@@ -3,13 +3,35 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/data_providers.dart';
 import '../core/theme.dart';
+import '../core/search_bar.dart';
 
-class DebtsScreen extends ConsumerWidget {
+class DebtsScreen extends ConsumerStatefulWidget {
   const DebtsScreen({super.key});
+  @override
+  ConsumerState<DebtsScreen> createState() => _DebtsScreenState();
+}
+
+class _DebtsScreenState extends ConsumerState<DebtsScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final debtors = ref.watch(debtorOrdersProvider);
+    final q = normalizeForSearch(_query);
+    final filteredDebtors = q.isEmpty
+        ? debtors
+        : debtors.where((o) {
+            return normalizeForSearch(o.customerName).contains(q) || normalizeForSearch(o.itemType).contains(q);
+          }).toList();
+    // إجمالي المديونيات دايمًا بيتحسب من كل المديونين، مش من نتيجة البحث،
+    // عشان الرقم يفضل يعكس الموقف الحقيقي حتى لو المستخدم بيدور على عميل معين
     final totalDebt = debtors.fold<double>(0, (s, o) => s + (o.totalAmount - o.totalPaid));
 
     return Scaffold(
@@ -20,7 +42,7 @@ class DebtsScreen extends ConsumerWidget {
               children: [
                 Container(
                   width: double.infinity,
-                  margin: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
                   child: Column(
@@ -31,23 +53,31 @@ class DebtsScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                AppSearchBar(
+                  controller: _searchController,
+                  hintText: 'ابحث باسم العميل أو نوع الصنف...',
+                  onChanged: (v) => setState(() => _query = v),
+                  onClear: () => setState(() => _query = ''),
+                ),
                 Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: debtors.length,
-                    itemBuilder: (context, index) {
-                      final o = debtors[index];
-                      final remaining = o.totalAmount - o.totalPaid;
-                      return Card(
-                        child: ListTile(
-                          leading: const CircleAvatar(backgroundColor: Color(0x1AB3261E), child: Icon(Icons.priority_high_rounded, color: AppColors.danger)),
-                          title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
-                          trailing: Text('${remaining.toStringAsFixed(0)} ج.م', style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 15)),
+                  child: filteredDebtors.isEmpty
+                      ? const Center(child: Text('لا توجد نتائج مطابقة', style: TextStyle(color: Colors.grey)))
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: filteredDebtors.length,
+                          itemBuilder: (context, index) {
+                            final o = filteredDebtors[index];
+                            final remaining = o.totalAmount - o.totalPaid;
+                            return Card(
+                              child: ListTile(
+                                leading: const CircleAvatar(backgroundColor: Color(0x1AB3261E), child: Icon(Icons.priority_high_rounded, color: AppColors.danger)),
+                                title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                subtitle: Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
+                                trailing: Text('${remaining.toStringAsFixed(0)} ج.م', style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 15)),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
               ],
             ),
