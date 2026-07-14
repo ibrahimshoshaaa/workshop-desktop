@@ -175,6 +175,34 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertTransaction(PaymentTransactionsCompanion entry) =>
       into(paymentTransactions).insertOnConflictUpdate(entry);
 
+  /// بيحسب إجمالي المدفوع لطلب معيّن من واقع سجل الدفعات نفسه (مش من رقم
+  /// متراكم متخزّن) - ده اللي بيضمن إن الرقم صح دايمًا مهما حصل تعارض
+  /// أو تكرار مزامنة، لأن SUM() عملية "idempotent" ومفيهاش تراكم أخطاء
+  Future<double> sumPaymentsForOrder(String orderId) async {
+    final sumExp = paymentTransactions.amountPaid.sum();
+    final query = selectOnly(paymentTransactions)
+      ..addColumns([sumExp])
+      ..where(paymentTransactions.orderId.equals(orderId) & paymentTransactions.isDeleted.equals(false));
+    final row = await query.getSingleOrNull();
+    return row?.read(sumExp) ?? 0;
+  }
+
+  /// بيعيد حساب totalPaid لطلب معيّن من الصفر بناءً على سجل الدفعات
+  /// الفعلي، وبيحدّثه في جدول الطلبات لو مختلف عن القيمة الحالية
+  Future<void> recomputeOrderTotalPaid(String orderId) async {
+    final order = await (select(orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
+    if (order == null) return;
+    final correctTotal = await sumPaymentsForOrder(orderId);
+    if (correctTotal != order.totalPaid) {
+      await upsertOrder(OrdersCompanion(
+        id: Value(orderId),
+        totalPaid: Value(correctTotal),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        dirty: const Value(true),
+      ));
+    }
+  }
+
   // ---------------- Expenses ----------------
 
   Stream<List<Expense>> watchExpenses() {
