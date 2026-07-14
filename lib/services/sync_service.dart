@@ -9,10 +9,13 @@ import '../data/database.dart';
 /// لـ Firebase، وأي سجل جديد/أحدث من Firebase بينزل محليًا، على أساس
 /// "آخر تعديل بيكسب" (Last-Write-Wins) بمقارنة updatedAt.
 class SyncService {
-  SyncService(this._db, {required String databaseUrl}) : _baseUrl = databaseUrl;
+  SyncService(this._db, {required String databaseUrl, this.onSynced}) : _baseUrl = databaseUrl;
 
   final AppDatabase _db;
   final String _baseUrl; // مثال: https://workshopmanage-e7555-default-rtdb.firebaseio.com
+  /// بيتنادى (لو موجود) بعد كل دورة مزامنة ناجحة - بنستخدمه لتحديث صلاحيات
+  /// المستخدم الحالي من غير ما نربط SyncService مباشرة بمنطق الصلاحيات
+  final Future<void> Function()? onSynced;
 
   static const _timeout = Duration(seconds: 10);
   Timer? _periodicTimer;
@@ -38,6 +41,7 @@ class SyncService {
       await _syncExpenses();
       await _syncMaterials();
       await _db.setMeta('lastSyncAt', DateTime.now().millisecondsSinceEpoch.toString());
+      if (onSynced != null) await onSynced!();
     } catch (_) {
       // غالبًا مفيش نت - هنحاول تاني في الدورة الجاية من غير ما نوقف التطبيق
     } finally {
@@ -178,11 +182,6 @@ class SyncService {
     final localRows = await _db.select(_db.paymentTransactions).get();
     final localById = {for (final t in localRows) t.id: t};
 
-    // بنجمّع أي orderId اتلمس (دفعة جديدة نزلت من السيرفر أو اتبعتت له أو
-    // اتمسحت) عشان نعيد حساب totalPaid بتاعه مرة واحدة بس في الآخر من
-    // واقع سجل الدفعات الفعلي - بدل ما نـ"زوّد" الرقم في أكتر من مكان
-    // ونعمل تعارض/تكرار (كان ده سبب إن الدفعات بتتسجل في السجل بس
-    // متبقي/مدفوع الطلب مش بيتحدّث صح)
     final touchedOrderIds = <String>{};
 
     if (remote != null) {
