@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
 import 'providers/sync_provider.dart';
+import 'providers/auth_provider.dart';
 import 'screens/app_shell.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   // لازم نضمن تهيئة الـ binding قبل أي await قبل runApp
@@ -39,7 +41,29 @@ class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
-      home: const AppShell(),
+      home: const _AuthGate(),
+    );
+  }
+}
+
+/// بيقرر يعرض إيه أول ما التطبيق يفتح: لو الحماية بكلمة مرور مفعّلة
+/// ومفيش تسجيل دخول لسه في الجلسة دي، يعرض شاشة الدخول، وإلا يروح
+/// على الشاشة الأساسية على طول
+class _AuthGate extends ConsumerWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authAsync = ref.watch(authSettingsProvider);
+    final isLoggedIn = ref.watch(isLoggedInProvider);
+
+    return authAsync.when(
+      data: (settings) {
+        if (settings.enabled && !isLoggedIn) return const LoginScreen();
+        return const AppShell();
+      },
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => const AppShell(),
     );
   }
 }
