@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/date_symbol_data_local.dart'; 
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
 import 'providers/sync_provider.dart';
 import 'screens/app_shell.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();      
-  await initializeDateFormatting('ar_EG', null); 
+void main() async {
+  // لازم نضمن تهيئة الـ binding قبل أي await قبل runApp
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // تهيئة بيانات تنسيق التاريخ لللغة العربية (مصر) - من غيرها أي
+  // DateFormat بيحدد locale صراحةً زي DateFormat('yyyy-MM-dd', 'ar_EG')
+  // بيرمي LocaleDataException وبيوقف رندر الشاشة كلها (شاشة رمادية فاضية)
+  await initializeDateFormatting('ar_EG', null);
+
   runApp(const ProviderScope(child: WorkshopDesktopApp()));
 }
 
