@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../core/theme.dart';
+import '../models/app_user_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/database_provider.dart';
 import '../providers/sync_provider.dart';
@@ -21,68 +22,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (mounted) setState(() => _isSyncing = false);
   }
 
-  Future<void> _showSetPasswordDialog(BuildContext context, {required bool isChangingExisting, required String currentPassword}) async {
+  Future<void> _showAddUserDialog(BuildContext context, List<String> existingUsernames) async {
     final formKey = GlobalKey<FormState>();
-    final currentController = TextEditingController();
-    final newController = TextEditingController();
-    final confirmController = TextEditingController();
-    String? error;
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+    bool isSaving = false;
 
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(isChangingExisting ? 'تغيير كلمة المرور' : 'تفعيل الحماية بكلمة مرور'),
-          content: SizedBox(
-            width: 380,
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isChangingExisting) ...[
-                    TextFormField(
-                      controller: currentController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'كلمة المرور الحالية'),
-                      validator: (v) => (v == null || v.isEmpty) ? 'مطلوب' : null,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  TextFormField(
-                    controller: newController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'كلمة المرور الجديدة'),
-                    validator: (v) => (v == null || v.length < 4) ? 'لازم تكون 4 حروف/أرقام على الأقل' : null,
+          title: const Text('إضافة حساب جديد'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: usernameController,
+                  textDirection: TextDirection.ltr,
+                  decoration: const InputDecoration(labelText: 'اليوزر'),
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return 'اكتب اليوزر';
+                    if (value == 'admin') return 'الاسم ده محجوز للحساب الرئيسي';
+                    if (existingUsernames.contains(value)) return 'اليوزر ده موجود بالفعل';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: passwordController,
+                  textDirection: TextDirection.ltr,
+                  decoration: const InputDecoration(labelText: 'الباسورد'),
+                  validator: (v) => (v == null || v.length < 4) ? 'الباسورد لازم يكون 4 حروف/أرقام على الأقل' : null,
+                ),
+                const SizedBox(height: 8),
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'هيتضاف بكل الصلاحيات مفعّلة، وتقدر تقيّدها بعد كده من زرار التعديل',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: confirmController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور'),
-                    validator: (v) => (v != newController.text) ? 'مش متطابقة' : null,
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
-                  ],
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
             ElevatedButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                if (isChangingExisting && currentController.text != currentPassword) {
-                  setDialogState(() => error = 'كلمة المرور الحالية غلط');
-                  return;
-                }
-                await ref.read(authRepositoryProvider).setPassword(newController.text);
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text('حفظ'),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => isSaving = true);
+                      try {
+                        await ref.read(userAccountServiceProvider).addUser(
+                              usernameController.text.trim(),
+                              passwordController.text,
+                            );
+                        ref.invalidate(appUsersProvider);
+                        if (context.mounted) Navigator.pop(context);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+                        }
+                        setDialogState(() => isSaving = false);
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('حفظ'),
             ),
           ],
         ),
@@ -90,30 +100,101 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _confirmDisableProtection(BuildContext context) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _showEditUserDialog(BuildContext context, AppUserModel user) async {
+    final formKey = GlobalKey<FormState>();
+    final passwordController = TextEditingController();
+    final confirmController = TextEditingController();
+    bool isSaving = false;
+    final permissions = <String, bool>{
+      for (final s in AppUserModel.permissionScreens) s.key: user.canAccess(s.key),
+    };
+
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('إلغاء الحماية'),
-        content: const Text('هل أنت متأكد من إلغاء طلب كلمة المرور عند فتح التطبيق؟'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('تعطيل الحماية'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('تعديل حساب "${user.username}"'),
+          content: SizedBox(
+            width: 420,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('الشاشات المسموح بيها', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...AppUserModel.permissionScreens.map((s) => CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(s.value),
+                          value: permissions[s.key],
+                          activeColor: AppColors.wood,
+                          onChanged: (v) => setDialogState(() => permissions[s.key] = v ?? true),
+                        )),
+                    const Divider(height: 24),
+                    const Text('تغيير كلمة المرور (اختياري - سيبها فاضية لو مش عايز تغيّرها)',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: passwordController,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(labelText: 'كلمة مرور جديدة'),
+                      validator: (v) =>
+                          (v != null && v.isNotEmpty && v.length < 4) ? 'لازم 4 حروف/أرقام على الأقل' : null,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: confirmController,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور'),
+                      validator: (v) => (passwordController.text.isNotEmpty && v != passwordController.text)
+                          ? 'مش متطابقة'
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => isSaving = true);
+                      final service = ref.read(userAccountServiceProvider);
+                      try {
+                        await service.updateUserPermissions(user.id, permissions);
+                        if (passwordController.text.isNotEmpty) {
+                          await service.updateUserPassword(user.id, passwordController.text);
+                        }
+                        ref.invalidate(appUsersProvider);
+                        if (context.mounted) Navigator.pop(context);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+                        }
+                        setDialogState(() => isSaving = false);
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('حفظ'),
+            ),
+          ],
+        ),
       ),
     );
-    if (confirm == true) {
-      await ref.read(authRepositoryProvider).disableProtection();
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authAsync = ref.watch(authSettingsProvider);
+    final session = ref.watch(sessionProvider).value;
+    final usersAsync = ref.watch(appUsersProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('الإعدادات'), backgroundColor: AppColors.wood, foregroundColor: Colors.white),
@@ -121,40 +202,125 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           _SectionCard(
-            title: 'الحماية بكلمة مرور',
-            icon: Icons.lock_outline_rounded,
-            child: authAsync.when(
-              data: (settings) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: settings.enabled,
-                    activeColor: AppColors.wood,
-                    title: const Text('طلب كلمة مرور عند فتح التطبيق'),
-                    subtitle: const Text('لو مفعّلة، هتحتاج تدخل كلمة المرور كل مرة تفتح فيها التطبيق'),
-                    onChanged: (v) async {
-                      if (v) {
-                        await _showSetPasswordDialog(context, isChangingExisting: false, currentPassword: settings.password);
-                      } else {
-                        await _confirmDisableProtection(context);
-                      }
-                    },
+            title: 'الحساب الحالي',
+            icon: Icons.verified_user_rounded,
+            child: Row(
+              children: [
+                const Icon(Icons.person_rounded, color: AppColors.wood),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('مسجّل دخول كـ: ${session?.username ?? '-'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(
+                        session?.isAdmin == true ? 'حساب أدمن - كل الصلاحيات متاحة' : 'حساب عامل - صلاحيات محدّدة',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    ],
                   ),
-                  if (settings.enabled) ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _showSetPasswordDialog(context, isChangingExisting: true, currentPassword: settings.password),
-                      icon: const Icon(Icons.key_rounded),
-                      label: const Text('تغيير كلمة المرور'),
-                    ),
-                  ],
-                ],
-              ),
-              loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
-              error: (e, _) => Text('خطأ: $e'),
+                ),
+              ],
             ),
           ),
+          if (session?.isAdmin == true) ...[
+            const SizedBox(height: 20),
+            _SectionCard(
+              title: 'حسابات العمال والصلاحيات',
+              icon: Icons.groups_rounded,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: usersAsync.when(
+                      data: (users) => TextButton.icon(
+                        onPressed: () => _showAddUserDialog(context, users.map((u) => u.username).toList()),
+                        icon: const Icon(Icons.person_add_alt_1_rounded),
+                        label: const Text('إضافة حساب'),
+                      ),
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  usersAsync.when(
+                    data: (users) {
+                      if (users.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Center(child: Text('لا توجد حسابات إضافية بعد', style: TextStyle(color: Colors.grey))),
+                        );
+                      }
+                      return Column(
+                        children: users.map((u) {
+                          final allowedScreens = AppUserModel.permissionScreens
+                              .where((s) => u.canAccess(s.key))
+                              .map((s) => s.value)
+                              .toList();
+                          final subtitle = allowedScreens.length == AppUserModel.permissionScreens.length
+                              ? 'كل الصلاحيات متاحة'
+                              : allowedScreens.isEmpty
+                                  ? 'من غير أي صلاحية شاشات'
+                                  : 'مسموح: ${allowedScreens.join('، ')}';
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: AppColors.wood.withValues(alpha: 0.15),
+                                child: Text(u.username.isNotEmpty ? u.username[0].toUpperCase() : '?',
+                                    style: const TextStyle(color: AppColors.wood, fontWeight: FontWeight.bold)),
+                              ),
+                              title: Text(u.username, textDirection: TextDirection.ltr),
+                              subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_rounded),
+                                    tooltip: 'تعديل الصلاحيات/الباسورد',
+                                    onPressed: () => _showEditUserDialog(context, u),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+                                    tooltip: 'حذف الحساب',
+                                    onPressed: () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('حذف الحساب'),
+                                          content: Text('هل أنت متأكد من حذف حساب "${u.username}"؟'),
+                                          actions: [
+                                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                                              onPressed: () => Navigator.pop(context, true),
+                                              child: const Text('حذف'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        await ref.read(userAccountServiceProvider).deleteUser(u.id);
+                                        ref.invalidate(appUsersProvider);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Text('خطأ: $e'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           _SectionCard(
             title: 'المزامنة مع السيرفر',
@@ -174,10 +340,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: _isSyncing ? null : () async {
-                    await _syncNow();
-                    setState(() {});
-                  },
+                  onPressed: _isSyncing
+                      ? null
+                      : () async {
+                          await _syncNow();
+                          setState(() {});
+                        },
                   icon: _isSyncing
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.sync_rounded),
