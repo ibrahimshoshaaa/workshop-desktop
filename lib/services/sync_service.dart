@@ -178,6 +178,13 @@ class SyncService {
     final localRows = await _db.select(_db.paymentTransactions).get();
     final localById = {for (final t in localRows) t.id: t};
 
+    // بنجمّع أي orderId اتلمس (دفعة جديدة نزلت من السيرفر أو اتبعتت له أو
+    // اتمسحت) عشان نعيد حساب totalPaid بتاعه مرة واحدة بس في الآخر من
+    // واقع سجل الدفعات الفعلي - بدل ما نـ"زوّد" الرقم في أكتر من مكان
+    // ونعمل تعارض/تكرار (كان ده سبب إن الدفعات بتتسجل في السجل بس
+    // متبقي/مدفوع الطلب مش بيتحدّث صح)
+    final touchedOrderIds = <String>{};
+
     if (remote != null) {
       for (final entry in remote.entries) {
         final id = entry.key;
@@ -185,9 +192,10 @@ class SyncService {
         final remoteUpdatedAt = (map['paymentDate'] as num?)?.toInt() ?? 0;
         final local = localById[id];
         if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+          final orderId = map['orderId']?.toString() ?? '';
           await _db.upsertTransaction(PaymentTransactionsCompanion(
             id: Value(id),
-            orderId: Value(map['orderId']?.toString() ?? ''),
+            orderId: Value(orderId),
             customerId: Value(map['customerId']?.toString() ?? ''),
             amountPaid: Value((map['amountPaid'] as num?)?.toDouble() ?? 0),
             paymentDate: Value((map['paymentDate'] as num?)?.toInt() ?? remoteUpdatedAt),
@@ -196,6 +204,7 @@ class SyncService {
             isDeleted: const Value(false),
             dirty: const Value(false),
           ));
+          touchedOrderIds.add(orderId);
         }
       }
     }
@@ -203,12 +212,14 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
+        touchedOrderIds.add(local.orderId);
         await (_db.delete(_db.paymentTransactions)..where((t) => t.id.equals(local.id))).go();
       }
     }
 
     final dirtyRows = await (_db.select(_db.paymentTransactions)..where((t) => t.dirty.equals(true))).get();
     for (final row in dirtyRows) {
+      touchedOrderIds.add(row.orderId);
       if (row.isDeleted) {
         await _deleteNode('transactions/${row.id}');
         await (_db.delete(_db.paymentTransactions)..where((t) => t.id.equals(row.id))).go();
@@ -221,21 +232,13 @@ class SyncService {
           'paymentType': row.paymentType,
         });
         await _db.upsertTransaction(PaymentTransactionsCompanion(id: Value(row.id), dirty: const Value(false)));
-        // نفس فكرة الموبايل: أي دفعة جديدة لازم تحدّث totalPaid بتاع الطلب
-        await _incrementOrderTotalPaid(row.orderId, row.amountPaid);
       }
     }
-  }
 
-  Future<void> _incrementOrderTotalPaid(String orderId, double amount) async {
-    final order = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
-    if (order == null) return;
-    await _db.upsertOrder(OrdersCompanion(
-      id: Value(orderId),
-      totalPaid: Value(order.totalPaid + amount),
-      updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-      dirty: const Value(true),
-    ));
+    for (final orderId in touchedOrderIds) {
+      if (orderId.isEmpty) continue;
+      await _db.recomputeOrderTotalPaid(orderId);
+    }
   }
 
   // ---------------- Expenses ----------------
