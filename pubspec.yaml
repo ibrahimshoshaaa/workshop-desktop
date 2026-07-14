@@ -13,6 +13,8 @@ dependencies:
 
   flutter_riverpod: ^2.5.1
 
+  collection: ^1.18.0
+
   # قاعدة بيانات محلية (المصدر الأساسي للبيانات على الويندوز)
   drift: ^2.20.3
   sqlite3_flutter_libs: ^0.5.24
