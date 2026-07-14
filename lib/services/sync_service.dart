@@ -258,6 +258,9 @@ class SyncService {
             category: Value(map['category']?.toString() ?? 'other'),
             description: Value(map['description']?.toString() ?? ''),
             workerName: Value(map['workerName']?.toString()),
+            orderId: Value(map['orderId']?.toString()),
+            customerId: Value(map['customerId']?.toString()),
+            customerName: Value(map['customerName']?.toString()),
             date: Value((map['date'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
@@ -285,6 +288,9 @@ class SyncService {
           'category': row.category,
           'description': row.description,
           if (row.workerName != null) 'workerName': row.workerName,
+          if (row.orderId != null) 'orderId': row.orderId,
+          if (row.customerId != null) 'customerId': row.customerId,
+          if (row.customerName != null) 'customerName': row.customerName,
           'date': row.date,
         });
         await _db.upsertExpense(ExpensesCompanion(id: Value(row.id), dirty: const Value(false)));
