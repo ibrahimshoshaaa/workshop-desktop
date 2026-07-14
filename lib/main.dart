@@ -8,14 +8,8 @@ import 'screens/app_shell.dart';
 import 'screens/login_screen.dart';
 
 void main() async {
-  // لازم نضمن تهيئة الـ binding قبل أي await قبل runApp
   WidgetsFlutterBinding.ensureInitialized();
-
-  // تهيئة بيانات تنسيق التاريخ لللغة العربية (مصر) - من غيرها أي
-  // DateFormat بيحدد locale صراحةً زي DateFormat('yyyy-MM-dd', 'ar_EG')
-  // بيرمي LocaleDataException وبيوقف رندر الشاشة كلها (شاشة رمادية فاضية)
   await initializeDateFormatting('ar_EG', null);
-
   runApp(const ProviderScope(child: WorkshopDesktopApp()));
 }
 
@@ -46,24 +40,19 @@ class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
   }
 }
 
-/// بيقرر يعرض إيه أول ما التطبيق يفتح: لو الحماية بكلمة مرور مفعّلة
-/// ومفيش تسجيل دخول لسه في الجلسة دي، يعرض شاشة الدخول، وإلا يروح
-/// على الشاشة الأساسية على طول
+/// بيعرض شاشة الدخول لو مفيش جلسة محفوظة، أو الشاشة الأساسية لو فيه
+/// مستخدم مسجّل دخول بالفعل (من مرة سابقة أو دلوقتي)
 class _AuthGate extends ConsumerWidget {
   const _AuthGate();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authAsync = ref.watch(authSettingsProvider);
-    final isLoggedIn = ref.watch(isLoggedInProvider);
+    final sessionAsync = ref.watch(sessionProvider);
 
-    return authAsync.when(
-      data: (settings) {
-        if (settings.enabled && !isLoggedIn) return const LoginScreen();
-        return const AppShell();
-      },
+    return sessionAsync.when(
+      data: (session) => session == null ? const LoginScreen() : const AppShell(),
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => const AppShell(),
+      error: (e, _) => const LoginScreen(),
     );
   }
 }
