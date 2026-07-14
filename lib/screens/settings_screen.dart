@@ -361,7 +361,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('ورشة التنجيد والأثاث - نسخة سطح المكتب', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text('طاحون رويال هوم - نسخة سطح المكتب', style: TextStyle(fontWeight: FontWeight.w600)),
                 SizedBox(height: 4),
                 Text('الإصدار 1.0.0', style: TextStyle(color: Colors.grey)),
               ],
