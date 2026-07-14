@@ -11,7 +11,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # State Management (نفس الموبايل)
   flutter_riverpod: ^2.5.1
 
   # قاعدة بيانات محلية (المصدر الأساسي للبيانات على الويندوز)
@@ -27,7 +26,7 @@ dependencies:
   google_fonts: ^6.2.1
   intl: ^0.20.2
 
-  # PDF / Excel export (نفس الموبايل)
+  # PDF / Excel export
   pdf: ^3.11.0
   printing: ^5.13.2
   excel: ^4.0.6
@@ -44,4 +43,3 @@ dev_dependencies:
   drift_dev: ^2.20.3
 
 flutter:
-  uses-material-design: true
