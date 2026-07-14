@@ -52,6 +52,15 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
     }
 
     final totalRevenue = filteredOrders.fold<double>(0, (sum, order) => sum + order.totalPaid);
+    final averageRevenue = filteredOrders.isEmpty ? 0.0 : totalRevenue / filteredOrders.length;
+
+    // حساب الإيرادات حسب الحالة
+    final completedRevenue = filteredOrders
+        .where((o) => o.status.toLowerCase() == 'completed' || o.status.toLowerCase() == 'مكتمل')
+        .fold<double>(0, (sum, o) => sum + o.totalPaid);
+    final pendingRevenue = filteredOrders
+        .where((o) => o.status.toLowerCase() == 'pending' || o.status.toLowerCase() == 'قيد الانتظار')
+        .fold<double>(0, (sum, o) => sum + o.totalPaid);
 
     return Scaffold(
       appBar: AppBar(
@@ -68,13 +77,14 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // صف المرشحات
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('الفترة الزمنية:', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                          Text('الفترة الزمنية:', style: TextStyle(color: Colors.grey.shade700, fontSize: 12, fontWeight: FontWeight.w500)),
                           const SizedBox(height: 6),
                           InkWell(
                             onTap: () async {
@@ -105,7 +115,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                               ),
                               child: Text(
                                 '${dateFormatter.format(_selectedDateRange.start)} إلى ${dateFormatter.format(_selectedDateRange.end)}',
-                                style: const TextStyle(fontWeight: FontWeight.w500),
+                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
                               ),
                             ),
                           ),
@@ -116,12 +126,12 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ترتيب:', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                        Text('ترتيب:', style: TextStyle(color: Colors.grey.shade700, fontSize: 12, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 6),
                         DropdownButton<String>(
                           value: _sortBy,
                           underline: Container(),
-                          items: [
+                          items: const [
                             DropdownMenuItem(value: 'date', child: Text('التاريخ')),
                             DropdownMenuItem(value: 'amount', child: Text('المبلغ')),
                           ],
@@ -136,41 +146,35 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                // بطاقة الإجمالي
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
-                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('إجمالي الإيرادات في الفترة', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Text(
-                            formatter.format(totalRevenue),
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.success),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('عدد الطلبات', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${filteredOrders.length}',
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.success),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                // شبكة الإحصائيات
+                GridView.count(
+                  crossAxisCount: 4,
+                  shrinkWrap: true,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _StatBox(
+                      label: 'إجمالي الإيرادات',
+                      value: formatter.format(totalRevenue),
+                      color: AppColors.success,
+                    ),
+                    _StatBox(
+                      label: 'متوسط الإيراد',
+                      value: formatter.format(averageRevenue),
+                      color: AppColors.navy,
+                    ),
+                    _StatBox(
+                      label: 'مكتمل',
+                      value: formatter.format(completedRevenue),
+                      color: Colors.green,
+                    ),
+                    _StatBox(
+                      label: 'قيد الانتظار',
+                      value: formatter.format(pendingRevenue),
+                      color: AppColors.warning,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -184,7 +188,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                       children: [
                         Icon(Icons.inbox_rounded, size: 64, color: Colors.grey.shade300),
                         const SizedBox(height: 16),
-                        Text('لا توجد إيرادات في هذه الفترة', style: TextStyle(color: Colors.grey.shade600)),
+                        Text('لا توجد إيرادات في هذه الفترة', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
                       ],
                     ),
                   )
@@ -198,6 +202,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
+                        elevation: 1,
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
@@ -250,7 +255,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text('المبلغ الإجمالي:', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
-                                          Text(formatter.format(order.totalAmount), style: const TextStyle(fontWeight: FontWeight.w500)),
+                                          Text(formatter.format(order.totalAmount), style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
                                         ],
                                       ),
                                     ),
@@ -263,12 +268,12 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                           Text('المدفوع:', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
                                           Text(
                                             formatter.format(order.totalPaid),
-                                            style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.success),
+                                            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: AppColors.success),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    if (outstanding > 0) ...[
+                                    if (outstanding > 0) ...[(
                                       const Divider(height: 16),
                                       Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -278,12 +283,12 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                             Text('المتبقي:', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
                                             Text(
                                               formatter.format(outstanding),
-                                              style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.danger),
+                                              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: AppColors.danger),
                                             ),
                                           ],
                                         ),
                                       ),
-                                    ],
+                                    )],
                                   ],
                                 ),
                               ),
@@ -313,5 +318,46 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
       default:
         return Colors.grey;
     }
+  }
+}
+
+class _StatBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatBox({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(color: Colors.grey.shade700, fontSize: 11, fontWeight: FontWeight.w500),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 }
