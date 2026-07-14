@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../providers/data_providers.dart';
 import '../core/theme.dart';
 
@@ -96,12 +96,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                 lastDate: DateTime.now(),
                                 initialDateRange: _selectedDateRange,
                                 builder: (context, child) {
-                                  return Theme(
-                                    data: Theme.of(context).copyWith(
-                                      useMaterial3: true,
-                                    ),
-                                    child: Directionality(textDirection: TextDirection.ltr, child: child!),
-                                  );
+                                  return Directionality(textDirection: TextDirection.ltr, child: child!);
                                 },
                               );
                               if (picked != null) {
