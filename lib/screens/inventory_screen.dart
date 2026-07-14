@@ -3,11 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
+import '../core/search_bar.dart';
 
 const _units = ['متر', 'كيلو', 'قطعة', 'لفة', 'لتر'];
 
-class InventoryScreen extends ConsumerWidget {
+class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
+  @override
+  ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends ConsumerState<InventoryScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _showMaterialDialog(BuildContext context, WidgetRef ref, {MaterialItem? material}) async {
     final formKey = GlobalKey<FormState>();
@@ -98,7 +112,7 @@ class InventoryScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final materialsAsync = ref.watch(materialsProvider);
 
     return Scaffold(
@@ -108,38 +122,53 @@ class InventoryScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
         actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => _showMaterialDialog(context, ref))],
       ),
-      body: materialsAsync.when(
-        data: (materials) {
-          if (materials.isEmpty) return const Center(child: Text('لا توجد خامات مسجلة بعد', style: TextStyle(color: Colors.grey)));
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: materials.length,
-            itemBuilder: (context, index) {
-              final m = materials[index];
-              final isLow = m.quantity <= m.minThreshold;
-              return Card(
-                color: isLow ? AppColors.danger.withValues(alpha: 0.08) : null,
-                child: ListTile(
-                  onTap: () => _showAdjustDialog(context, ref, m),
-                  onLongPress: () => _showMaterialDialog(context, ref, material: m),
-                  leading: CircleAvatar(backgroundColor: (isLow ? AppColors.danger : AppColors.wood).withValues(alpha: 0.15), child: Icon(Icons.inventory_2_rounded, color: isLow ? AppColors.danger : AppColors.wood)),
-                  title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text('الحد الأدنى: ${m.minThreshold.toStringAsFixed(1)} ${m.unit}'),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('${m.quantity.toStringAsFixed(1)} ${m.unit}', style: TextStyle(fontWeight: FontWeight.bold, color: isLow ? AppColors.danger : AppColors.success)),
-                      if (isLow) const Text('على وشك النفاد', style: TextStyle(fontSize: 11, color: AppColors.danger)),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('خطأ: $e')),
+      body: Column(
+        children: [
+          AppSearchBar(
+            controller: _searchController,
+            hintText: 'ابحث باسم الخامة...',
+            onChanged: (v) => setState(() => _query = v),
+            onClear: () => setState(() => _query = ''),
+          ),
+          Expanded(
+            child: materialsAsync.when(
+              data: (materials) {
+                if (materials.isEmpty) return const Center(child: Text('لا توجد خامات مسجلة بعد', style: TextStyle(color: Colors.grey)));
+                final q = normalizeForSearch(_query);
+                final filtered = q.isEmpty ? materials : materials.where((m) => normalizeForSearch(m.name).contains(q)).toList();
+                if (filtered.isEmpty) return const Center(child: Text('لا توجد نتائج مطابقة', style: TextStyle(color: Colors.grey)));
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final m = filtered[index];
+                    final isLow = m.quantity <= m.minThreshold;
+                    return Card(
+                      color: isLow ? AppColors.danger.withValues(alpha: 0.08) : null,
+                      child: ListTile(
+                        onTap: () => _showAdjustDialog(context, ref, m),
+                        onLongPress: () => _showMaterialDialog(context, ref, material: m),
+                        leading: CircleAvatar(backgroundColor: (isLow ? AppColors.danger : AppColors.wood).withValues(alpha: 0.15), child: Icon(Icons.inventory_2_rounded, color: isLow ? AppColors.danger : AppColors.wood)),
+                        title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text('الحد الأدنى: ${m.minThreshold.toStringAsFixed(1)} ${m.unit}'),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('${m.quantity.toStringAsFixed(1)} ${m.unit}', style: TextStyle(fontWeight: FontWeight.bold, color: isLow ? AppColors.danger : AppColors.success)),
+                            if (isLow) const Text('على وشك النفاد', style: TextStyle(fontSize: 11, color: AppColors.danger)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('خطأ: $e')),
+            ),
+          ),
+        ],
       ),
     );
   }
