@@ -1,13 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/database_provider.dart';
+import 'providers/sync_provider.dart';
 
 void main() {
   runApp(const ProviderScope(child: WorkshopDesktopApp()));
 }
 
-class WorkshopDesktopApp extends StatelessWidget {
+class WorkshopDesktopApp extends ConsumerStatefulWidget {
   const WorkshopDesktopApp({super.key});
+
+  @override
+  ConsumerState<WorkshopDesktopApp> createState() => _WorkshopDesktopAppState();
+}
+
+class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
+  @override
+  void initState() {
+    super.initState();
+    // ابدأ مزامنة دورية أول ما التطبيق يفتح (فورية الأول، وبعدين كل دقيقتين)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(syncServiceProvider).startPeriodicSync();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,8 +39,8 @@ class WorkshopDesktopApp extends StatelessWidget {
   }
 }
 
-/// شاشة تأكيد مؤقتة - بتتأكد إن قاعدة البيانات المحلية اتفتحت صح، هتتستبدل
-/// بالداشبورد الحقيقي في مرحلة الواجهات
+/// شاشة تجريبية مؤقتة للتأكد إن قاعدة البيانات والمزامنة شغالين، هتتستبدل
+/// بالداشبورد الحقيقي في مرحلة الواجهات الجاية
 class _DbCheckHome extends ConsumerWidget {
   const _DbCheckHome();
 
@@ -49,14 +64,45 @@ class _DbCheckHome extends ConsumerWidget {
                   return const Text('جاري فتح قاعدة البيانات...', style: TextStyle(color: Colors.grey));
                 }
                 return Text(
-                  'قاعدة البيانات المحلية جاهزة ✅ (${snapshot.data?.length ?? 0} عميل محليًا)',
+                  'عدد العملاء محليًا: ${snapshot.data?.length ?? 0}',
                   style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
                 );
               },
             ),
+            const SizedBox(height: 24),
+            _SyncButton(),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SyncButton extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_SyncButton> createState() => _SyncButtonState();
+}
+
+class _SyncButtonState extends ConsumerState<_SyncButton> {
+  bool _isSyncing = false;
+
+  Future<void> _sync() async {
+    setState(() => _isSyncing = true);
+    await ref.read(syncServiceProvider).syncAll();
+    if (mounted) {
+      setState(() => _isSyncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت المزامنة')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: _isSyncing ? null : _sync,
+      icon: _isSyncing
+          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.sync_rounded),
+      label: const Text('مزامنة الآن'),
     );
   }
 }
