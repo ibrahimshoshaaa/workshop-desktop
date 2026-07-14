@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme.dart';
 import '../providers/sync_provider.dart';
 import '../providers/navigation_provider.dart';   // 👈 جديد
+import '../providers/auth_provider.dart';
 import 'dashboard_screen.dart';
 import 'customers_screen.dart';
 import 'orders_screen.dart';
@@ -10,6 +11,7 @@ import 'debts_screen.dart';
 import 'expenses_screen.dart';
 import 'inventory_screen.dart';
 import 'reports_screen.dart';
+import 'settings_screen.dart';
 
 class AppShell extends ConsumerWidget {          // 👈 كان StatefulWidget، بقى ConsumerWidget
   const AppShell({super.key});
@@ -22,6 +24,7 @@ class AppShell extends ConsumerWidget {          // 👈 كان StatefulWidget،
     (Icons.receipt_long_rounded, 'المصروفات'),
     (Icons.inventory_2_rounded, 'المخزون'),
     (Icons.summarize_rounded, 'التقارير'),
+    (Icons.settings_rounded, 'الإعدادات'),
   ];
 
   static const _screens = [
@@ -32,6 +35,7 @@ class AppShell extends ConsumerWidget {          // 👈 كان StatefulWidget،
     ExpensesScreen(),
     InventoryScreen(),
     ReportsScreen(),
+    SettingsScreen(),
   ];
 
   @override
@@ -59,7 +63,24 @@ class AppShell extends ConsumerWidget {          // 👈 كان StatefulWidget،
                 alignment: Alignment.bottomCenter,
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: _SyncButton(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _SyncButton(),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final authAsync = ref.watch(authSettingsProvider);
+                          final protectionEnabled = authAsync.value?.enabled ?? false;
+                          if (!protectionEnabled) return const SizedBox.shrink();
+                          return IconButton(
+                            tooltip: 'تسجيل الخروج',
+                            onPressed: () => ref.read(isLoggedInProvider.notifier).state = false,
+                            icon: const Icon(Icons.logout_rounded, color: AppColors.amber),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
