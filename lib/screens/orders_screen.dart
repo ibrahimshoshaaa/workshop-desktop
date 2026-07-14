@@ -11,6 +11,121 @@ import '../core/search_bar.dart';
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 const _statuses = ['جاري التجهيز', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
 
+/// ديالوج إضافة طلب جديد - قابل لإعادة الاستخدام من أي صفحة. لو اتبعتله
+/// [presetCustomer] (زي لما بيتفتح من ديالوج طلبات عميل معيّن في صفحة
+/// العملاء) بيثبّت العميل ده تلقائيًا من غير ما يوريلك قايمة الاختيار
+Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? presetCustomer}) async {
+  final customers = ref.read(customersProvider).value ?? [];
+  if (presetCustomer == null && customers.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أضف عميل أولًا')));
+    return;
+  }
+  final formKey = GlobalKey<FormState>();
+  String? customerId = presetCustomer?.id ?? customers.first.id;
+  String itemType = _itemTypes.first;
+  final detailsController = TextEditingController();
+  final totalController = TextEditingController();
+  final depositController = TextEditingController();
+  DateTime deliveryDate = DateTime.now().add(const Duration(days: 7));
+
+  await showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(presetCustomer == null ? 'طلب جديد' : 'طلب جديد لـ ${presetCustomer.name}'),
+        content: SizedBox(
+          width: 420,
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (presetCustomer == null)
+                    DropdownButtonFormField<String>(
+                      value: customerId,
+                      decoration: const InputDecoration(labelText: 'العميل'),
+                      items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.name} - ${c.phone}'))).toList(),
+                      onChanged: (v) => setDialogState(() => customerId = v),
+                    )
+                  else
+                    TextFormField(
+                      initialValue: '${presetCustomer.name} - ${presetCustomer.phone}',
+                      enabled: false,
+                      decoration: const InputDecoration(labelText: 'العميل'),
+                    ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: itemType,
+                    decoration: const InputDecoration(labelText: 'نوع الصنف'),
+                    items: _itemTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                    onChanged: (v) => setDialogState(() => itemType = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: detailsController, maxLines: 2, decoration: const InputDecoration(labelText: 'المواصفات')),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('تاريخ التسليم'),
+                    subtitle: Text('${deliveryDate.year}/${deliveryDate.month}/${deliveryDate.day}'),
+                    trailing: const Icon(Icons.calendar_month_rounded),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: deliveryDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) setDialogState(() => deliveryDate = picked);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: totalController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'إجمالي الاتفاق (ج.م)'),
+                    validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل مبلغ صحيح' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: depositController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'العربون المدفوع الآن (اختياري)'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate() || customerId == null) return;
+              final customer = presetCustomer ?? customers.firstWhere((c) => c.id == customerId);
+              final repo = ref.read(repositoryProvider);
+              final orderId = await repo.addOrder(
+                customerId: customer.id,
+                customerName: customer.name,
+                itemType: itemType,
+                details: detailsController.text.trim(),
+                totalAmount: double.parse(totalController.text.trim()),
+                deliveryDate: deliveryDate,
+              );
+              final deposit = double.tryParse(depositController.text.trim()) ?? 0;
+              if (deposit > 0) {
+                await repo.addPayment(orderId: orderId, customerId: customer.id, amount: deposit, paymentType: 'deposit');
+              }
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
   @override
@@ -28,111 +143,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     super.dispose();
   }
 
-  Future<void> _showAddOrderDialog(BuildContext context, WidgetRef ref) async {
-    final customers = ref.read(customersProvider).value ?? [];
-    if (customers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أضف عميل أولًا')));
-      return;
-    }
-    final formKey = GlobalKey<FormState>();
-    String? customerId = customers.first.id;
-    String itemType = _itemTypes.first;
-    final detailsController = TextEditingController();
-    final totalController = TextEditingController();
-    final depositController = TextEditingController();
-    DateTime deliveryDate = DateTime.now().add(const Duration(days: 7));
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('طلب جديد'),
-          content: SizedBox(
-            width: 420,
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      value: customerId,
-                      decoration: const InputDecoration(labelText: 'العميل'),
-                      items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.name} - ${c.phone}'))).toList(),
-                      onChanged: (v) => setDialogState(() => customerId = v),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: itemType,
-                      decoration: const InputDecoration(labelText: 'نوع الصنف'),
-                      items: _itemTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                      onChanged: (v) => setDialogState(() => itemType = v!),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(controller: detailsController, maxLines: 2, decoration: const InputDecoration(labelText: 'المواصفات')),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('تاريخ التسليم'),
-                      subtitle: Text('${deliveryDate.year}/${deliveryDate.month}/${deliveryDate.day}'),
-                      trailing: const Icon(Icons.calendar_month_rounded),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: deliveryDate,
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                        );
-                        if (picked != null) setDialogState(() => deliveryDate = picked);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: totalController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'إجمالي الاتفاق (ج.م)'),
-                      validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل مبلغ صحيح' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: depositController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'العربون المدفوع الآن (اختياري)'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-            ElevatedButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate() || customerId == null) return;
-                final customer = customers.firstWhere((c) => c.id == customerId);
-                final repo = ref.read(repositoryProvider);
-                final orderId = await repo.addOrder(
-                  customerId: customer.id,
-                  customerName: customer.name,
-                  itemType: itemType,
-                  details: detailsController.text.trim(),
-                  totalAmount: double.parse(totalController.text.trim()),
-                  deliveryDate: deliveryDate,
-                );
-                final deposit = double.tryParse(depositController.text.trim()) ?? 0;
-                if (deposit > 0) {
-                  await repo.addPayment(orderId: orderId, customerId: customer.id, amount: deposit, paymentType: 'deposit');
-                }
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text('حفظ'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(ordersProvider);
@@ -142,7 +152,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         title: const Text('الطلبات'),
         backgroundColor: AppColors.wood,
         foregroundColor: Colors.white,
-        actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => _showAddOrderDialog(context, ref))],
+        actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => showAddOrderDialog(context, ref))],
       ),
       body: Column(
         children: [
