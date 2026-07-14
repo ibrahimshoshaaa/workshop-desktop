@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
+import '../core/constants.dart';
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 const _statuses = ['جاري التجهيز', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
@@ -227,14 +228,27 @@ class _OrderDetailDialog extends ConsumerWidget {
                   _MoneyBox(label: 'المتبقي', value: remaining, color: remaining > 0 ? AppColors.danger : AppColors.success),
                 ],
               ),
-              if (remaining > 0) ...[
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: () => _showAddPaymentDialog(context, ref, currentOrder, remaining),
-                  icon: const Icon(Icons.add_card_rounded),
-                  label: const Text('تسجيل دفعة'),
-                ),
-              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (remaining > 0)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showAddPaymentDialog(context, ref, currentOrder, remaining),
+                        icon: const Icon(Icons.add_card_rounded),
+                        label: const Text('تسجيل دفعة'),
+                      ),
+                    ),
+                  if (remaining > 0) const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showAddExpenseDialog(context, ref, currentOrder),
+                      icon: const Icon(Icons.receipt_long_rounded),
+                      label: const Text('تسجيل مصروف'),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               const Align(alignment: Alignment.centerRight, child: Text('سجل الدفعات', style: TextStyle(fontWeight: FontWeight.bold))),
               const SizedBox(height: 8),
@@ -248,6 +262,10 @@ class _OrderDetailDialog extends ConsumerWidget {
                       subtitle: Text(t.paymentType == 'deposit' ? 'عربون' : 'قسط/دفعة'),
                       trailing: Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(t.paymentDate))),
                     )),
+              const SizedBox(height: 16),
+              const Align(alignment: Alignment.centerRight, child: Text('سجل المصروفات', style: TextStyle(fontWeight: FontWeight.bold))),
+              const SizedBox(height: 8),
+              _OrderExpensesList(orderId: order.id),
             ],
           ),
         ),
@@ -302,6 +320,130 @@ class _OrderDetailDialog extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showAddExpenseDialog(BuildContext context, WidgetRef ref, Order order) {
+    final formKey = GlobalKey<FormState>();
+    String category = expenseCategories.keys.first;
+    final amountController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final workerController = TextEditingController();
+    DateTime date = DateTime.now();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('تسجيل مصروف على الطلب'),
+          content: SizedBox(
+            width: 380,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: category,
+                      decoration: const InputDecoration(labelText: 'الفئة'),
+                      items: expenseCategories.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                      onChanged: (v) => setDialogState(() => category = v!),
+                    ),
+                    const SizedBox(height: 12),
+                    if (category == 'wages')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: TextFormField(controller: workerController, decoration: const InputDecoration(labelText: 'اسم الصنايعي')),
+                      ),
+                    TextFormField(
+                      controller: amountController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'المبلغ (ج.م)'),
+                      validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل مبلغ صحيح' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(controller: descriptionController, maxLines: 2, decoration: const InputDecoration(labelText: 'الوصف (اختياري)')),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('التاريخ'),
+                      subtitle: Text('${date.year}/${date.month}/${date.day}'),
+                      trailing: const Icon(Icons.calendar_month_rounded),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: date,
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) setDialogState(() => date = picked);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+            ElevatedButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                final workerName = category == 'wages' && workerController.text.trim().isNotEmpty ? workerController.text.trim() : null;
+                await ref.read(repositoryProvider).addExpense(
+                      amount: double.parse(amountController.text.trim()),
+                      category: category,
+                      description: descriptionController.text.trim(),
+                      workerName: workerName,
+                      date: date,
+                      orderId: order.id,
+                      customerId: order.customerId,
+                      customerName: order.customerName,
+                    );
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// قائمة المصروفات المرتبطة بطلب معيّن - بتتحدث تلقائيًا لما نضيف مصروف جديد
+class _OrderExpensesList extends ConsumerWidget {
+  final String orderId;
+  const _OrderExpensesList({required this.orderId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final expensesAsync = ref.watch(orderExpensesProvider(orderId));
+    return expensesAsync.when(
+      data: (expenses) {
+        if (expenses.isEmpty) {
+          return const Text('لا توجد مصروفات مسجلة على الطلب ده بعد', style: TextStyle(color: Colors.grey));
+        }
+        final sorted = [...expenses]..sort((a, b) => b.date.compareTo(a.date));
+        return Column(
+          children: sorted
+              .map((e) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.receipt_long_rounded, color: AppColors.warning),
+                    title: Text('${e.amount.toStringAsFixed(0)} ج.م - ${expenseCategories[e.category] ?? e.category}'),
+                    subtitle: Text(
+                      e.description.isNotEmpty
+                          ? e.description
+                          : (e.workerName != null ? 'الصنايعي: ${e.workerName}' : ''),
+                    ),
+                    trailing: Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))),
+                  ))
+              .toList(),
+        );
+      },
+      loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Text('خطأ: $e', style: const TextStyle(color: AppColors.danger)),
     );
   }
 }
