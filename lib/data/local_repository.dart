@@ -123,15 +123,11 @@ class LocalRepository {
       dirty: const Value(true),
     ));
 
-    final order = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
-    if (order != null) {
-      await _db.upsertOrder(OrdersCompanion(
-        id: Value(orderId),
-        totalPaid: Value(order.totalPaid + amount),
-        updatedAt: Value(_now),
-        dirty: const Value(true),
-      ));
-    }
+    // بنعيد حساب المدفوع بالكامل من سجل الدفعات (SUM) بدل "اقرأ ثم اجمع"
+    // - الطريقة القديمة كانت بتعمل race مع خدمة المزامنة (اللي كانت بتزوّد
+    // نفس المبلغ تاني وقت الرفع لـ Firebase) فيحصل تراكم أخطاء أو ضياع
+    // تحديثات لو حصل تعارض توقيت
+    await _db.recomputeOrderTotalPaid(orderId);
   }
 
   // ---------------- Expenses ----------------
