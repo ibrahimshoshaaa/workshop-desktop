@@ -139,6 +139,14 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> upsertCustomer(CustomersCompanion entry) => into(customers).insertOnConflictUpdate(entry);
 
+  /// تحديث جزئي لعميل موجود بالفعل - عكس [upsertCustomer]، الميثود دي
+  /// بتستخدم UPDATE حقيقي (مش INSERT ... ON CONFLICT) عشان تقدر تبعت
+  /// أي عدد من الأعمدة من غير ما تحتاج تبعت كل الأعمدة الإجبارية، لأن
+  /// UPSERT في SQLite بيتطلب قيم لكل الأعمدة NOT NULL حتى لو السجل
+  /// موجود بالفعل وهدفك تعدّل عمود واحد بس
+  Future<void> updateCustomerFields(CustomersCompanion entry) =>
+      (update(customers)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
   Future<void> softDeleteCustomer(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(customers)..where((t) => t.id.equals(id))).write(
@@ -153,6 +161,11 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> upsertOrder(OrdersCompanion entry) => into(orders).insertOnConflictUpdate(entry);
+
+  /// تحديث جزئي لطلب موجود بالفعل (زي تغيير الحالة بس، أو المبلغ
+  /// المدفوع بس) - نفس فكرة [updateCustomerFields]، UPDATE حقيقي
+  Future<void> updateOrderFields(OrdersCompanion entry) =>
+      (update(orders)..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   Future<void> softDeleteOrder(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -175,6 +188,9 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertTransaction(PaymentTransactionsCompanion entry) =>
       into(paymentTransactions).insertOnConflictUpdate(entry);
 
+  Future<void> updateTransactionFields(PaymentTransactionsCompanion entry) =>
+      (update(paymentTransactions)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
   /// بيحسب إجمالي المدفوع لطلب معيّن من واقع سجل الدفعات نفسه (مش من رقم
   /// متراكم متخزّن) - ده اللي بيضمن إن الرقم صح دايمًا مهما حصل تعارض
   /// أو تكرار مزامنة، لأن SUM() عملية "idempotent" ومفيهاش تراكم أخطاء
@@ -194,7 +210,7 @@ class AppDatabase extends _$AppDatabase {
     if (order == null) return;
     final correctTotal = await sumPaymentsForOrder(orderId);
     if (correctTotal != order.totalPaid) {
-      await upsertOrder(OrdersCompanion(
+      await updateOrderFields(OrdersCompanion(
         id: Value(orderId),
         totalPaid: Value(correctTotal),
         updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
@@ -215,6 +231,9 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> upsertExpense(ExpensesCompanion entry) => into(expenses).insertOnConflictUpdate(entry);
 
+  Future<void> updateExpenseFields(ExpensesCompanion entry) =>
+      (update(expenses)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
   Future<void> softDeleteExpense(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(expenses)..where((t) => t.id.equals(id))).write(
@@ -229,6 +248,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> upsertMaterial(MaterialItemsCompanion entry) => into(materialItems).insertOnConflictUpdate(entry);
+
+  Future<void> updateMaterialFields(MaterialItemsCompanion entry) =>
+      (update(materialItems)..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   Future<void> softDeleteMaterial(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
