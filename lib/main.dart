@@ -31,7 +31,7 @@ class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ورشة التنجيد والأثاث - سطح المكتب',
+      title: 'طاحون رويال هوم - سطح المكتب',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
