@@ -97,7 +97,7 @@ class SyncService {
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
         });
-        await _db.upsertCustomer(CustomersCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateCustomerFields(CustomersCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -170,7 +170,7 @@ class SyncService {
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
         });
-        await _db.upsertOrder(OrdersCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateOrderFields(OrdersCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -230,7 +230,7 @@ class SyncService {
           'paymentDate': row.paymentDate,
           'paymentType': row.paymentType,
         });
-        await _db.upsertTransaction(PaymentTransactionsCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateTransactionFields(PaymentTransactionsCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
 
@@ -295,7 +295,7 @@ class SyncService {
           if (row.customerName != null) 'customerName': row.customerName,
           'date': row.date,
         });
-        await _db.upsertExpense(ExpensesCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateExpenseFields(ExpensesCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -348,7 +348,7 @@ class SyncService {
           'minThreshold': row.minThreshold,
           'updatedAt': row.updatedAt,
         });
-        await _db.upsertMaterial(MaterialItemsCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateMaterialFields(MaterialItemsCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
