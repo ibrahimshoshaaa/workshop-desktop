@@ -49,7 +49,7 @@ class DashboardScreen extends ConsumerWidget {
                   color: AppColors.warning,
                 ),
                 _StatCard(
-                  title: 'صافي الربح',
+                  title: 'المبلغ المتاح',
                   value: formatter.format(stats.netProfit),
                   icon: Icons.account_balance_rounded,
                   color: stats.netProfit >= 0 ? AppColors.navy : AppColors.danger,
