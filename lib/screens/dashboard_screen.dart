@@ -41,7 +41,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 _StatCard(title: 'إجمالي المصروفات', value: formatter.format(stats.totalExpenses), icon: Icons.receipt_long_rounded, color: AppColors.warning),
                 _StatCard(
-                  title: 'الرصيد المتاح',
+                  title: 'المبلغ المتاح في الخزنة',
                   value: formatter.format(stats.netProfit),
                   icon: Icons.account_balance_rounded,
                   color: stats.netProfit >= 0 ? AppColors.navy : AppColors.danger,
