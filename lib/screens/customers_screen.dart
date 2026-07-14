@@ -5,7 +5,7 @@ import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
-import 'orders_screen.dart' show OrderDetailDialog;
+import 'orders_screen.dart' show OrderDetailDialog, showAddOrderDialog;
 
 class CustomersScreen extends ConsumerStatefulWidget {
   const CustomersScreen({super.key});
@@ -223,7 +223,12 @@ class _CustomerOrdersDialog extends ConsumerWidget {
               ),
       ),
       actions: [
-        ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('إضافة طلب'),
+          onPressed: () => showAddOrderDialog(context, ref, presetCustomer: customer),
+        ),
       ],
     );
   }
