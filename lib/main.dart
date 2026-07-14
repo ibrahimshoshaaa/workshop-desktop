@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart'; 
 import 'core/theme.dart';
 import 'providers/sync_provider.dart';
 import 'screens/app_shell.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();      
+  await initializeDateFormatting('ar_EG', null); 
   runApp(const ProviderScope(child: WorkshopDesktopApp()));
 }
 
