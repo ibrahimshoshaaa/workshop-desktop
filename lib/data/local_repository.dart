@@ -80,7 +80,7 @@ class LocalRepository {
     required double totalAmount,
     required DateTime deliveryDate,
   }) {
-    return _db.upsertOrder(OrdersCompanion(
+    return _db.updateOrderFields(OrdersCompanion(
       id: Value(order.id),
       itemType: Value(itemType),
       details: Value(details),
@@ -92,7 +92,7 @@ class LocalRepository {
   }
 
   Future<void> updateOrderStatus(String orderId, String status) {
-    return _db.upsertOrder(OrdersCompanion(
+    return _db.updateOrderFields(OrdersCompanion(
       id: Value(orderId),
       status: Value(status),
       updatedAt: Value(_now),
@@ -167,7 +167,7 @@ class LocalRepository {
     String? workerName,
     required DateTime date,
   }) {
-    return _db.upsertExpense(ExpensesCompanion(
+    return _db.updateExpenseFields(ExpensesCompanion(
       id: Value(expense.id),
       amount: Value(amount),
       category: Value(category),
@@ -208,7 +208,7 @@ class LocalRepository {
     required double quantity,
     required double minThreshold,
   }) {
-    return _db.upsertMaterial(MaterialItemsCompanion(
+    return _db.updateMaterialFields(MaterialItemsCompanion(
       id: Value(material.id),
       name: Value(name),
       unit: Value(unit),
@@ -221,7 +221,7 @@ class LocalRepository {
 
   Future<void> adjustMaterialQuantity(MaterialItem material, double delta) {
     final newQuantity = (material.quantity + delta) < 0 ? 0.0 : material.quantity + delta;
-    return _db.upsertMaterial(MaterialItemsCompanion(
+    return _db.updateMaterialFields(MaterialItemsCompanion(
       id: Value(material.id),
       quantity: Value(newQuantity),
       updatedAt: Value(_now),
