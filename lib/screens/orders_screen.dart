@@ -6,6 +6,7 @@ import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
+import '../core/search_bar.dart';
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 const _statuses = ['جاري التجهيز', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
@@ -18,6 +19,14 @@ class OrdersScreen extends ConsumerStatefulWidget {
 
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String? _statusFilter;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _showAddOrderDialog(BuildContext context, WidgetRef ref) async {
     final customers = ref.read(customersProvider).value ?? [];
@@ -152,10 +161,24 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               ],
             ),
           ),
+          AppSearchBar(
+            controller: _searchController,
+            hintText: 'ابحث باسم العميل أو نوع الصنف...',
+            onChanged: (v) => setState(() => _query = v),
+            onClear: () => setState(() => _query = ''),
+          ),
           Expanded(
             child: ordersAsync.when(
               data: (orders) {
-                final filtered = _statusFilter == null ? orders : orders.where((o) => o.status == _statusFilter).toList();
+                var filtered = _statusFilter == null ? orders : orders.where((o) => o.status == _statusFilter).toList();
+                final q = normalizeForSearch(_query);
+                if (q.isNotEmpty) {
+                  filtered = filtered.where((o) {
+                    return normalizeForSearch(o.customerName).contains(q) ||
+                        normalizeForSearch(o.itemType).contains(q) ||
+                        normalizeForSearch(o.details).contains(q);
+                  }).toList();
+                }
                 if (filtered.isEmpty) return const Center(child: Text('لا توجد طلبات', style: TextStyle(color: Colors.grey)));
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -171,7 +194,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           remaining > 0 ? 'متبقي ${remaining.toStringAsFixed(0)}' : 'مكتمل',
                           style: TextStyle(color: remaining > 0 ? AppColors.danger : AppColors.success, fontWeight: FontWeight.bold),
                         ),
-                        onTap: () => showDialog(context: context, builder: (context) => _OrderDetailDialog(order: o)),
+                        onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
                       ),
                     );
                   },
@@ -187,9 +210,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 }
 
-class _OrderDetailDialog extends ConsumerWidget {
+class OrderDetailDialog extends ConsumerWidget {
   final Order order;
-  const _OrderDetailDialog({required this.order});
+  const OrderDetailDialog({required this.order});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
