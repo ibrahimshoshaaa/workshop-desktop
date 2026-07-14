@@ -142,6 +142,9 @@ class LocalRepository {
     required String description,
     String? workerName,
     required DateTime date,
+    String? orderId,
+    String? customerId,
+    String? customerName,
   }) {
     final now = _now;
     return _db.upsertExpense(ExpensesCompanion(
@@ -150,6 +153,9 @@ class LocalRepository {
       category: Value(category),
       description: Value(description),
       workerName: Value(workerName),
+      orderId: Value(orderId),
+      customerId: Value(customerId),
+      customerName: Value(customerName),
       date: Value(date.millisecondsSinceEpoch),
       updatedAt: Value(now),
       isDeleted: const Value(false),
