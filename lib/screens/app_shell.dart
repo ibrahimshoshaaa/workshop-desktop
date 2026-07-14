@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme.dart';
 import '../providers/sync_provider.dart';
+import '../providers/navigation_provider.dart';   // 👈 جديد
 import 'dashboard_screen.dart';
 import 'customers_screen.dart';
 import 'orders_screen.dart';
@@ -10,15 +11,8 @@ import 'expenses_screen.dart';
 import 'inventory_screen.dart';
 import 'reports_screen.dart';
 
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerWidget {          // 👈 كان StatefulWidget، بقى ConsumerWidget
   const AppShell({super.key});
-
-  @override
-  State<AppShell> createState() => _AppShellState();
-}
-
-class _AppShellState extends State<AppShell> {
-  int _index = 0;
 
   static const _destinations = [
     (Icons.dashboard_rounded, 'الرئيسية'),
@@ -41,13 +35,15 @@ class _AppShellState extends State<AppShell> {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {              // 👈 بقت build(context, ref)
+    final index = ref.watch(selectedTabProvider);                  // 👈 بدل _index
+
     return Scaffold(
       body: Row(
         children: [
           NavigationRail(
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
+            selectedIndex: index,
+            onDestinationSelected: (i) => ref.read(selectedTabProvider.notifier).state = i,  // 👈 بدل setState
             labelType: NavigationRailLabelType.all,
             backgroundColor: AppColors.woodDark,
             selectedIconTheme: const IconThemeData(color: AppColors.amber),
@@ -70,15 +66,14 @@ class _AppShellState extends State<AppShell> {
             destinations: _destinations.map((d) => NavigationRailDestination(icon: Icon(d.$1), label: Text(d.$2))).toList(),
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: _screens[_index]),
+          Expanded(child: _screens[index]),
         ],
       ),
     );
   }
 }
 
-/// زرار مزامنة يدوي - يظهر تحت الشريط الجانبي، يفيد لما تعرف إن فيه
-/// تعديل حصل على الموبايل وعايز تشوفه فورًا من غير ما تستنى الدورة التلقائية
+// _SyncButton يفضل زي ما هو من غير أي تغيير
 class _SyncButton extends ConsumerStatefulWidget {
   @override
   ConsumerState<_SyncButton> createState() => _SyncButtonState();
