@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../providers/data_providers.dart';
 import '../core/theme.dart';
+import '../core/search_bar.dart';
 
 class RevenuesDetailScreen extends ConsumerStatefulWidget {
   const RevenuesDetailScreen({super.key});
@@ -15,6 +16,14 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
   late DateTimeRange _selectedDateRange;
   late String _sortBy;
   late bool _sortAscending;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -35,10 +44,18 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
     final dateFormatter = DateFormat('yyyy-MM-dd', 'ar_EG');
 
     // تصفية الطلبات حسب التاريخ
-    final filteredOrders = orders.where((order) {
+    var filteredOrders = orders.where((order) {
       final orderDate = DateTime.fromMillisecondsSinceEpoch(order.createdAt);
       return orderDate.isAfter(_selectedDateRange.start) && orderDate.isBefore(_selectedDateRange.end.add(const Duration(days: 1)));
     }).toList();
+
+    // تصفية حسب نص البحث (اسم العميل أو نوع الصنف)
+    final q = normalizeForSearch(_query);
+    if (q.isNotEmpty) {
+      filteredOrders = filteredOrders.where((order) {
+        return normalizeForSearch(order.customerName).contains(q) || normalizeForSearch(order.itemType).contains(q);
+      }).toList();
+    }
 
     // فرز الطلبات
     if (_sortBy == 'date') {
@@ -175,6 +192,12 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                 ),
               ],
             ),
+          ),
+          AppSearchBar(
+            controller: _searchController,
+            hintText: 'ابحث باسم العميل أو نوع الصنف...',
+            onChanged: (v) => setState(() => _query = v),
+            onClear: () => setState(() => _query = ''),
           ),
           // قائمة الطلبات
           Expanded(
