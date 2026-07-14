@@ -68,6 +68,11 @@ class Expenses extends Table {
   TextColumn get category => text()();
   TextColumn get description => text().withDefault(const Constant(''))();
   TextColumn get workerName => text().nullable()();
+  /// لو المصروف ده مرتبط بطلب/عميل معيّن (زي مصروف بيتسجل من جوه تفاصيل
+  /// الطلب) - بيفضلوا null للمصروفات العامة (إيجار، أجور... إلخ)
+  TextColumn get orderId => text().nullable()();
+  TextColumn get customerId => text().nullable()();
+  TextColumn get customerName => text().nullable()();
   IntColumn get date => integer()();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
@@ -107,7 +112,24 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onCreate: (m) async {
+        await m.createAll();
+      },
+      onUpgrade: (m, from, to) async {
+        if (from < 2) {
+          // إضافة أعمدة ربط المصروف بالطلب/العميل (نسخة 2)
+          await m.addColumn(expenses, expenses.orderId);
+          await m.addColumn(expenses, expenses.customerId);
+          await m.addColumn(expenses, expenses.customerName);
+        }
+      },
+    );
+  }
 
   // ---------------- Customers ----------------
 
@@ -157,6 +179,10 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Expense>> watchExpenses() {
     return (select(expenses)..where((t) => t.isDeleted.equals(false))).watch();
+  }
+
+  Stream<List<Expense>> watchExpensesForOrder(String orderId) {
+    return (select(expenses)..where((t) => t.orderId.equals(orderId) & t.isDeleted.equals(false))).watch();
   }
 
   Future<void> upsertExpense(ExpensesCompanion entry) => into(expenses).insertOnConflictUpdate(entry);
