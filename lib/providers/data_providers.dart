@@ -23,6 +23,11 @@ final expensesProvider = StreamProvider<List<Expense>>((ref) {
   return ref.watch(databaseProvider).watchExpenses();
 });
 
+/// مصروفات مرتبطة بطلب معيّن فقط - بنستخدمه في ديالوج تفاصيل الطلب
+final orderExpensesProvider = StreamProvider.family<List<Expense>, String>((ref, orderId) {
+  return ref.watch(databaseProvider).watchExpensesForOrder(orderId);
+});
+
 final materialsProvider = StreamProvider<List<MaterialItem>>((ref) {
   return ref.watch(databaseProvider).watchMaterials();
 });
