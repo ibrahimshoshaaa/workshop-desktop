@@ -322,4 +322,4 @@ class _MoneyBox extends StatelessWidget {
       ],
     );
   }
-}s
+}
