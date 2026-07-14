@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/data_providers.dart';
-import '../providers/navigation_provider.dart';   // 👈 جديد
+import '../providers/navigation_provider.dart';
 import '../core/theme.dart';
+import 'revenues_detail_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -24,13 +25,19 @@ class DashboardScreen extends ConsumerWidget {
               spacing: 16,
               runSpacing: 16,
               children: [
-                _StatCard(title: 'إجمالي الإيرادات', value: formatter.format(stats.totalRevenue), icon: Icons.trending_up_rounded, color: AppColors.success),
+                _StatCard(
+                  title: 'إجمالي الإيرادات',
+                  value: formatter.format(stats.totalRevenue),
+                  icon: Icons.trending_up_rounded,
+                  color: AppColors.success,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RevenuesDetailScreen())),
+                ),
                 _StatCard(
                   title: 'إجمالي المديونيات',
                   value: formatter.format(stats.totalDebts),
                   icon: Icons.warning_amber_rounded,
                   color: AppColors.danger,
-                  onTap: () => ref.read(selectedTabProvider.notifier).state = 3,   // 👈 3 = صفحة المديونيات
+                  onTap: () => ref.read(selectedTabProvider.notifier).state = 3,
                 ),
                 _StatCard(title: 'إجمالي المصروفات', value: formatter.format(stats.totalExpenses), icon: Icons.receipt_long_rounded, color: AppColors.warning),
                 _StatCard(
