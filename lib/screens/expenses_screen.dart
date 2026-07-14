@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
+import '../core/search_bar.dart';
 
 const _categories = {'materials': 'خامات', 'rent': 'إيجار وتشغيل', 'wages': 'أجور الصنايعية', 'other': 'أخرى'};
 
@@ -15,6 +16,14 @@ class ExpensesScreen extends ConsumerStatefulWidget {
 
 class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   String? _categoryFilter;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _showExpenseDialog(BuildContext context, WidgetRef ref, {Expense? expense}) async {
     final formKey = GlobalKey<FormState>();
@@ -128,10 +137,24 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               ],
             ),
           ),
+          AppSearchBar(
+            controller: _searchController,
+            hintText: 'ابحث بالوصف أو اسم الصنايعي...',
+            onChanged: (v) => setState(() => _query = v),
+            onClear: () => setState(() => _query = ''),
+          ),
           Expanded(
             child: expensesAsync.when(
               data: (expenses) {
-                final filtered = _categoryFilter == null ? expenses : expenses.where((e) => e.category == _categoryFilter).toList();
+                var filtered = _categoryFilter == null ? expenses : expenses.where((e) => e.category == _categoryFilter).toList();
+                final q = normalizeForSearch(_query);
+                if (q.isNotEmpty) {
+                  filtered = filtered.where((e) {
+                    return normalizeForSearch(e.description).contains(q) ||
+                        normalizeForSearch(e.workerName ?? '').contains(q) ||
+                        normalizeForSearch(_categories[e.category] ?? '').contains(q);
+                  }).toList();
+                }
                 if (filtered.isEmpty) return const Center(child: Text('لا توجد مصروفات مسجلة', style: TextStyle(color: Colors.grey)));
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
