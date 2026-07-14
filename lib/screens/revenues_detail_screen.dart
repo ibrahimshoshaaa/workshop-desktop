@@ -100,7 +100,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                     data: Theme.of(context).copyWith(
                                       useMaterial3: true,
                                     ),
-                                    child: Directionality(textDirection: TextDirection.rtl, child: child!),
+                                    child: Directionality(textDirection: TextDirection.ltr, child: child!),
                                   );
                                 },
                               );
