@@ -13,12 +13,14 @@ class RevenuesDetailScreen extends ConsumerStatefulWidget {
 
 class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
   late DateTimeRange _selectedDateRange;
-  String _sortBy = 'date'; // 'date' or 'amount'
-  bool _sortAscending = false;
+  late String _sortBy;
+  late bool _sortAscending;
 
   @override
   void initState() {
     super.initState();
+    _sortBy = 'date';
+    _sortAscending = false;
     final now = DateTime.now();
     _selectedDateRange = DateTimeRange(
       start: DateTime(now.year, now.month, 1),
@@ -273,7 +275,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                         ],
                                       ),
                                     ),
-                                    if (outstanding > 0) ...[(
+                                    if (outstanding > 0) ...[
                                       const Divider(height: 16),
                                       Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -288,7 +290,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                           ],
                                         ),
                                       ),
-                                    )],
+                                    ],
                                   ],
                                 ),
                               ),
