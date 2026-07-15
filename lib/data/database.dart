@@ -61,6 +61,11 @@ class PaymentTransactions extends Table {
   RealColumn get amountPaid => real()();
   IntColumn get paymentDate => integer()();
   TextColumn get paymentType => text()();
+  /// طريقة استلام المبلغ: cash (نقدي) / instapay (إنستاباي) - أو أي قيمة
+  /// حرة تانية لو المستخدم اختار "أخرى" وكتب طريقة مخصوصة
+  TextColumn get paymentMethod => text().withDefault(const Constant('cash'))();
+  /// حالة الدفعة: pending (معلقة) / completed (مكتملة)
+  TextColumn get status => text().withDefault(const Constant('completed'))();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   BoolColumn get dirty => boolean().withDefault(const Constant(true))();
@@ -164,7 +169,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -198,6 +203,11 @@ class AppDatabase extends _$AppDatabase {
             await (update(customers)..where((t) => t.id.equals(existing[i].id)))
                 .write(CustomersCompanion(serialNumber: Value(i + 1)));
           }
+        }
+        if (from < 6) {
+          // إضافة طريقة الاستلام (نقدي/إنستاباي) وحالة الدفعة على الدفعات (نسخة 6)
+          await m.addColumn(paymentTransactions, paymentTransactions.paymentMethod);
+          await m.addColumn(paymentTransactions, paymentTransactions.status);
         }
       },
     );
@@ -273,6 +283,14 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> updateTransactionFields(PaymentTransactionsCompanion entry) =>
       (update(paymentTransactions)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
+  /// تحديث حالة دفعة معيّنة بس (معلقة/مكتملة) من غير ما نلمس باقي الأعمدة
+  Future<void> updatePaymentStatus(String id, String status) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return (update(paymentTransactions)..where((t) => t.id.equals(id))).write(
+      PaymentTransactionsCompanion(status: Value(status), updatedAt: Value(now), dirty: const Value(true)),
+    );
+  }
 
   /// بيحسب إجمالي المدفوع لطلب معيّن من واقع سجل الدفعات نفسه (مش من رقم
   /// متراكم متخزّن) - ده اللي بيضمن إن الرقم صح دايمًا مهما حصل تعارض

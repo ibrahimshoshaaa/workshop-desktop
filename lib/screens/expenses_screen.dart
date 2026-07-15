@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:collection/collection.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
+import '../core/other_dropdown.dart';
 
 const _categories = {'materials': 'خامات', 'rent': 'إيجار وتشغيل', 'wages': 'أجور الصنايعية', 'other': 'أخرى'};
 
@@ -32,6 +34,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     final descriptionController = TextEditingController(text: expense?.description ?? '');
     final workerController = TextEditingController(text: expense?.workerName ?? '');
     DateTime date = expense != null ? DateTime.fromMillisecondsSinceEpoch(expense.date) : DateTime.now();
+    final customers = ref.read(customersProvider).value ?? [];
+    String? chargedCustomerId = expense?.customerId;
 
     await showDialog(
       context: context,
@@ -46,11 +50,13 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DropdownButtonFormField<String>(
-                      value: category,
-                      decoration: const InputDecoration(labelText: 'الفئة'),
-                      items: _categories.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-                      onChanged: (v) => setDialogState(() => category = v!),
+                    OtherCapableDropdown(
+                      options: _categories.entries.where((e) => e.key != 'other').map((e) => e.value).toList(),
+                      label: 'الفئة',
+                      value: _categories[category] ?? category,
+                      onChanged: (v) => setDialogState(
+                        () => category = _categories.entries.firstWhereOrNull((e) => e.value == v)?.key ?? v,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     if (category == 'wages')
@@ -66,6 +72,17 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextFormField(controller: descriptionController, maxLines: 2, decoration: const InputDecoration(labelText: 'الوصف (اختياري)')),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      value: chargedCustomerId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'تحميل المصروف على عميل (اختياري)'),
+                      items: [
+                        const DropdownMenuItem<String?>(value: null, child: Text('بدون - مصروف عام')),
+                        ...customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name))),
+                      ],
+                      onChanged: (v) => setDialogState(() => chargedCustomerId = v),
+                    ),
                     const SizedBox(height: 12),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -113,12 +130,34 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
+                if (category.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اكتب فئة المصروف')));
+                  return;
+                }
                 final repo = ref.read(repositoryProvider);
                 final workerName = category == 'wages' && workerController.text.trim().isNotEmpty ? workerController.text.trim() : null;
+                final chargedCustomer = chargedCustomerId == null ? null : customers.firstWhereOrNull((c) => c.id == chargedCustomerId);
                 if (expense == null) {
-                  await repo.addExpense(amount: double.parse(amountController.text.trim()), category: category, description: descriptionController.text.trim(), workerName: workerName, date: date);
+                  await repo.addExpense(
+                    amount: double.parse(amountController.text.trim()),
+                    category: category,
+                    description: descriptionController.text.trim(),
+                    workerName: workerName,
+                    date: date,
+                    customerId: chargedCustomer?.id,
+                    customerName: chargedCustomer?.name,
+                  );
                 } else {
-                  await repo.updateExpense(expense, amount: double.parse(amountController.text.trim()), category: category, description: descriptionController.text.trim(), workerName: workerName, date: date);
+                  await repo.updateExpense(
+                    expense,
+                    amount: double.parse(amountController.text.trim()),
+                    category: category,
+                    description: descriptionController.text.trim(),
+                    workerName: workerName,
+                    date: date,
+                    customerId: chargedCustomer?.id,
+                    customerName: chargedCustomer?.name,
+                  );
                 }
                 if (context.mounted) Navigator.pop(context);
               },
@@ -174,7 +213,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   filtered = filtered.where((e) {
                     return normalizeForSearch(e.description).contains(q) ||
                         normalizeForSearch(e.workerName ?? '').contains(q) ||
-                        normalizeForSearch(_categories[e.category] ?? '').contains(q);
+                        normalizeForSearch(_categories[e.category] ?? e.category).contains(q);
                   }).toList();
                 }
                 if (filtered.isEmpty) return const Center(child: Text('لا توجد مصروفات مسجلة', style: TextStyle(color: Colors.grey)));
@@ -186,9 +225,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     return Card(
                       child: ListTile(
                         onTap: () => _showExpenseDialog(context, ref, expense: e),
-                        title: Text(e.description.isNotEmpty ? e.description : (_categories[e.category] ?? 'مصروف')),
+                        title: Text(e.description.isNotEmpty ? e.description : (_categories[e.category] ?? e.category)),
                         subtitle: Text(
-                          '${_categories[e.category] ?? ''}${e.workerName != null ? ' - ${e.workerName}' : ''} | ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))}',
+                          '${_categories[e.category] ?? e.category}${e.workerName != null ? ' - ${e.workerName}' : ''}'
+                          '${e.customerName != null ? ' | محمّل على: ${e.customerName}' : ''}'
+                          ' | ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))}',
                         ),
                         trailing: Text('${e.amount.toStringAsFixed(0)} ج.م', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.danger)),
                       ),

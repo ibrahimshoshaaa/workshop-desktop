@@ -4,6 +4,7 @@ import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
+import '../core/other_dropdown.dart';
 
 const _units = ['متر', 'كيلو', 'قطعة', 'لفة', 'لتر'];
 
@@ -44,11 +45,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                 children: [
                   TextFormField(controller: nameController, decoration: const InputDecoration(labelText: 'اسم الخامة'), validator: (v) => (v == null || v.trim().isEmpty) ? 'الاسم مطلوب' : null),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
+                  OtherCapableDropdown(
+                    options: _units,
+                    label: 'الوحدة',
                     value: unit,
-                    decoration: const InputDecoration(labelText: 'الوحدة'),
-                    items: _units.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                    onChanged: (v) => setDialogState(() => unit = v!),
+                    onChanged: (v) => setDialogState(() => unit = v),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(controller: quantityController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الكمية الحالية'), validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل رقم صحيح' : null),
@@ -63,6 +64,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
+                if (unit.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اكتب الوحدة')));
+                  return;
+                }
                 final repo = ref.read(repositoryProvider);
                 final quantity = double.parse(quantityController.text.trim());
                 final minThreshold = double.parse(minController.text.trim());

@@ -127,7 +127,7 @@ class PdfExportService {
               _summaryBox('الإيرادات', totalRevenue, PdfColors.green700),
               _summaryBox('المديونيات', totalDebts, PdfColors.red700),
               _summaryBox('المصروفات', totalExpenses, PdfColors.orange700),
-              _summaryBox('صافي الربح', netProfit, netProfit >= 0 ? PdfColors.blue700 : PdfColors.red700),
+              _summaryBox('المبلغ المتاح', netProfit, netProfit >= 0 ? PdfColors.blue700 : PdfColors.red700),
             ],
           ),
           pw.SizedBox(height: 24),
@@ -154,6 +154,102 @@ class PdfExportService {
                 .map((e) => [e.category, e.description, DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date)), _fmt(e.amount)])
                 .toList(),
           ),
+        ],
+      ),
+    );
+    return doc.save();
+  }
+
+  /// إيصال استلام فوري - بيتطبع بعد تسجيل أي دفعة (عربون أو قسط) مباشرة
+  Future<Uint8List> buildPaymentReceipt({
+    required String customerName,
+    required String itemType,
+    required double amount,
+    required String method,
+    required DateTime date,
+    String status = 'مكتملة',
+  }) async {
+    await _ensureFontsLoaded();
+    final doc = pw.Document();
+    doc.addPage(
+      pw.Page(
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(base: _arabicFont, bold: _arabicFontBold),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Center(child: pw.Text('إيصال استلام', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('طاحون رويال هوم', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700))),
+            pw.Divider(height: 24),
+            pw.SizedBox(height: 8),
+            _receiptRow('اسم العميل', customerName),
+            _receiptRow('الصنف', itemType),
+            _receiptRow('المبلغ المستلم', _fmt(amount)),
+            _receiptRow('طريقة الاستلام', method),
+            _receiptRow('حالة الدفعة', status),
+            _receiptRow('التاريخ', DateFormat('d/M/yyyy - hh:mm a').format(date)),
+            pw.SizedBox(height: 24),
+            pw.Divider(),
+            pw.SizedBox(height: 12),
+            pw.Text('توقيع المستلم: ..............................', style: const pw.TextStyle(fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+    return doc.save();
+  }
+
+  pw.Widget _receiptRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 6),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label, style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+          pw.Text(value, style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  /// تقرير التسليمات المقرر إتمامها خلال فترة معيّنة (الأسبوع القادم
+  /// افتراضيًا) - بيتبعت للورشة/المتابعة عن طريق زر "إرسال" في التقارير
+  Future<Uint8List> buildWeeklyDeliveriesReport({
+    required List<Order> orders,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    await _ensureFontsLoaded();
+    final doc = pw.Document();
+    final sorted = [...orders]..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
+
+    doc.addPage(
+      pw.MultiPage(
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(base: _arabicFont, bold: _arabicFontBold),
+        build: (context) => [
+          pw.Text('تقرير التسليمات القادمة', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+          pw.Text('من ${DateFormat('d/M/yyyy').format(from)} إلى ${DateFormat('d/M/yyyy').format(to)}',
+              style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+          pw.Divider(height: 24),
+          if (sorted.isEmpty)
+            pw.Text('لا توجد تسليمات مقررة خلال هذه الفترة', style: const pw.TextStyle(fontSize: 14))
+          else
+            pw.TableHelper.fromTextArray(
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
+              cellAlignment: pw.Alignment.centerRight,
+              headers: ['تاريخ التسليم', 'العميل', 'الصنف', 'الحالة', 'المتبقي'],
+              data: sorted
+                  .map((o) => [
+                        DateFormat('EEEE d/M', 'ar_EG').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate)),
+                        o.customerName,
+                        o.itemType,
+                        o.status,
+                        _fmt(o.remaining),
+                      ])
+                  .toList(),
+            ),
         ],
       ),
     );

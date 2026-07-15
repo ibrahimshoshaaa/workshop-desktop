@@ -4,6 +4,7 @@ import '../providers/data_providers.dart';
 import '../services/pdf_export_service.dart';
 import '../services/excel_export_service.dart';
 import '../core/theme.dart';
+import '../core/whatsapp.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -24,6 +25,51 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       initialDateRange: _range,
     );
     if (picked != null) setState(() => _range = picked);
+  }
+
+  Future<void> _exportWeeklyDeliveries() async {
+    setState(() => _isExporting = true);
+    try {
+      final now = DateTime.now();
+      final from = DateTime(now.year, now.month, now.day);
+      final to = from.add(const Duration(days: 7));
+      final orders = (ref.read(ordersProvider).value ?? [])
+          .where((o) =>
+              o.status != 'تم التسليم' &&
+              DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isAfter(from.subtract(const Duration(seconds: 1))) &&
+              DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isBefore(to))
+          .toList();
+      final bytes = await PdfExportService.instance.buildWeeklyDeliveriesReport(orders: orders, from: from, to: to);
+      if (mounted) await PdfExportService.instance.preview(context, bytes, 'تقرير_التسليمات_الأسبوعية.pdf');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _sendWeeklyDeliveriesOnWhatsApp() async {
+    final now = DateTime.now();
+    final from = DateTime(now.year, now.month, now.day);
+    final to = from.add(const Duration(days: 7));
+    final orders = (ref.read(ordersProvider).value ?? [])
+        .where((o) =>
+            o.status != 'تم التسليم' &&
+            DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isAfter(from.subtract(const Duration(seconds: 1))) &&
+            DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isBefore(to))
+        .toList()
+      ..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
+
+    final buffer = StringBuffer()..writeln('تسليمات الأسبوع القادم:');
+    if (orders.isEmpty) {
+      buffer.writeln('لا توجد تسليمات مقررة');
+    } else {
+      for (final o in orders) {
+        final d = DateTime.fromMillisecondsSinceEpoch(o.deliveryDate);
+        buffer.writeln('- ${o.customerName} (${o.itemType}) بتاريخ ${d.day}/${d.month}');
+      }
+    }
+    await shareTextOnWhatsApp(buffer.toString());
   }
 
   Future<void> _exportFinancialPdf() async {
@@ -102,6 +148,29 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             padding: const EdgeInsets.all(24),
             child: ListView(
               children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('تقرير التسليمات (الأسبوع القادم)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        const SizedBox(height: 4),
+                        const Text('كل الطلبات المقرر تسليمها خلال الأيام السبعة القادمة ولسه ما اتسلمتش',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: OutlinedButton.icon(onPressed: _exportWeeklyDeliveries, icon: const Icon(Icons.picture_as_pdf_rounded), label: const Text('عرض/طباعة'))),
+                            const SizedBox(width: 12),
+                            Expanded(child: ElevatedButton.icon(onPressed: _sendWeeklyDeliveriesOnWhatsApp, icon: const Icon(Icons.send_rounded), label: const Text('إرسال واتساب'))),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),

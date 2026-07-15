@@ -201,6 +201,8 @@ class SyncService {
             amountPaid: Value((map['amountPaid'] as num?)?.toDouble() ?? 0),
             paymentDate: Value((map['paymentDate'] as num?)?.toInt() ?? remoteUpdatedAt),
             paymentType: Value(map['paymentType']?.toString() ?? 'installment'),
+            paymentMethod: Value(map['paymentMethod']?.toString() ?? 'cash'),
+            status: Value(map['status']?.toString() ?? 'completed'),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
             dirty: const Value(false),
@@ -231,6 +233,8 @@ class SyncService {
           'amountPaid': row.amountPaid,
           'paymentDate': row.paymentDate,
           'paymentType': row.paymentType,
+          'paymentMethod': row.paymentMethod,
+          'status': row.status,
         });
         await _db.updateTransactionFields(PaymentTransactionsCompanion(id: Value(row.id), dirty: const Value(false)));
       }

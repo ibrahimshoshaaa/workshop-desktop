@@ -146,20 +146,25 @@ class LocalRepository {
 
   // ---------------- Payments ----------------
 
-  Future<void> addPayment({
+  Future<String> addPayment({
     required String orderId,
     required String customerId,
     required double amount,
     required String paymentType,
+    String paymentMethod = 'cash',
+    String status = 'completed',
   }) async {
     final now = _now;
+    final id = _uuid.v4();
     await _db.upsertTransaction(PaymentTransactionsCompanion(
-      id: Value(_uuid.v4()),
+      id: Value(id),
       orderId: Value(orderId),
       customerId: Value(customerId),
       amountPaid: Value(amount),
       paymentDate: Value(now),
       paymentType: Value(paymentType),
+      paymentMethod: Value(paymentMethod),
+      status: Value(status),
       updatedAt: Value(now),
       isDeleted: const Value(false),
       dirty: const Value(true),
@@ -170,6 +175,12 @@ class LocalRepository {
     // نفس المبلغ تاني وقت الرفع لـ Firebase) فيحصل تراكم أخطاء أو ضياع
     // تحديثات لو حصل تعارض توقيت
     await _db.recomputeOrderTotalPaid(orderId);
+    return id;
+  }
+
+  /// تحديث حالة دفعة سابقة (مثلاً من "معلقة" لـ "مكتملة")
+  Future<void> updatePaymentStatus(String transactionId, String status) {
+    return _db.updatePaymentStatus(transactionId, status);
   }
 
   // ---------------- Expenses ----------------
@@ -208,6 +219,8 @@ class LocalRepository {
     required String description,
     String? workerName,
     required DateTime date,
+    String? customerId,
+    String? customerName,
   }) {
     return _db.updateExpenseFields(ExpensesCompanion(
       id: Value(expense.id),
@@ -216,6 +229,8 @@ class LocalRepository {
       description: Value(description),
       workerName: Value(workerName),
       date: Value(date.millisecondsSinceEpoch),
+      customerId: Value(customerId),
+      customerName: Value(customerName),
       updatedAt: Value(_now),
       dirty: const Value(true),
     ));

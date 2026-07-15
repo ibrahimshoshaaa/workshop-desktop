@@ -14,7 +14,43 @@ import '../core/constants.dart';
 import '../core/search_bar.dart';
 import '../core/whatsapp.dart';
 import '../core/order_calculations.dart';
+import '../core/other_dropdown.dart';
 import '../services/cloudinary_service.dart';
+import '../services/pdf_export_service.dart';
+
+/// بعد تسجيل أي دفعة، بيسأل المستخدم لو عايز يطبع إيصال استلام فورًا
+Future<void> _offerReceiptPrint(
+  BuildContext context, {
+  required String customerName,
+  required String itemType,
+  required double amount,
+  required String method,
+  required DateTime date,
+  String status = 'completed',
+}) async {
+  final shouldPrint = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('تسجيل الدفعة تم بنجاح'),
+      content: const Text('هل تريد طباعة إيصال استلام الآن؟'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('لا')),
+        ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('طباعة إيصال')),
+      ],
+    ),
+  );
+  if (shouldPrint == true && context.mounted) {
+    final bytes = await PdfExportService.instance.buildPaymentReceipt(
+      customerName: customerName,
+      itemType: itemType,
+      amount: amount,
+      method: paymentMethods[method] ?? method,
+      status: paymentStatuses[status] ?? status,
+      date: date,
+    );
+    if (context.mounted) await PdfExportService.instance.preview(context, bytes, 'إيصال_استلام.pdf');
+  }
+}
 
 /// بيحوّل نص JSON مخزّن في imagesJson لقائمة روابط صور
 List<String> _parseOrderImages(String imagesJson) {
@@ -84,6 +120,12 @@ class _ImageThumb extends StatelessWidget {
 }
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
+
+/// طرق استلام الدفعات المتاحة
+const Map<String, String> paymentMethods = {'cash': 'نقدي', 'instapay': 'إنستاباي'};
+
+/// حالات الدفعة المتاحة
+const Map<String, String> paymentStatuses = {'completed': 'مكتملة', 'pending': 'معلقة'};
 
 /// بيبني نص الرسالة اللي هتتبعت للصنايعي على واتساب - نوع الصنف
 /// والمواصفات وتاريخ التسليم بس، من غير أي مبالغ (إجمالي/متبقي) لأن
@@ -235,6 +277,7 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
   final detailsController = TextEditingController();
   final totalController = TextEditingController();
   final depositController = TextEditingController();
+  String depositMethod = 'cash';
   DateTime deliveryDate = DateTime.now().add(const Duration(days: 7));
   final pickedImages = <PlatformFile>[];
   bool isSaving = false;
@@ -266,11 +309,11 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                       decoration: const InputDecoration(labelText: 'العميل'),
                     ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
+                  OtherCapableDropdown(
+                    options: _itemTypes.where((t) => t != kOtherOptionValue).toList(),
+                    label: 'نوع الصنف',
                     value: itemType,
-                    decoration: const InputDecoration(labelText: 'نوع الصنف'),
-                    items: _itemTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                    onChanged: (v) => setDialogState(() => itemType = v!),
+                    onChanged: (v) => setDialogState(() => itemType = v),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(controller: detailsController, maxLines: 2, decoration: const InputDecoration(labelText: 'المواصفات')),
@@ -340,6 +383,13 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'العربون المدفوع الآن (اختياري)'),
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: depositMethod,
+                    decoration: const InputDecoration(labelText: 'طريقة الاستلام'),
+                    items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                    onChanged: (v) => setDialogState(() => depositMethod = v!),
+                  ),
                 ],
               ),
             ),
@@ -352,6 +402,10 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                 ? null
                 : () async {
                     if (!formKey.currentState!.validate() || customerId == null) return;
+                    if (itemType.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اكتب نوع الصنف')));
+                      return;
+                    }
                     setDialogState(() => isSaving = true);
                     try {
                       final imageUrls = pickedImages.isEmpty
@@ -372,10 +426,27 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                         imageUrls: imageUrls,
                       );
                       final deposit = double.tryParse(depositController.text.trim()) ?? 0;
+                      String? depositTxId;
                       if (deposit > 0) {
-                        await repo.addPayment(orderId: orderId, customerId: customer.id, amount: deposit, paymentType: 'deposit');
+                        depositTxId = await repo.addPayment(
+                          orderId: orderId,
+                          customerId: customer.id,
+                          amount: deposit,
+                          paymentType: 'deposit',
+                          paymentMethod: depositMethod,
+                        );
                       }
                       if (context.mounted) Navigator.pop(context);
+                      if (deposit > 0 && depositTxId != null && context.mounted) {
+                        await _offerReceiptPrint(
+                          context,
+                          customerName: customer.name,
+                          itemType: itemType,
+                          amount: deposit,
+                          method: depositMethod,
+                          date: DateTime.now(),
+                        );
+                      }
                     } catch (e) {
                       setDialogState(() => isSaving = false);
                       if (context.mounted) {
@@ -654,8 +725,31 @@ class OrderDetailDialog extends ConsumerWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(t.paymentType == 'deposit' ? Icons.savings_rounded : Icons.payments_rounded, color: AppColors.wood),
                       title: Text('${t.amountPaid.toStringAsFixed(0)} ج.م'),
-                      subtitle: Text(t.paymentType == 'deposit' ? 'عربون' : 'قسط/دفعة'),
-                      trailing: Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(t.paymentDate))),
+                      subtitle: Text(
+                        '${t.paymentType == 'deposit' ? 'عربون' : 'قسط/دفعة'} - ${paymentMethods[t.paymentMethod] ?? t.paymentMethod}',
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              final next = t.status == 'completed' ? 'pending' : 'completed';
+                              ref.read(repositoryProvider).updatePaymentStatus(t.id, next);
+                            },
+                            child: Chip(
+                              label: Text(paymentStatuses[t.status] ?? t.status, style: const TextStyle(fontSize: 11)),
+                              backgroundColor: t.status == 'completed'
+                                  ? AppColors.success.withValues(alpha: 0.15)
+                                  : AppColors.warning.withValues(alpha: 0.15),
+                              labelStyle: TextStyle(color: t.status == 'completed' ? AppColors.success : AppColors.warning),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(t.paymentDate)), style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
                     )),
               const SizedBox(height: 16),
               const Align(alignment: Alignment.centerRight, child: Text('سجل المصروفات', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -762,27 +856,71 @@ class OrderDetailDialog extends ConsumerWidget {
 
   void _showAddPaymentDialog(BuildContext context, WidgetRef ref, Order order, double maxAmount) {
     final controller = TextEditingController();
+    String method = 'cash';
+    String status = 'completed';
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('تسجيل دفعة'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: 'المبلغ (المتبقي ${maxAmount.toStringAsFixed(0)} ج.م)'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              final amount = double.tryParse(controller.text.trim());
-              if (amount == null || amount <= 0) return;
-              await ref.read(repositoryProvider).addPayment(orderId: order.id, customerId: order.customerId, amount: amount, paymentType: 'installment');
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('حفظ'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('تسجيل دفعة'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: 'المبلغ (المتبقي ${maxAmount.toStringAsFixed(0)} ج.م)'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: method,
+                  decoration: const InputDecoration(labelText: 'طريقة الاستلام'),
+                  items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                  onChanged: (v) => setDialogState(() => method = v!),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: status,
+                  decoration: const InputDecoration(labelText: 'حالة الدفعة'),
+                  items: paymentStatuses.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                  onChanged: (v) => setDialogState(() => status = v!),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+            ElevatedButton(
+              onPressed: () async {
+                final amount = double.tryParse(controller.text.trim());
+                if (amount == null || amount <= 0) return;
+                await ref.read(repositoryProvider).addPayment(
+                      orderId: order.id,
+                      customerId: order.customerId,
+                      amount: amount,
+                      paymentType: 'installment',
+                      paymentMethod: method,
+                      status: status,
+                    );
+                if (context.mounted) Navigator.pop(context);
+                if (context.mounted) {
+                  await _offerReceiptPrint(
+                    context,
+                    customerName: order.customerName,
+                    itemType: order.itemType,
+                    amount: amount,
+                    method: method,
+                    status: status,
+                    date: DateTime.now(),
+                  );
+                }
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -808,11 +946,11 @@ class OrderDetailDialog extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DropdownButtonFormField<String>(
-                      value: category,
-                      decoration: const InputDecoration(labelText: 'الفئة'),
-                      items: expenseCategories.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-                      onChanged: (v) => setDialogState(() => category = v!),
+                    OtherCapableDropdown(
+                      options: expenseCategories.entries.where((e) => e.key != 'other').map((e) => e.value).toList(),
+                      label: 'الفئة',
+                      value: expenseCategories[category] ?? category,
+                      onChanged: (v) => setDialogState(() => category = expenseCategories.entries.firstWhereOrNull((e) => e.value == v)?.key ?? v),
                     ),
                     const SizedBox(height: 12),
                     if (category == 'wages')
@@ -854,6 +992,10 @@ class OrderDetailDialog extends ConsumerWidget {
             ElevatedButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
+                if (category.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اكتب فئة المصروف')));
+                  return;
+                }
                 final workerName = category == 'wages' && workerController.text.trim().isNotEmpty ? workerController.text.trim() : null;
                 await ref.read(repositoryProvider).addExpense(
                       amount: double.parse(amountController.text.trim()),
