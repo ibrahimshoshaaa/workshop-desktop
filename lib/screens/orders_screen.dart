@@ -11,7 +11,6 @@ import '../core/whatsapp.dart';
 import '../core/order_calculations.dart';
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
-const _statuses = ['جاري التجهيز', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
 
 /// بيبني نص الرسالة اللي هتتبعت على واتساب - بيشمل المواصفات اللي
 /// اتكتبت وقت إضافة الطلب، مع أهم بيانات الطلب (النوع، تاريخ التسليم،
@@ -186,7 +185,7 @@ class _StatusChip extends ConsumerWidget {
     return PopupMenuButton<String>(
       tooltip: 'تغيير حالة الطلب',
       onSelected: (v) => ref.read(repositoryProvider).updateOrderStatus(order.id, v),
-      itemBuilder: (context) => _statuses.map((s) => PopupMenuItem(value: s, child: Text(s))).toList(),
+      itemBuilder: (context) => orderStatuses.map((s) => PopupMenuItem(value: s, child: Text(s))).toList(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
@@ -241,7 +240,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               children: [
                 ChoiceChip(label: const Text('الكل'), selected: _statusFilter == null, onSelected: (_) => setState(() => _statusFilter = null)),
                 const SizedBox(width: 8),
-                ..._statuses.map((s) => Padding(
+                ...orderStatuses.map((s) => Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: ChoiceChip(label: Text(s), selected: _statusFilter == s, onSelected: (_) => setState(() => _statusFilter = s)),
                     )),
@@ -352,7 +351,7 @@ class OrderDetailDialog extends ConsumerWidget {
               DropdownButtonFormField<String>(
                 value: currentOrder.status,
                 decoration: const InputDecoration(labelText: 'حالة الطلب'),
-                items: _statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                items: orderStatuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (v) {
                   if (v != null) ref.read(repositoryProvider).updateOrderStatus(currentOrder.id, v);
                 },
