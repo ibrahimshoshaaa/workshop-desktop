@@ -5,6 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// (بدل استخدام Navigator.push اللي بيفتح صفحة فوق الحالية).
 ///
 /// ترتيب الفهارس مطابق لترتيب _destinations / _screens في app_shell.dart:
-/// 0: الرئيسية, 1: العملاء, 2: الطلبات, 3: المديونيات, 4: المصروفات,
-/// 5: المخزون, 6: التقارير
+/// 0: الرئيسية, 1: العملاء, 2: الطلبات, 3: المديونيات, 4: العمال,
+/// 5: المصروفات, 6: المخزون, 7: التقارير
 final selectedTabProvider = StateProvider<int>((ref) => 0);
