@@ -181,6 +181,94 @@ class LocalRepository {
 
   Future<void> deleteExpense(String id) => _db.softDeleteExpense(id);
 
+  // ---------------- Workers ----------------
+
+  Future<void> addWorker({
+    required String name,
+    required String jobTitle,
+    required String salaryType,
+    required double salaryAmount,
+    int payWeekday = DateTime.thursday,
+    String phone = '',
+    String notes = '',
+  }) {
+    final now = _now;
+    return _db.upsertWorker(WorkersCompanion(
+      id: Value(_uuid.v4()),
+      name: Value(name),
+      jobTitle: Value(jobTitle),
+      salaryType: Value(salaryType),
+      salaryAmount: Value(salaryAmount),
+      payWeekday: Value(payWeekday),
+      phone: Value(phone),
+      notes: Value(notes),
+      createdAt: Value(now),
+      updatedAt: Value(now),
+      isDeleted: const Value(false),
+      dirty: const Value(true),
+    ));
+  }
+
+  Future<void> updateWorker(
+    Worker worker, {
+    required String name,
+    required String jobTitle,
+    required String salaryType,
+    required double salaryAmount,
+    int payWeekday = DateTime.thursday,
+    String phone = '',
+    String notes = '',
+  }) {
+    return _db.updateWorkerFields(WorkersCompanion(
+      id: Value(worker.id),
+      name: Value(name),
+      jobTitle: Value(jobTitle),
+      salaryType: Value(salaryType),
+      salaryAmount: Value(salaryAmount),
+      payWeekday: Value(payWeekday),
+      phone: Value(phone),
+      notes: Value(notes),
+      updatedAt: Value(_now),
+      dirty: const Value(true),
+    ));
+  }
+
+  Future<void> deleteWorker(String id) => _db.softDeleteWorker(id);
+
+  /// بتسجّل قبض العامل لمرتبه (أي نوع: يومي/أسبوعي/شهري) - بتعمل صف في
+  /// سجل القبض وبتضيف مصروف "أجور" مرتبط بيه تلقائيًا عشان يدخل في
+  /// حسابات الأرباح والتقارير من غير ما تتسجل مرتين يدوي
+  Future<void> confirmWorkerPayment({
+    required Worker worker,
+    required double amount,
+    required DateTime periodStart,
+    String? note,
+  }) async {
+    final now = _now;
+    final expenseId = _uuid.v4();
+    await _db.upsertExpense(ExpensesCompanion(
+      id: Value(expenseId),
+      amount: Value(amount),
+      category: const Value('wages'),
+      description: Value(note?.trim().isNotEmpty == true ? note!.trim() : 'قبض ${worker.jobTitle} - ${worker.name}'),
+      workerName: Value(worker.name),
+      date: Value(now),
+      updatedAt: Value(now),
+      isDeleted: const Value(false),
+      dirty: const Value(true),
+    ));
+    await _db.insertWorkerPayment(WorkerPaymentsCompanion.insert(
+      id: _uuid.v4(),
+      workerId: worker.id,
+      workerName: worker.name,
+      amount: amount,
+      paymentDate: now,
+      periodStart: periodStart.millisecondsSinceEpoch,
+      expenseId: Value(expenseId),
+      updatedAt: now,
+    ));
+  }
+
   // ---------------- Materials ----------------
 
   Future<void> addMaterial({
