@@ -12,6 +12,9 @@ class Customers extends Table {
   TextColumn get name => text()();
   TextColumn get phone => text()();
   TextColumn get address => text().withDefault(const Constant(''))();
+  /// رقم تسلسلي فريد وثابت للعميل - بيتحدد مرة واحدة وقت الإضافة
+  /// ومبيتغيرش بعد كده، ومش بيتكرر أبدًا حتى لو اتحذف عميل تاني قبله
+  IntColumn get serialNumber => integer().withDefault(const Constant(0))();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
@@ -161,7 +164,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -185,6 +188,16 @@ class AppDatabase extends _$AppDatabase {
           // إضافة أعمدة الخصم على الطلبات (نسخة 4)
           await m.addColumn(orders, orders.discountAmount);
           await m.addColumn(orders, orders.discountReason);
+        }
+        if (from < 5) {
+          // إضافة الرقم التسلسلي للعميل (نسخة 5) - وترقيم العملاء
+          // الموجودين بالفعل حسب ترتيب تاريخ إضافتهم عشان محدش يفضل صفر
+          await m.addColumn(customers, customers.serialNumber);
+          final existing = await (select(customers)..orderBy([(t) => OrderingTerm.asc(t.createdAt)])).get();
+          for (var i = 0; i < existing.length; i++) {
+            await (update(customers)..where((t) => t.id.equals(existing[i].id)))
+                .write(CustomersCompanion(serialNumber: Value(i + 1)));
+          }
         }
       },
     );
@@ -211,6 +224,17 @@ class AppDatabase extends _$AppDatabase {
     return (update(customers)..where((t) => t.id.equals(id))).write(
       CustomersCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
     );
+  }
+
+  /// بيرجع أول رقم تسلسلي متاح للعميل الجديد = أكبر رقم مستخدم + 1.
+  /// بنحسبها من كل العملاء حتى المحذوفين عشان الرقم يفضل مخصوص للعميل
+  /// اللي اتحذف ومحدش تاني ياخده بالغلط
+  Future<int> getNextCustomerSerialNumber() async {
+    final maxExp = customers.serialNumber.max();
+    final query = selectOnly(customers)..addColumns([maxExp]);
+    final row = await query.getSingleOrNull();
+    final currentMax = row?.read(maxExp) ?? 0;
+    return currentMax + 1;
   }
 
   // ---------------- Orders ----------------
