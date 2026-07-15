@@ -13,13 +13,15 @@ class LocalRepository {
 
   // ---------------- Customers ----------------
 
-  Future<void> addCustomer({required String name, required String phone, required String address}) {
+  Future<void> addCustomer({required String name, required String phone, required String address}) async {
     final now = _now;
+    final serialNumber = await _db.getNextCustomerSerialNumber();
     return _db.upsertCustomer(CustomersCompanion(
       id: Value(_uuid.v4()),
       name: Value(name),
       phone: Value(phone),
       address: Value(address),
+      serialNumber: Value(serialNumber),
       createdAt: Value(now),
       updatedAt: Value(now),
       isDeleted: const Value(false),
