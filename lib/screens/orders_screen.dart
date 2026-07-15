@@ -8,6 +8,7 @@ import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/search_bar.dart';
 import '../core/whatsapp.dart';
+import '../core/order_calculations.dart';
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 const _statuses = ['جاري التجهيز', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
@@ -16,7 +17,7 @@ const _statuses = ['جاري التجهيز', 'قيد التنفيذ', 'جاهز
 /// اتكتبت وقت إضافة الطلب، مع أهم بيانات الطلب (النوع، تاريخ التسليم،
 /// الإجمالي والمتبقي) عشان العميل ياخد صورة كاملة من رسالة واحدة
 String _buildOrderShareText(Order order) {
-  final remaining = order.totalAmount - order.totalPaid;
+  final remaining = order.remaining;
   final buffer = StringBuffer()
     ..writeln('طلب: ${order.itemType}')
     ..writeln('العميل: ${order.customerName}');
@@ -29,7 +30,7 @@ String _buildOrderShareText(Order order) {
   }
   buffer
     ..writeln('تاريخ التسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(order.deliveryDate))}')
-    ..writeln('الإجمالي: ${order.totalAmount.toStringAsFixed(0)} ج.م');
+    ..writeln('الإجمالي: ${order.effectiveTotal.toStringAsFixed(0)} ج.م');
   if (remaining > 0) buffer.writeln('المتبقي: ${remaining.toStringAsFixed(0)} ج.م');
   return buffer.toString();
 }
@@ -227,7 +228,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final o = filtered[index];
-                    final remaining = o.totalAmount - o.totalPaid;
+                    final remaining = o.remaining;
                     return Card(
                       child: ListTile(
                         title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -273,7 +274,7 @@ class OrderDetailDialog extends ConsumerWidget {
     final transactionsAsync = ref.watch(allTransactionsProvider);
     final orderTransactions = (transactionsAsync.value ?? []).where((t) => t.orderId == order.id).toList()
       ..sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
-    final remaining = currentOrder.totalAmount - currentOrder.totalPaid;
+    final remaining = currentOrder.remaining;
 
     return AlertDialog(
       title: Row(
@@ -303,11 +304,20 @@ class OrderDetailDialog extends ConsumerWidget {
                   if (v != null) ref.read(repositoryProvider).updateOrderStatus(currentOrder.id, v);
                 },
               ),
+              if (currentOrder.discountAmount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'الاتفاق الأصلي: ${currentOrder.totalAmount.toStringAsFixed(0)} ج.م - خصم ${currentOrder.discountAmount.toStringAsFixed(0)} ج.م'
+                    '${currentOrder.discountReason.isNotEmpty ? ' (${currentOrder.discountReason})' : ''}',
+                    style: const TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _MoneyBox(label: 'الإجمالي', value: currentOrder.totalAmount),
+                  _MoneyBox(label: 'الإجمالي', value: currentOrder.effectiveTotal),
                   _MoneyBox(label: 'المدفوع', value: currentOrder.totalPaid, color: AppColors.success),
                   _MoneyBox(label: 'المتبقي', value: remaining, color: remaining > 0 ? AppColors.danger : AppColors.success),
                 ],
@@ -332,6 +342,16 @@ class OrderDetailDialog extends ConsumerWidget {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.warning, side: const BorderSide(color: AppColors.warning)),
+                  onPressed: () => _showDiscountDialog(context, ref, currentOrder),
+                  icon: const Icon(Icons.percent_rounded),
+                  label: Text(currentOrder.discountAmount > 0 ? 'تعديل الخصم' : 'عمل خصم'),
+                ),
               ),
               const SizedBox(height: 16),
               const Align(alignment: Alignment.centerRight, child: Text('سجل الدفعات', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -377,6 +397,75 @@ class OrderDetailDialog extends ConsumerWidget {
         ),
         ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
       ],
+    );
+  }
+
+  void _showDiscountDialog(BuildContext context, WidgetRef ref, Order order) {
+    final formKey = GlobalKey<FormState>();
+    final amountController = TextEditingController(
+      text: order.discountAmount > 0 ? order.discountAmount.toStringAsFixed(0) : '',
+    );
+    final reasonController = TextEditingController(text: order.discountReason);
+    final maxDiscount = order.totalAmount - order.totalPaid;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('خصم على الطلب'),
+        content: SizedBox(
+          width: 380,
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'الخصم مبلغ ثابت (مش نسبة) - بيتشال من الاتفاق الأصلي (${order.totalAmount.toStringAsFixed(0)} ج.م)، '
+                    'ومش بيتحسب مديونية عليه ولا إيراد للورشة',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: amountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'مبلغ الخصم (ج.م)'),
+                  validator: (v) {
+                    final amount = double.tryParse(v ?? '');
+                    if (amount == null || amount < 0) return 'أدخل مبلغ صحيح';
+                    if (amount > maxDiscount) return 'الخصم أكبر من المتبقي (${maxDiscount.toStringAsFixed(0)} ج.م)';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(controller: reasonController, decoration: const InputDecoration(labelText: 'السبب (اختياري)')),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          if (order.discountAmount > 0)
+            TextButton(
+              onPressed: () async {
+                await ref.read(repositoryProvider).setOrderDiscount(order, discountAmount: 0, reason: '');
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('إلغاء الخصم', style: TextStyle(color: AppColors.danger)),
+            ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              final amount = double.parse(amountController.text.trim());
+              await ref.read(repositoryProvider).setOrderDiscount(order, discountAmount: amount, reason: reasonController.text.trim());
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
     );
   }
 
