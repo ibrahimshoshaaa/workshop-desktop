@@ -40,7 +40,13 @@ class DashboardScreen extends ConsumerWidget {
                   color: AppColors.danger,
                   onTap: () => ref.read(selectedTabProvider.notifier).state = 3,
                 ),
-                _StatCard(title: 'إجمالي المصروفات', value: formatter.format(stats.totalExpenses), icon: Icons.receipt_long_rounded, color: AppColors.warning),
+                _StatCard(
+                  title: 'إجمالي المصروفات',
+                  value: formatter.format(stats.totalExpenses),
+                  icon: Icons.receipt_long_rounded,
+                  color: AppColors.warning,
+                  onTap: () => ref.read(selectedTabProvider.notifier).state = 5,
+                ),
                 _StatCard(
                   title: 'المبلغ المتاح في الخزنة',
                   value: formatter.format(stats.netProfit),
