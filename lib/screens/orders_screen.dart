@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
@@ -82,11 +85,10 @@ class _ImageThumb extends StatelessWidget {
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 
-/// بيبني نص الرسالة اللي هتتبعت على واتساب - بيشمل المواصفات اللي
-/// اتكتبت وقت إضافة الطلب، مع أهم بيانات الطلب (النوع، تاريخ التسليم،
-/// الإجمالي والمتبقي) عشان العميل ياخد صورة كاملة من رسالة واحدة
-String _buildOrderShareText(Order order) {
-  final remaining = order.remaining;
+/// بيبني نص الرسالة اللي هتتبعت للصنايعي على واتساب - نوع الصنف
+/// والمواصفات وتاريخ التسليم بس، من غير أي مبالغ (إجمالي/متبقي) لأن
+/// دي بيانات مالية خاصة بصاحب الطلب مش شغلانة الصنايعي
+String _buildOrderShareTextForWorker(Order order) {
   final buffer = StringBuffer()
     ..writeln('طلب: ${order.itemType}')
     ..writeln('العميل: ${order.customerName}');
@@ -94,23 +96,128 @@ String _buildOrderShareText(Order order) {
     buffer
       ..writeln()
       ..writeln('المواصفات:')
-      ..writeln(order.details.trim())
-      ..writeln();
+      ..writeln(order.details.trim());
   }
   buffer
-    ..writeln('تاريخ التسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(order.deliveryDate))}')
-    ..writeln('الإجمالي: ${order.effectiveTotal.toStringAsFixed(0)} ج.م');
-  if (remaining > 0) buffer.writeln('المتبقي: ${remaining.toStringAsFixed(0)} ج.م');
+    ..writeln()
+    ..writeln('تاريخ التسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(order.deliveryDate))}');
   return buffer.toString();
 }
 
-Future<void> _shareOrderOnWhatsApp(BuildContext context, WidgetRef ref, Order order) async {
-  final customers = ref.read(customersProvider).value ?? [];
-  final customer = customers.firstWhereOrNull((c) => c.id == order.customerId);
-  final ok = await shareTextOnWhatsApp(_buildOrderShareText(order), phone: customer?.phone);
+/// بينزّل صور الطلب من Cloudinary لفولدر مؤقت على الجهاز - واتساب مش
+/// بيسمح إن الصور تتبعت أوتوماتيك عن طريق رابط (لا wa.me ولا حتى
+/// تطبيق سطح المكتب)، فأقرب حل إن الصور تتحط جاهزة في فولدر بيتفتح
+/// جنب الشات عشان تتسحب بسهولة على الرسالة
+Future<Directory?> _downloadOrderImagesToFolder(Order order) async {
+  final urls = _parseOrderImages(order.imagesJson);
+  if (urls.isEmpty) return null;
+  try {
+    final tempDir = await getTemporaryDirectory();
+    final folder = Directory('${tempDir.path}${Platform.pathSeparator}order_${order.id}_images');
+    if (!await folder.exists()) await folder.create(recursive: true);
+    for (var i = 0; i < urls.length; i++) {
+      try {
+        final response = await http.get(Uri.parse(urls[i]));
+        if (response.statusCode == 200) {
+          final ext = urls[i].split('.').last.split('?').first;
+          final file = File('${folder.path}${Platform.pathSeparator}صورة_${i + 1}.$ext');
+          await file.writeAsBytes(response.bodyBytes);
+        }
+      } catch (_) {
+        // نتجاهل أي صورة فشل تنزيلها ونكمل الباقي
+      }
+    }
+    return folder;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// بيبعت مواصفات الطلب لصنايعي معيّن على واتساب، وبيفتح فولدر صور
+/// الطلب (لو فيه صور) عشان تتسحب في الشات يدويًا
+Future<void> _shareOrderWithWorker(BuildContext context, WidgetRef ref, Order order, Worker worker) async {
+  final hasImages = _parseOrderImages(order.imagesJson).isNotEmpty;
+  Directory? imagesFolder;
+  if (hasImages) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('بننزّل صور الطلب...')));
+    }
+    imagesFolder = await _downloadOrderImagesToFolder(order);
+  }
+  final ok = await shareTextOnWhatsApp(_buildOrderShareTextForWorker(order), phone: worker.phone);
+  if (imagesFolder != null) {
+    await Process.run('explorer', [imagesFolder.path]);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('فتحنا فولدر فيه صور الطلب - اسحبها في شات واتساب مع الرسالة (واتساب مش بيسمح بإرفاق صور تلقائي عن طريق رابط)')),
+      );
+    }
+  }
   if (!ok && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('مقدرش أفتح واتساب - تأكد إنه متثبت على الجهاز')));
   }
+}
+
+/// ديالوج اختيار الصنايعي اللي هتتبعتله مواصفات الطلب - فيه بحث
+/// بالاسم أو المهنة عشان يبقى سهل لو عدد العمال كبير
+Future<void> _showShareToWorkerDialog(BuildContext context, WidgetRef ref, Order order) async {
+  final workers = ref.read(workersProvider).value ?? [];
+  if (workers.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أضف صنايعي أولًا من صفحة العمال')));
+    return;
+  }
+  final searchController = TextEditingController();
+  String query = '';
+  await showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        final q = normalizeForSearch(query);
+        final filtered = q.isEmpty
+            ? workers
+            : workers.where((w) => normalizeForSearch(w.name).contains(q) || normalizeForSearch(w.jobTitle).contains(q)).toList();
+        return AlertDialog(
+          title: const Text('ابعت المواصفات لأي صنايعي؟'),
+          content: SizedBox(
+            width: 380,
+            height: 420,
+            child: Column(
+              children: [
+                AppSearchBar(
+                  controller: searchController,
+                  hintText: 'ابحث باسم الصنايعي أو مهنته...',
+                  onChanged: (v) => setDialogState(() => query = v),
+                  onClear: () => setDialogState(() => query = ''),
+                ),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const Center(child: Text('لا يوجد صنايعي بالاسم ده', style: TextStyle(color: Colors.grey)))
+                      : ListView.builder(
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final w = filtered[index];
+                            return ListTile(
+                              leading: const Icon(Icons.engineering_rounded, color: AppColors.wood),
+                              title: Text(w.name),
+                              subtitle: Text(w.jobTitle.isNotEmpty ? '${w.jobTitle} - ${w.phone}' : w.phone),
+                              onTap: () {
+                                Navigator.pop(context);
+                                _shareOrderWithWorker(context, ref, order, w);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 /// ديالوج إضافة طلب جديد - قابل لإعادة الاستخدام من أي صفحة. لو اتبعتله
@@ -423,7 +530,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                             IconButton(
                               tooltip: 'مشاركة على واتساب',
                               icon: const Icon(Icons.share_rounded, color: AppColors.success),
-                              onPressed: () => _shareOrderOnWhatsApp(context, ref, o),
+                              onPressed: () => _showShareToWorkerDialog(context, ref, o),
                             ),
                           ],
                         ),
@@ -463,7 +570,7 @@ class OrderDetailDialog extends ConsumerWidget {
           IconButton(
             tooltip: 'مشاركة على واتساب',
             icon: const Icon(Icons.share_rounded, color: AppColors.success),
-            onPressed: () => _shareOrderOnWhatsApp(context, ref, currentOrder),
+            onPressed: () => _showShareToWorkerDialog(context, ref, currentOrder),
           ),
         ],
       ),
