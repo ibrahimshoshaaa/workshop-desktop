@@ -17,6 +17,7 @@ class AppUserModel {
     MapEntry('customers', 'العملاء'),
     MapEntry('orders', 'الطلبات'),
     MapEntry('debts', 'المديونيات'),
+    MapEntry('workers', 'العمال'),
     MapEntry('expenses', 'المصروفات'),
     MapEntry('inventory', 'المخزون'),
     MapEntry('reports', 'التقارير'),
