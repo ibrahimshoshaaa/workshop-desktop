@@ -5,6 +5,7 @@ import '../providers/data_providers.dart';
 import '../providers/navigation_provider.dart';
 import '../core/theme.dart';
 import 'revenues_detail_screen.dart';
+import 'orders_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -14,6 +15,7 @@ class DashboardScreen extends ConsumerWidget {
     final stats = ref.watch(dashboardStatsProvider);
     final lowStock = ref.watch(lowStockMaterialsProvider);
     final dueWorkers = ref.watch(workersDueTodayProvider);
+    final upcomingDeliveries = ref.watch(upcomingDeliveriesProvider);
     final formatter = NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
 
     return Scaffold(
@@ -76,6 +78,46 @@ class DashboardScreen extends ConsumerWidget {
                   subtitle: Text('مستني تأكيد الدفع: ${dueWorkers.map((w) => w.name).join('، ')}'),
                   trailing: const Icon(Icons.chevron_left_rounded),
                   onTap: () => ref.read(selectedTabProvider.notifier).state = 4,
+                ),
+              ),
+            ],
+            if (upcomingDeliveries.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.local_shipping_rounded, color: AppColors.navy),
+                          const SizedBox(width: 8),
+                          const Text('التسليمات القادمة خلال أسبوع', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ...upcomingDeliveries.map((o) {
+                        final delivery = DateTime.fromMillisecondsSinceEpoch(o.deliveryDate);
+                        final today = DateTime.now();
+                        final daysLeft = DateTime(delivery.year, delivery.month, delivery.day)
+                            .difference(DateTime(today.year, today.month, today.day))
+                            .inDays;
+                        final label = daysLeft == 0 ? 'النهاردة' : (daysLeft == 1 ? 'بكرة' : 'بعد $daysLeft أيام');
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: (daysLeft == 0 ? AppColors.danger : AppColors.navy).withValues(alpha: 0.1),
+                            child: Icon(Icons.checkroom_rounded, color: daysLeft == 0 ? AppColors.danger : AppColors.navy),
+                          ),
+                          title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text('${DateFormat('d/M/yyyy').format(delivery)} • $label'),
+                          trailing: const Icon(Icons.chevron_left_rounded),
+                          onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
               ),
             ],
