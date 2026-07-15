@@ -5,6 +5,7 @@ import '../providers/data_providers.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
 import '../core/order_calculations.dart';
+import 'orders_screen.dart';
 
 class DebtsScreen extends ConsumerStatefulWidget {
   const DebtsScreen({super.key});
@@ -71,6 +72,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                             final remaining = o.remaining;
                             return Card(
                               child: ListTile(
+                                onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
                                 leading: const CircleAvatar(backgroundColor: Color(0x1AB3261E), child: Icon(Icons.priority_high_rounded, color: AppColors.danger)),
                                 title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
                                 subtitle: Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
