@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../data/database.dart';
+import '../core/order_calculations.dart';
 
 /// خدمة توليد ملفات PDF - نفس منطق نسخة الموبايل، بس هنا بنستخدم
 /// Printing.layoutPdf بدل sharePdf عشان دي الطريقة الصح لفتح نافذة
@@ -28,7 +29,7 @@ class PdfExportService {
   }) async {
     await _ensureFontsLoaded();
     final doc = pw.Document();
-    final totalAmount = orders.fold<double>(0, (s, o) => s + o.totalAmount);
+    final totalAmount = orders.fold<double>(0, (s, o) => s + o.effectiveTotal);
     final totalPaid = orders.fold<double>(0, (s, o) => s + o.totalPaid);
     final totalRemaining = totalAmount - totalPaid;
 
@@ -55,9 +56,9 @@ class PdfExportService {
                 .map((o) => [
                       o.itemType,
                       o.status,
-                      _currency.format(o.totalAmount),
+                      _currency.format(o.effectiveTotal),
                       _currency.format(o.totalPaid),
-                      _currency.format(o.totalAmount - o.totalPaid),
+                      _currency.format(o.remaining),
                     ])
                 .toList(),
           ),
@@ -93,7 +94,7 @@ class PdfExportService {
     final doc = pw.Document();
 
     final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-    final totalDebts = orders.fold<double>(0, (s, o) => s + (o.totalAmount - o.totalPaid));
+    final totalDebts = orders.fold<double>(0, (s, o) => s + o.remaining);
     final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
     final netProfit = totalRevenue - totalExpenses;
 
@@ -124,7 +125,7 @@ class PdfExportService {
             cellAlignment: pw.Alignment.centerRight,
             headers: ['العميل', 'الصنف', 'الحالة', 'الإجمالي', 'المتبقي'],
             data: orders
-                .map((o) => [o.customerName, o.itemType, o.status, _currency.format(o.totalAmount), _currency.format(o.totalAmount - o.totalPaid)])
+                .map((o) => [o.customerName, o.itemType, o.status, _currency.format(o.effectiveTotal), _currency.format(o.remaining)])
                 .toList(),
           ),
           pw.SizedBox(height: 24),
