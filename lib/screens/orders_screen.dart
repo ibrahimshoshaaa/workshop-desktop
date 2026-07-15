@@ -7,9 +7,41 @@ import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/search_bar.dart';
+import '../core/whatsapp.dart';
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 const _statuses = ['جاري التجهيز', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
+
+/// بيبني نص الرسالة اللي هتتبعت على واتساب - بيشمل المواصفات اللي
+/// اتكتبت وقت إضافة الطلب، مع أهم بيانات الطلب (النوع، تاريخ التسليم،
+/// الإجمالي والمتبقي) عشان العميل ياخد صورة كاملة من رسالة واحدة
+String _buildOrderShareText(Order order) {
+  final remaining = order.totalAmount - order.totalPaid;
+  final buffer = StringBuffer()
+    ..writeln('طلب: ${order.itemType}')
+    ..writeln('العميل: ${order.customerName}');
+  if (order.details.trim().isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('المواصفات:')
+      ..writeln(order.details.trim())
+      ..writeln();
+  }
+  buffer
+    ..writeln('تاريخ التسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(order.deliveryDate))}')
+    ..writeln('الإجمالي: ${order.totalAmount.toStringAsFixed(0)} ج.م');
+  if (remaining > 0) buffer.writeln('المتبقي: ${remaining.toStringAsFixed(0)} ج.م');
+  return buffer.toString();
+}
+
+Future<void> _shareOrderOnWhatsApp(BuildContext context, WidgetRef ref, Order order) async {
+  final customers = ref.read(customersProvider).value ?? [];
+  final customer = customers.firstWhereOrNull((c) => c.id == order.customerId);
+  final ok = await shareTextOnWhatsApp(_buildOrderShareText(order), phone: customer?.phone);
+  if (!ok && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('مقدرش أفتح واتساب - تأكد إنه متثبت على الجهاز')));
+  }
+}
 
 /// ديالوج إضافة طلب جديد - قابل لإعادة الاستخدام من أي صفحة. لو اتبعتله
 /// [presetCustomer] (زي لما بيتفتح من ديالوج طلبات عميل معيّن في صفحة
@@ -200,9 +232,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       child: ListTile(
                         title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))} | ${o.status}'),
-                        trailing: Text(
-                          remaining > 0 ? 'متبقي ${remaining.toStringAsFixed(0)}' : 'مكتمل',
-                          style: TextStyle(color: remaining > 0 ? AppColors.danger : AppColors.success, fontWeight: FontWeight.bold),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              remaining > 0 ? 'متبقي ${remaining.toStringAsFixed(0)}' : 'مكتمل',
+                              style: TextStyle(color: remaining > 0 ? AppColors.danger : AppColors.success, fontWeight: FontWeight.bold),
+                            ),
+                            IconButton(
+                              tooltip: 'مشاركة على واتساب',
+                              icon: const Icon(Icons.share_rounded, color: AppColors.success),
+                              onPressed: () => _shareOrderOnWhatsApp(context, ref, o),
+                            ),
+                          ],
                         ),
                         onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
                       ),
@@ -234,7 +276,16 @@ class OrderDetailDialog extends ConsumerWidget {
     final remaining = currentOrder.totalAmount - currentOrder.totalPaid;
 
     return AlertDialog(
-      title: Text('${currentOrder.customerName} - ${currentOrder.itemType}'),
+      title: Row(
+        children: [
+          Expanded(child: Text('${currentOrder.customerName} - ${currentOrder.itemType}')),
+          IconButton(
+            tooltip: 'مشاركة على واتساب',
+            icon: const Icon(Icons.share_rounded, color: AppColors.success),
+            onPressed: () => _shareOrderOnWhatsApp(context, ref, currentOrder),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
