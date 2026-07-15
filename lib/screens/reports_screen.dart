@@ -38,7 +38,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               DateTime.fromMillisecondsSinceEpoch(e.date).isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
       final bytes = await PdfExportService.instance.buildFinancialReport(orders: orders, expenses: expenses, from: _range.start, to: _range.end);
-      await PdfExportService.instance.previewAndPrint(bytes, 'تقرير_مالي.pdf');
+      if (mounted) await PdfExportService.instance.preview(context, bytes, 'تقرير_مالي.pdf');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
     } finally {
@@ -80,7 +80,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final customer = customers.firstWhere((c) => c.id == _selectedCustomerId);
       final orders = (ref.read(ordersProvider).value ?? []).where((o) => o.customerId == _selectedCustomerId).toList();
       final bytes = await PdfExportService.instance.buildCustomerInvoice(customer: customer, orders: orders);
-      await PdfExportService.instance.previewAndPrint(bytes, 'فاتورة_${customer.name}.pdf');
+      if (mounted) await PdfExportService.instance.preview(context, bytes, 'فاتورة_${customer.name}.pdf');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
     } finally {
