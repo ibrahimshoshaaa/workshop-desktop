@@ -159,6 +159,50 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
   );
 }
 
+Color _statusColor(String status) {
+  switch (status) {
+    case 'جاري التجهيز':
+      return AppColors.warning;
+    case 'قيد التنفيذ':
+      return AppColors.navy;
+    case 'جاهز للتسليم':
+      return AppColors.success;
+    case 'تم التسليم':
+      return Colors.grey.shade600;
+    default:
+      return Colors.grey;
+  }
+}
+
+/// شارة حالة الطلب - ملوّنة حسب الحالة وقابلة للضغط عليها مباشرة لتغيير
+/// الحالة من غير ما تحتاج تدخل على تفاصيل الطلب
+class _StatusChip extends ConsumerWidget {
+  final Order order;
+  const _StatusChip({required this.order});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final color = _statusColor(order.status);
+    return PopupMenuButton<String>(
+      tooltip: 'تغيير حالة الطلب',
+      onSelected: (v) => ref.read(repositoryProvider).updateOrderStatus(order.id, v),
+      itemBuilder: (context) => _statuses.map((s) => PopupMenuItem(value: s, child: Text(s))).toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(order.status, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down_rounded, color: color, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
   @override
@@ -232,7 +276,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     return Card(
                       child: ListTile(
                         title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))} | ${o.status}'),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
+                              const SizedBox(width: 8),
+                              _StatusChip(order: o),
+                            ],
+                          ),
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
