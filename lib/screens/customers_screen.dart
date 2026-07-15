@@ -5,6 +5,7 @@ import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
+import '../core/order_calculations.dart';
 import 'orders_screen.dart' show OrderDetailDialog, showAddOrderDialog;
 
 class CustomersScreen extends ConsumerStatefulWidget {
@@ -207,7 +208,7 @@ class _CustomerOrdersDialog extends ConsumerWidget {
                 itemCount: customerOrders.length,
                 itemBuilder: (context, index) {
                   final o = customerOrders[index];
-                  final remaining = o.totalAmount - o.totalPaid;
+                  final remaining = o.remaining;
                   return Card(
                     child: ListTile(
                       title: Text(o.itemType, style: const TextStyle(fontWeight: FontWeight.w600)),
