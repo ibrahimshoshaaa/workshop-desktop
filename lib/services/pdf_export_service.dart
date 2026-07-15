@@ -1,10 +1,12 @@
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../data/database.dart';
 import '../core/order_calculations.dart';
+import '../core/theme.dart';
 
 /// خدمة توليد ملفات PDF - نفس منطق نسخة الموبايل، بس هنا بنستخدم
 /// Printing.layoutPdf بدل sharePdf عشان دي الطريقة الصح لفتح نافذة
@@ -22,6 +24,18 @@ class PdfExportService {
   }
 
   final _currency = NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
+
+  /// عربي Locale بيضيف حروف اتجاه مخفية (bidi/format marks) جوه النص عشان
+  /// يظبط ترتيب الأرقام والعملة، بس خط Cairo مالوش شكل ليها فبتظهر كمربع
+  /// فاضي "تُفُو". الميثود دي بتشيل أي حرف مخفي من النوع ده وتستبدل الـ
+  /// non-breaking space بمسافة عادية، عشان النص يترسم نضيف من غير علامات غريبة.
+  static final RegExp _invisibleChars = RegExp(
+    r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u061C\uFEFF]',
+  );
+
+  String _clean(String input) => input.replaceAll('\u00A0', ' ').replaceAll(_invisibleChars, '');
+
+  String _fmt(double value) => _clean(_currency.format(value));
 
   Future<Uint8List> buildCustomerInvoice({
     required Customer customer,
@@ -56,9 +70,9 @@ class PdfExportService {
                 .map((o) => [
                       o.itemType,
                       o.status,
-                      _currency.format(o.effectiveTotal),
-                      _currency.format(o.totalPaid),
-                      _currency.format(o.remaining),
+                      _fmt(o.effectiveTotal),
+                      _fmt(o.totalPaid),
+                      _fmt(o.remaining),
                     ])
                 .toList(),
           ),
@@ -69,11 +83,11 @@ class PdfExportService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('إجمالي الاتفاق: ${_currency.format(totalAmount)}'),
+                pw.Text('إجمالي الاتفاق: ${_fmt(totalAmount)}'),
                 pw.SizedBox(height: 4),
-                pw.Text('إجمالي المدفوع: ${_currency.format(totalPaid)}'),
+                pw.Text('إجمالي المدفوع: ${_fmt(totalPaid)}'),
                 pw.SizedBox(height: 4),
-                pw.Text('إجمالي المتبقي: ${_currency.format(totalRemaining)}',
+                pw.Text('إجمالي المتبقي: ${_fmt(totalRemaining)}',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: totalRemaining > 0 ? PdfColors.red700 : PdfColors.green700)),
               ],
             ),
@@ -125,7 +139,7 @@ class PdfExportService {
             cellAlignment: pw.Alignment.centerRight,
             headers: ['العميل', 'الصنف', 'الحالة', 'الإجمالي', 'المتبقي'],
             data: orders
-                .map((o) => [o.customerName, o.itemType, o.status, _currency.format(o.effectiveTotal), _currency.format(o.remaining)])
+                .map((o) => [o.customerName, o.itemType, o.status, _fmt(o.effectiveTotal), _fmt(o.remaining)])
                 .toList(),
           ),
           pw.SizedBox(height: 24),
@@ -137,7 +151,7 @@ class PdfExportService {
             cellAlignment: pw.Alignment.centerRight,
             headers: ['الفئة', 'الوصف', 'التاريخ', 'المبلغ'],
             data: expenses
-                .map((e) => [e.category, e.description, DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date)), _currency.format(e.amount)])
+                .map((e) => [e.category, e.description, DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date)), _fmt(e.amount)])
                 .toList(),
           ),
         ],
@@ -154,14 +168,41 @@ class PdfExportService {
         children: [
           pw.Text(label, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
           pw.SizedBox(height: 4),
-          pw.Text(_currency.format(value), style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: color)),
+          pw.Text(_fmt(value), style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: color)),
         ],
       ),
     );
   }
 
-  /// يفتح نافذة معاينة/طباعة/حفظ حقيقية بتاعة ويندوز - دي الطريقة الصح
-  /// على سطح المكتب (بدل sharePdf اللي مخصصة للموبايل)
+  /// بيفتح شاشة معاينة جوه التطبيق الأول (تعرض شكل التقرير/الفاتورة كامل)،
+  /// وبعدين المستخدم هو اللي يقرر: يطبع/يحفظ، أو يقفل الشاشة من غير ما
+  /// يحصل تصدير خالص. ده بديل previewAndPrint اللي كانت بتفتح ديالوج
+  /// الطباعة بتاع ويندوز على طول من غير معاينة.
+  Future<void> preview(BuildContext context, Uint8List bytes, String fileName) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: const Text('معاينة قبل التصدير'),
+            backgroundColor: AppColors.wood,
+            foregroundColor: Colors.white,
+          ),
+          body: PdfPreview(
+            build: (format) async => bytes,
+            pdfFileName: fileName,
+            allowPrinting: true,
+            allowSharing: true,
+            canChangePageFormat: false,
+            canChangeOrientation: false,
+            canDebug: false,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// نسخة قديمة (بتفتح ديالوج الطباعة/الحفظ بتاع النظام على طول من غير
+  /// معاينة داخل التطبيق) - سايبها موجودة لو احتجتها في مكان تاني.
   Future<void> previewAndPrint(Uint8List bytes, String fileName) async {
     await Printing.layoutPdf(onLayout: (format) async => bytes, name: fileName);
   }
