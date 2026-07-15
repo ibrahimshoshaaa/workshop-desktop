@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/database.dart';
 import '../data/local_repository.dart';
+import '../core/order_calculations.dart';
 import 'database_provider.dart';
 
 final repositoryProvider = Provider<LocalRepository>((ref) {
@@ -80,8 +81,7 @@ final workersDueTodayProvider = Provider<List<Worker>>((ref) {
 
 final debtorOrdersProvider = Provider<List<Order>>((ref) {
   final orders = ref.watch(ordersProvider).value ?? [];
-  return orders.where((o) => o.totalAmount - o.totalPaid > 0).toList()
-    ..sort((a, b) => (b.totalAmount - b.totalPaid).compareTo(a.totalAmount - a.totalPaid));
+  return orders.where((o) => o.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
 });
 
 final lowStockMaterialsProvider = Provider<List<MaterialItem>>((ref) {
@@ -106,7 +106,7 @@ final dashboardStatsProvider = Provider<DashboardStats>((ref) {
   final orders = ref.watch(ordersProvider).value ?? [];
   final expenses = ref.watch(expensesProvider).value ?? [];
   final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-  final totalDebts = orders.fold<double>(0, (s, o) => s + (o.totalAmount - o.totalPaid));
+  final totalDebts = orders.fold<double>(0, (s, o) => s + o.remaining);
   final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
   return DashboardStats(
     totalRevenue: totalRevenue,
