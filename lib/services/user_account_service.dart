@@ -42,9 +42,10 @@ class UserAccountService {
     return null;
   }
 
-  /// إضافة حساب جديد بكل الصلاحيات مفعّلة افتراضيًا (زي أي حساب عامل جديد
-  /// من الموبايل) - الأدمن يقدر يقيّدها بعد كده من شاشة الإعدادات
-  Future<String> addUser(String username, String password) async {
+  /// إضافة حساب جديد - لو مبعتش [permissions] بيتضاف بكل الصلاحيات مفعّلة
+  /// افتراضيًا (زي أي حساب عامل جديد من الموبايل)، وتقدر تحدد صلاحيات
+  /// مخصوصة من الأول وقت الإضافة لو حبيت
+  Future<String> addUser(String username, String password, {Map<String, bool>? permissions}) async {
     final response = await http
         .post(
           Uri.parse('$_baseUrl/$_path.json'),
@@ -52,7 +53,7 @@ class UserAccountService {
             'username': username,
             'password': password,
             'createdAt': DateTime.now().millisecondsSinceEpoch,
-            'permissions': {for (final s in AppUserModel.permissionScreens) s.key: true},
+            'permissions': permissions ?? {for (final s in AppUserModel.permissionScreens) s.key: true},
           }),
         )
         .timeout(_timeout);
