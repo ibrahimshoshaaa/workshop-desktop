@@ -82,6 +82,50 @@ class Expenses extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// جدول العمال (صنايعية، محاسبين، مديرين، سوشيال ميديا... أي وظيفة
+/// تتضاف وقت إضافة العامل نفسه - مفيش قايمة وظايف ثابتة)
+class Workers extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get jobTitle => text()();
+  /// نوع المرتب: monthly / weekly / daily
+  TextColumn get salaryType => text()();
+  RealColumn get salaryAmount => real().withDefault(const Constant(0))();
+  /// يوم القبض الأسبوعي (1=الاثنين ... 7=الأحد، زي DateTime.weekday) -
+  /// مستخدم بس لو salaryType == weekly، افتراضيًا الخميس (4)
+  IntColumn get payWeekday => integer().withDefault(const Constant(4))();
+  TextColumn get phone => text().withDefault(const Constant(''))();
+  TextColumn get notes => text().withDefault(const Constant(''))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get dirty => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// سجل تأكيد قبض العمال - كل مرة تتأكد فيها إن العامل قبض مرتبه (يومي/
+/// أسبوعي/شهري) بيتسجل هنا صف، وبيترتبط أوتوماتيك بمصروف من نوع "أجور"
+/// عشان يدخل في حساب الأرباح والتقارير زي أي مصروف تاني
+class WorkerPayments extends Table {
+  TextColumn get id => text()();
+  TextColumn get workerId => text()();
+  TextColumn get workerName => text()();
+  RealColumn get amount => real()();
+  IntColumn get paymentDate => integer()();
+  /// بداية دورة الاستحقاق (منتصف الليل) - بنستخدمها نتأكد إن العامل
+  /// اتقبض مرة واحدة بس في نفس الدورة (الأسبوع/اليوم/الشهر)
+  IntColumn get periodStart => integer()();
+  TextColumn get expenseId => text().nullable()();
+  IntColumn get updatedAt => integer()();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get dirty => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// جدول الخامات
 class MaterialItems extends Table {
   TextColumn get id => text()();
@@ -107,12 +151,12 @@ class SyncMeta extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Customers, Orders, PaymentTransactions, Expenses, MaterialItems, SyncMeta])
+@DriftDatabase(tables: [Customers, Orders, PaymentTransactions, Expenses, MaterialItems, Workers, WorkerPayments, SyncMeta])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -126,6 +170,11 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(expenses, expenses.orderId);
           await m.addColumn(expenses, expenses.customerId);
           await m.addColumn(expenses, expenses.customerName);
+        }
+        if (from < 3) {
+          // إضافة جدولي العمال وسجل قبضهم (نسخة 3)
+          await m.createTable(workers);
+          await m.createTable(workerPayments);
         }
       },
     );
@@ -258,6 +307,39 @@ class AppDatabase extends _$AppDatabase {
       MaterialItemsCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
     );
   }
+
+  // ---------------- Workers ----------------
+
+  Stream<List<Worker>> watchWorkers() {
+    return (select(workers)..where((t) => t.isDeleted.equals(false))).watch();
+  }
+
+  Future<void> upsertWorker(WorkersCompanion entry) => into(workers).insertOnConflictUpdate(entry);
+
+  Future<void> updateWorkerFields(WorkersCompanion entry) =>
+      (update(workers)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
+  Future<void> softDeleteWorker(String id) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return (update(workers)..where((t) => t.id.equals(id))).write(
+      WorkersCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
+    );
+  }
+
+  // ---------------- Worker Payments ----------------
+
+  Stream<List<WorkerPayment>> watchWorkerPayments() {
+    return (select(workerPayments)..where((t) => t.isDeleted.equals(false))).watch();
+  }
+
+  Stream<List<WorkerPayment>> watchPaymentsForWorker(String workerId) {
+    return (select(workerPayments)
+          ..where((t) => t.workerId.equals(workerId) & t.isDeleted.equals(false))
+          ..orderBy([(t) => OrderingTerm.desc(t.paymentDate)]))
+        .watch();
+  }
+
+  Future<void> insertWorkerPayment(WorkerPaymentsCompanion entry) => into(workerPayments).insert(entry);
 
   // ---------------- Sync Meta ----------------
 
