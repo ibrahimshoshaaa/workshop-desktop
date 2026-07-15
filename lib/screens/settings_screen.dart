@@ -27,45 +27,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
     bool isSaving = false;
+    final permissions = <String, bool>{
+      for (final s in AppUserModel.permissionScreens) s.key: true,
+    };
 
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('إضافة حساب جديد'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: usernameController,
-                  textDirection: TextDirection.ltr,
-                  decoration: const InputDecoration(labelText: 'اليوزر'),
-                  validator: (v) {
-                    final value = v?.trim() ?? '';
-                    if (value.isEmpty) return 'اكتب اليوزر';
-                    if (value == 'admin') return 'الاسم ده محجوز للحساب الرئيسي';
-                    if (existingUsernames.contains(value)) return 'اليوزر ده موجود بالفعل';
-                    return null;
-                  },
+          content: SizedBox(
+            width: 420,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: usernameController,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(labelText: 'اليوزر'),
+                      validator: (v) {
+                        final value = v?.trim() ?? '';
+                        if (value.isEmpty) return 'اكتب اليوزر';
+                        if (value == 'admin') return 'الاسم ده محجوز للحساب الرئيسي';
+                        if (existingUsernames.contains(value)) return 'اليوزر ده موجود بالفعل';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: passwordController,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(labelText: 'الباسورد'),
+                      validator: (v) => (v == null || v.length < 4) ? 'الباسورد لازم يكون 4 حروف/أرقام على الأقل' : null,
+                    ),
+                    const Divider(height: 24),
+                    const Text('الشاشات المسموح بيها', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...AppUserModel.permissionScreens.map((s) => CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(s.value),
+                          value: permissions[s.key],
+                          activeColor: AppColors.wood,
+                          onChanged: (v) => setDialogState(() => permissions[s.key] = v ?? true),
+                        )),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: passwordController,
-                  textDirection: TextDirection.ltr,
-                  decoration: const InputDecoration(labelText: 'الباسورد'),
-                  validator: (v) => (v == null || v.length < 4) ? 'الباسورد لازم يكون 4 حروف/أرقام على الأقل' : null,
-                ),
-                const SizedBox(height: 8),
-                const Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'هيتضاف بكل الصلاحيات مفعّلة، وتقدر تقيّدها بعد كده من زرار التعديل',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           actions: [
@@ -80,6 +92,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         await ref.read(userAccountServiceProvider).addUser(
                               usernameController.text.trim(),
                               passwordController.text,
+                              permissions: permissions,
                             );
                         ref.invalidate(appUsersProvider);
                         if (context.mounted) Navigator.pop(context);
