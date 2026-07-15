@@ -102,6 +102,19 @@ class LocalRepository {
 
   Future<void> deleteOrder(String id) => _db.softDeleteOrder(id);
 
+  /// بتسجّل (أو تعدّل) خصم بمبلغ ثابت على طلب معيّن - المبلغ ده بيتشال
+  /// نهائيًا من حساب المديونية والإيراد المستحق على الطلب، مش بس بيظهر
+  /// "متبقي صفر" عن طريق تعديل يدوي في المبلغ الإجمالي
+  Future<void> setOrderDiscount(Order order, {required double discountAmount, String reason = ''}) {
+    return _db.updateOrderFields(OrdersCompanion(
+      id: Value(order.id),
+      discountAmount: Value(discountAmount),
+      discountReason: Value(reason),
+      updatedAt: Value(_now),
+      dirty: const Value(true),
+    ));
+  }
+
   // ---------------- Payments ----------------
 
   Future<void> addPayment({
