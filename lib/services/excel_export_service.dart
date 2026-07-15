@@ -4,6 +4,7 @@ import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../data/database.dart';
+import '../core/order_calculations.dart';
 
 /// خدمة توليد وحفظ ملف Excel - على سطح المكتب بنسأل المستخدم فين عايز
 /// يحفظ الملف (بدل المشاركة المباشرة زي الموبايل)
@@ -33,9 +34,9 @@ class ExcelExportService {
         TextCellValue(o.customerName),
         TextCellValue(o.itemType),
         TextCellValue(o.status),
-        DoubleCellValue(o.totalAmount),
+        DoubleCellValue(o.effectiveTotal),
         DoubleCellValue(o.totalPaid),
-        DoubleCellValue(o.totalAmount - o.totalPaid),
+        DoubleCellValue(o.remaining),
         TextCellValue(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))),
       ]);
     }
