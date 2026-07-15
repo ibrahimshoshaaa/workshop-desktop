@@ -88,6 +88,27 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             ),
           ),
           actions: [
+            if (expense != null)
+              TextButton(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('حذف المصروف'),
+                      content: const Text('هل أنت متأكد من حذف هذا المصروف؟'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+                        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger), onPressed: () => Navigator.pop(context, true), child: const Text('حذف')),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await ref.read(repositoryProvider).deleteExpense(expense.id);
+                    if (context.mounted) Navigator.pop(context);
+                  }
+                },
+                child: const Text('حذف', style: TextStyle(color: AppColors.danger)),
+              ),
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
             ElevatedButton(
               onPressed: () async {
@@ -104,6 +125,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               child: const Text('حفظ'),
             ),
           ],
+
         ),
       ),
     );
