@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import 'database.dart';
@@ -53,6 +54,7 @@ class LocalRepository {
     required String details,
     required double totalAmount,
     required DateTime deliveryDate,
+    List<String> imageUrls = const [],
   }) async {
     final id = _uuid.v4();
     final now = _now;
@@ -62,7 +64,7 @@ class LocalRepository {
       customerName: Value(customerName),
       itemType: Value(itemType),
       details: Value(details),
-      imagesJson: const Value('[]'),
+      imagesJson: Value(jsonEncode(imageUrls)),
       status: const Value('جاري التجهيز'),
       totalAmount: Value(totalAmount),
       totalPaid: const Value(0),
@@ -73,6 +75,31 @@ class LocalRepository {
       dirty: const Value(true),
     ));
     return id;
+  }
+
+  /// بيضيف روابط صور جديدة (بعد رفعها على Cloudinary) لطلب موجود، من غير
+  /// ما يمسح الصور القديمة اللي كانت متسجلة عليه
+  Future<void> addImagesToOrder(Order order, List<String> newImageUrls) {
+    final existing = (jsonDecode(order.imagesJson) as List).map((e) => e.toString()).toList();
+    final merged = [...existing, ...newImageUrls];
+    return _db.updateOrderFields(OrdersCompanion(
+      id: Value(order.id),
+      imagesJson: Value(jsonEncode(merged)),
+      updatedAt: Value(_now),
+      dirty: const Value(true),
+    ));
+  }
+
+  /// بيمسح صورة واحدة بس من قائمة صور الطلب (بالرابط)
+  Future<void> removeImageFromOrder(Order order, String imageUrl) {
+    final existing = (jsonDecode(order.imagesJson) as List).map((e) => e.toString()).toList();
+    existing.remove(imageUrl);
+    return _db.updateOrderFields(OrdersCompanion(
+      id: Value(order.id),
+      imagesJson: Value(jsonEncode(existing)),
+      updatedAt: Value(_now),
+      dirty: const Value(true),
+    ));
   }
 
   Future<void> updateOrder(
