@@ -13,6 +13,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(dashboardStatsProvider);
     final lowStock = ref.watch(lowStockMaterialsProvider);
+    final dueWorkers = ref.watch(workersDueTodayProvider);
     final formatter = NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
 
     return Scaffold(
@@ -56,6 +57,19 @@ class DashboardScreen extends ConsumerWidget {
                   leading: const Icon(Icons.warning_amber_rounded, color: AppColors.danger),
                   title: const Text('خامات على وشك النفاد', style: TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(lowStock.map((m) => m.name).join('، ')),
+                ),
+              ),
+            ],
+            if (dueWorkers.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Card(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                child: ListTile(
+                  leading: const Icon(Icons.notifications_active_rounded, color: AppColors.warning),
+                  title: const Text('النهاردة يوم القبض الأسبوعي', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('مستني تأكيد الدفع: ${dueWorkers.map((w) => w.name).join('، ')}'),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => ref.read(selectedTabProvider.notifier).state = 4,
                 ),
               ),
             ],
