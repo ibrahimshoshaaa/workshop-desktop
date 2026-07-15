@@ -5,8 +5,7 @@ import '../providers/data_providers.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
 import '../core/order_calculations.dart';
-
-enum _StatusFilter { all, completed, pending, cancelled }
+import '../core/constants.dart';
 
 class RevenuesDetailScreen extends ConsumerStatefulWidget {
   const RevenuesDetailScreen({super.key});
@@ -19,7 +18,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
   late DateTimeRange _selectedDateRange;
   late String _sortBy;
   late bool _sortAscending;
-  _StatusFilter _statusFilter = _StatusFilter.all;
+  String? _statusFilter;
   final _searchController = TextEditingController();
   String _query = '';
 
@@ -42,18 +41,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
   }
 
   bool _matchesStatusFilter(String status) {
-    if (_statusFilter == _StatusFilter.all) return true;
-    final s = status.toLowerCase();
-    switch (_statusFilter) {
-      case _StatusFilter.completed:
-        return s == 'completed' || s == 'مكتمل';
-      case _StatusFilter.pending:
-        return s == 'pending' || s == 'قيد الانتظار';
-      case _StatusFilter.cancelled:
-        return s == 'cancelled' || s == 'ملغى';
-      case _StatusFilter.all:
-        return true;
-    }
+    return _statusFilter == null || status == _statusFilter;
   }
 
   @override
@@ -96,10 +84,10 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
     final totalRevenue = filteredOrders.fold<double>(0, (sum, order) => sum + order.totalPaid);
     final averageRevenue = filteredOrders.isEmpty ? 0.0 : totalRevenue / filteredOrders.length;
     final completedRevenue = filteredOrders
-        .where((o) => _matchesStatusFilterFor(o.status, _StatusFilter.completed))
+        .where((o) => o.status == 'تم التسليم')
         .fold<double>(0, (sum, o) => sum + o.totalPaid);
     final pendingRevenue = filteredOrders
-        .where((o) => _matchesStatusFilterFor(o.status, _StatusFilter.pending))
+        .where((o) => o.status != 'تم التسليم')
         .fold<double>(0, (sum, o) => sum + o.totalPaid);
 
     return Scaffold(
@@ -323,20 +311,6 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
     );
   }
 
-  bool _matchesStatusFilterFor(String status, _StatusFilter filter) {
-    final s = status.toLowerCase();
-    switch (filter) {
-      case _StatusFilter.completed:
-        return s == 'completed' || s == 'مكتمل';
-      case _StatusFilter.pending:
-        return s == 'pending' || s == 'قيد الانتظار';
-      case _StatusFilter.cancelled:
-        return s == 'cancelled' || s == 'ملغى';
-      case _StatusFilter.all:
-        return true;
-    }
-  }
-
   Widget _buildStatusDropdown() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -345,19 +319,15 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<_StatusFilter>(
+        child: DropdownButton<String?>(
           value: _statusFilter,
           icon: const Icon(Icons.expand_more_rounded, size: 18),
           style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w500),
-          items: const [
-            DropdownMenuItem(value: _StatusFilter.all, child: Text('كل الحالات')),
-            DropdownMenuItem(value: _StatusFilter.completed, child: Text('مكتمل')),
-            DropdownMenuItem(value: _StatusFilter.pending, child: Text('قيد الانتظار')),
-            DropdownMenuItem(value: _StatusFilter.cancelled, child: Text('ملغى')),
+          items: [
+            const DropdownMenuItem(value: null, child: Text('كل الحالات')),
+            ...orderStatuses.map((s) => DropdownMenuItem(value: s, child: Text(s))),
           ],
-          onChanged: (value) {
-            if (value != null) setState(() => _statusFilter = value);
-          },
+          onChanged: (value) => setState(() => _statusFilter = value),
         ),
       ),
     );
@@ -399,16 +369,15 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
   }
 
   Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'مكتمل':
-        return AppColors.success;
-      case 'pending':
-      case 'قيد الانتظار':
+    switch (status) {
+      case 'جاري التجهيز':
         return AppColors.warning;
-      case 'cancelled':
-      case 'ملغى':
-        return AppColors.danger;
+      case 'قيد التنفيذ':
+        return AppColors.navy;
+      case 'جاهز للتسليم':
+        return AppColors.success;
+      case 'تم التسليم':
+        return Colors.grey.shade600;
       default:
         return Colors.grey;
     }
