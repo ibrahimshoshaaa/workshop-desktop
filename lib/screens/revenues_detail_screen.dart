@@ -4,6 +4,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import '../providers/data_providers.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
+import '../core/order_calculations.dart';
 
 enum _StatusFilter { all, completed, pending, cancelled }
 
@@ -278,7 +279,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                               ],
                               rows: filteredOrders.map((order) {
                                 final orderDate = DateTime.fromMillisecondsSinceEpoch(order.createdAt);
-                                final outstanding = order.totalAmount - order.totalPaid;
+                                final outstanding = order.remaining;
                                 return DataRow(
                                   cells: [
                                     DataCell(
@@ -294,7 +295,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                     ),
                                     DataCell(Text(dateFormatter.format(orderDate), style: const TextStyle(fontSize: 12))),
                                     DataCell(_StatusBadge(status: order.status, color: _getStatusColor(order.status))),
-                                    DataCell(Text(formatter.format(order.totalAmount), style: const TextStyle(fontSize: 12))),
+                                    DataCell(Text(formatter.format(order.effectiveTotal), style: const TextStyle(fontSize: 12))),
                                     DataCell(Text(
                                       formatter.format(order.totalPaid),
                                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success),
