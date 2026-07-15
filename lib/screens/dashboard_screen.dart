@@ -35,7 +35,7 @@ class DashboardScreen extends ConsumerWidget {
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RevenuesDetailScreen())),
                 ),
                 _StatCard(
-                  title: 'إجمالي المديونيات',
+                  title: ' إجمالي المديونيات المستحقه',
                   value: formatter.format(stats.totalDebts),
                   icon: Icons.warning_amber_rounded,
                   color: AppColors.danger,
