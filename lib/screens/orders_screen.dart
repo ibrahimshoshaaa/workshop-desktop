@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
 import '../providers/data_providers.dart';
@@ -9,6 +11,74 @@ import '../core/constants.dart';
 import '../core/search_bar.dart';
 import '../core/whatsapp.dart';
 import '../core/order_calculations.dart';
+import '../services/cloudinary_service.dart';
+
+/// بيحوّل نص JSON مخزّن في imagesJson لقائمة روابط صور
+List<String> _parseOrderImages(String imagesJson) {
+  try {
+    return (jsonDecode(imagesJson) as List).map((e) => e.toString()).toList();
+  } catch (_) {
+    return [];
+  }
+}
+
+/// يفتح الصورة في نافذة كبيرة لعرضها بوضوح
+void _showFullImage(BuildContext context, String url) {
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      backgroundColor: Colors.black,
+      child: Stack(
+        alignment: Alignment.topRight,
+        children: [
+          InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// عرض صف من الصور (Thumbnails) القابلة للضغط والحذف - مستخدم في نافذة
+/// إضافة الطلب (على bytes محلية لسه ما اتبعتتش) وفي تفاصيل الطلب (روابط
+/// Cloudinary بعد الرفع)
+class _ImageThumb extends StatelessWidget {
+  final Widget image;
+  final VoidCallback? onTap;
+  final VoidCallback? onRemove;
+  const _ImageThumb({required this.image, this.onTap, this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: GestureDetector(
+            onTap: onTap,
+            child: SizedBox(width: 72, height: 72, child: image),
+          ),
+        ),
+        if (onRemove != null)
+          Positioned(
+            top: -6,
+            right: -6,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 
@@ -59,6 +129,8 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
   final totalController = TextEditingController();
   final depositController = TextEditingController();
   DateTime deliveryDate = DateTime.now().add(const Duration(days: 7));
+  final pickedImages = <PlatformFile>[];
+  bool isSaving = false;
 
   await showDialog(
     context: context,
@@ -96,6 +168,43 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                   const SizedBox(height: 12),
                   TextFormField(controller: detailsController, maxLines: 2, decoration: const InputDecoration(labelText: 'المواصفات')),
                   const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text('صور الطلب', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...pickedImages.map((f) => _ImageThumb(
+                            image: Image.memory(f.bytes!, fit: BoxFit.cover),
+                            onRemove: () => setDialogState(() => pickedImages.remove(f)),
+                          )),
+                      InkWell(
+                        onTap: () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.image,
+                            allowMultiple: true,
+                            withData: true,
+                          );
+                          if (result != null) {
+                            setDialogState(() => pickedImages.addAll(result.files.where((f) => f.bytes != null)));
+                          }
+                        },
+                        child: Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade400),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.add_photo_alternate_rounded, color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('تاريخ التسليم'),
@@ -130,27 +239,46 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          TextButton(onPressed: isSaving ? null : () => Navigator.pop(context), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate() || customerId == null) return;
-              final customer = presetCustomer ?? customers.firstWhere((c) => c.id == customerId);
-              final repo = ref.read(repositoryProvider);
-              final orderId = await repo.addOrder(
-                customerId: customer.id,
-                customerName: customer.name,
-                itemType: itemType,
-                details: detailsController.text.trim(),
-                totalAmount: double.parse(totalController.text.trim()),
-                deliveryDate: deliveryDate,
-              );
-              final deposit = double.tryParse(depositController.text.trim()) ?? 0;
-              if (deposit > 0) {
-                await repo.addPayment(orderId: orderId, customerId: customer.id, amount: deposit, paymentType: 'deposit');
-              }
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('حفظ'),
+            onPressed: isSaving
+                ? null
+                : () async {
+                    if (!formKey.currentState!.validate() || customerId == null) return;
+                    setDialogState(() => isSaving = true);
+                    try {
+                      final imageUrls = pickedImages.isEmpty
+                          ? <String>[]
+                          : await CloudinaryService.instance.uploadMultiple(
+                              pickedImages.map((f) => f.bytes!.toList()).toList(),
+                              folder: 'orders',
+                            );
+                      final customer = presetCustomer ?? customers.firstWhere((c) => c.id == customerId);
+                      final repo = ref.read(repositoryProvider);
+                      final orderId = await repo.addOrder(
+                        customerId: customer.id,
+                        customerName: customer.name,
+                        itemType: itemType,
+                        details: detailsController.text.trim(),
+                        totalAmount: double.parse(totalController.text.trim()),
+                        deliveryDate: deliveryDate,
+                        imageUrls: imageUrls,
+                      );
+                      final deposit = double.tryParse(depositController.text.trim()) ?? 0;
+                      if (deposit > 0) {
+                        await repo.addPayment(orderId: orderId, customerId: customer.id, amount: deposit, paymentType: 'deposit');
+                      }
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      setDialogState(() => isSaving = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل حفظ الطلب: $e')));
+                      }
+                    }
+                  },
+            child: isSaving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('حفظ'),
           ),
         ],
       ),
@@ -406,6 +534,10 @@ class OrderDetailDialog extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              const Align(alignment: Alignment.centerRight, child: Text('صور الطلب', style: TextStyle(fontWeight: FontWeight.bold))),
+              const SizedBox(height: 8),
+              _OrderImagesSection(order: currentOrder),
+              const SizedBox(height: 16),
               const Align(alignment: Alignment.centerRight, child: Text('سجل الدفعات', style: TextStyle(fontWeight: FontWeight.bold))),
               const SizedBox(height: 8),
               if (orderTransactions.isEmpty)
@@ -633,6 +765,94 @@ class OrderDetailDialog extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// قسم صور الطلب في نافذة التفاصيل - بيعرض الصور المرفوعة أصلًا (كـ
+/// روابط Cloudinary)، وبيسمح برفع صور جديدة أو حذف صورة موجودة
+class _OrderImagesSection extends ConsumerStatefulWidget {
+  final Order order;
+  const _OrderImagesSection({required this.order});
+
+  @override
+  ConsumerState<_OrderImagesSection> createState() => _OrderImagesSectionState();
+}
+
+class _OrderImagesSectionState extends ConsumerState<_OrderImagesSection> {
+  bool _isUploading = false;
+
+  Future<void> _pickAndUpload() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: true, withData: true);
+    if (result == null) return;
+    final files = result.files.where((f) => f.bytes != null).toList();
+    if (files.isEmpty) return;
+
+    setState(() => _isUploading = true);
+    try {
+      final urls = await CloudinaryService.instance.uploadMultiple(
+        files.map((f) => f.bytes!.toList()).toList(),
+        folder: 'orders',
+      );
+      await ref.read(repositoryProvider).addImagesToOrder(widget.order, urls);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل رفع الصور: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  Future<void> _removeImage(String url) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف الصورة'),
+        content: const Text('هل أنت متأكد من حذف هذه الصورة من الطلب؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await ref.read(repositoryProvider).removeImageFromOrder(widget.order, url);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // بنقرأ الطلب المحدّث دايمًا من الـ provider عشان الصور تظهر فورًا بعد الرفع
+    final ordersAsync = ref.watch(ordersProvider);
+    final currentOrder = (ordersAsync.value ?? []).firstWhereOrNull((o) => o.id == widget.order.id) ?? widget.order;
+    final images = _parseOrderImages(currentOrder.imagesJson);
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ...images.map((url) => _ImageThumb(
+              image: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_rounded)),
+              onTap: () => _showFullImage(context, url),
+              onRemove: () => _removeImage(url),
+            )),
+        InkWell(
+          onTap: _isUploading ? null : _pickAndUpload,
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(8)),
+            child: _isUploading
+                ? const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.add_photo_alternate_rounded, color: Colors.grey),
+          ),
+        ),
+      ],
     );
   }
 }
