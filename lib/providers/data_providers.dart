@@ -89,6 +89,21 @@ final lowStockMaterialsProvider = Provider<List<MaterialItem>>((ref) {
   return materials.where((m) => m.quantity <= m.minThreshold).toList();
 });
 
+/// الطلبات اللي معاد تسليمها خلال الأسبوع الجاي (من دلوقتي لحد بعد 7
+/// أيام) ولسه ماتسلمتش - بنستخدمها في بانر "التسليمات القادمة" بالرئيسية
+final upcomingDeliveriesProvider = Provider<List<Order>>((ref) {
+  final orders = ref.watch(ordersProvider).value ?? [];
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final weekAhead = today.add(const Duration(days: 7));
+  return orders.where((o) {
+    if (o.status == 'تم التسليم') return false;
+    final delivery = DateTime.fromMillisecondsSinceEpoch(o.deliveryDate);
+    return !delivery.isBefore(today) && delivery.isBefore(weekAhead);
+  }).toList()
+    ..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
+});
+
 class DashboardStats {
   final double totalRevenue;
   final double totalDebts;
