@@ -8,6 +8,7 @@ import 'dashboard_screen.dart';
 import 'customers_screen.dart';
 import 'orders_screen.dart';
 import 'debts_screen.dart';
+import 'workers_screen.dart';
 import 'expenses_screen.dart';
 import 'inventory_screen.dart';
 import 'reports_screen.dart';
@@ -23,6 +24,7 @@ class AppShell extends ConsumerWidget {
     (Icons.people_alt_rounded, 'العملاء', 'customers'),
     (Icons.checkroom_rounded, 'الطلبات', 'orders'),
     (Icons.account_balance_wallet_rounded, 'المديونيات', 'debts'),
+    (Icons.engineering_rounded, 'العمال', 'workers'),
     (Icons.receipt_long_rounded, 'المصروفات', 'expenses'),
     (Icons.inventory_2_rounded, 'المخزون', 'inventory'),
     (Icons.summarize_rounded, 'التقارير', 'reports'),
@@ -34,6 +36,7 @@ class AppShell extends ConsumerWidget {
     CustomersScreen(),
     OrdersScreen(),
     DebtsScreen(),
+    WorkersScreen(),
     ExpensesScreen(),
     InventoryScreen(),
     ReportsScreen(),
