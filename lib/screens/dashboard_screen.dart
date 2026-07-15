@@ -13,7 +13,6 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(dashboardStatsProvider);
-    final lowStock = ref.watch(lowStockMaterialsProvider);
     final dueWorkers = ref.watch(workersDueTodayProvider);
     final upcomingDeliveries = ref.watch(upcomingDeliveriesProvider);
     final formatter = NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
@@ -57,17 +56,6 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            if (lowStock.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              Card(
-                color: AppColors.danger.withValues(alpha: 0.08),
-                child: ListTile(
-                  leading: const Icon(Icons.warning_amber_rounded, color: AppColors.danger),
-                  title: const Text('خامات على وشك النفاد', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(lowStock.map((m) => m.name).join('، ')),
-                ),
-              ),
-            ],
             if (dueWorkers.isNotEmpty) ...[
               const SizedBox(height: 24),
               Card(
