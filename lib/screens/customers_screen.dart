@@ -138,7 +138,23 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           child: Text(c.name.isNotEmpty ? c.name[0] : '?',
                               style: const TextStyle(color: AppColors.wood, fontWeight: FontWeight.bold)),
                         ),
-                        title: Text(c.name),
+                        title: Row(
+                          children: [
+                            Text(c.name),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.wood.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '#${c.serialNumber}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.wood, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
                         subtitle: Text('${c.phone}${c.address.isNotEmpty ? ' - ${c.address}' : ''}'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -197,7 +213,7 @@ class _CustomerOrdersDialog extends ConsumerWidget {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return AlertDialog(
-      title: Text('طلبات ${customer.name}'),
+      title: Text('طلبات ${customer.name} (#${customer.serialNumber})'),
       content: SizedBox(
         width: 420,
         height: 420,
