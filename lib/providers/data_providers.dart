@@ -32,6 +32,52 @@ final materialsProvider = StreamProvider<List<MaterialItem>>((ref) {
   return ref.watch(databaseProvider).watchMaterials();
 });
 
+final workersProvider = StreamProvider<List<Worker>>((ref) {
+  return ref.watch(databaseProvider).watchWorkers();
+});
+
+final workerPaymentsProvider = StreamProvider<List<WorkerPayment>>((ref) {
+  return ref.watch(databaseProvider).watchWorkerPayments();
+});
+
+/// سجل قبض عامل معيّن بس - بنستخدمه في ديالوج تفاصيل العامل
+final workerPaymentsForWorkerProvider = StreamProvider.family<List<WorkerPayment>, String>((ref, workerId) {
+  return ref.watch(databaseProvider).watchPaymentsForWorker(workerId);
+});
+
+/// بيحسب بداية دورة الاستحقاق الحالية (منتصف الليل) لعامل معيّن حسب
+/// نوع مرتبه: يومي = النهاردة، أسبوعي = آخر (أو نفس) يوم القبض المحدد،
+/// شهري = أول يوم في الشهر الحالي
+DateTime workerPeriodAnchor(Worker worker, DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  switch (worker.salaryType) {
+    case 'weekly':
+      final diff = (now.weekday - worker.payWeekday + 7) % 7;
+      return today.subtract(Duration(days: diff));
+    case 'monthly':
+      return DateTime(now.year, now.month, 1);
+    default: // daily
+      return today;
+  }
+}
+
+bool isWorkerPaidForCurrentPeriod(Worker worker, List<WorkerPayment> payments, DateTime now) {
+  final anchor = workerPeriodAnchor(worker, now);
+  return payments.any((p) => p.workerId == worker.id && DateTime.fromMillisecondsSinceEpoch(p.periodStart).isAtSameMomentAs(anchor));
+}
+
+/// العمال الأسبوعيين اللي موعد قبضهم النهاردة بالظبط ولسه ما اتأكدش
+/// دفعهم - ده اللي بيبني عليه بانر "موعد القبض" في صفحة العمال والرئيسية
+final workersDueTodayProvider = Provider<List<Worker>>((ref) {
+  final workers = ref.watch(workersProvider).value ?? [];
+  final payments = ref.watch(workerPaymentsProvider).value ?? [];
+  final now = DateTime.now();
+  return workers.where((w) {
+    if (w.salaryType != 'weekly' || w.payWeekday != now.weekday) return false;
+    return !isWorkerPaidForCurrentPeriod(w, payments, now);
+  }).toList();
+});
+
 final debtorOrdersProvider = Provider<List<Order>>((ref) {
   final orders = ref.watch(ordersProvider).value ?? [];
   return orders.where((o) => o.totalAmount - o.totalPaid > 0).toList()
