@@ -68,6 +68,7 @@ class SyncService {
             name: Value(map['name']?.toString() ?? ''),
             phone: Value(map['phone']?.toString() ?? ''),
             address: Value(map['address']?.toString() ?? ''),
+            serialNumber: Value((map['serialNumber'] as num?)?.toInt() ?? local?.serialNumber ?? 0),
             createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
@@ -94,6 +95,7 @@ class SyncService {
           'name': row.name,
           'phone': row.phone,
           'address': row.address,
+          'serialNumber': row.serialNumber,
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
         });
