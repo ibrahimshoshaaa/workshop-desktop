@@ -34,6 +34,11 @@ class Orders extends Table {
   TextColumn get status => text()();
   RealColumn get totalAmount => real().withDefault(const Constant(0))();
   RealColumn get totalPaid => real().withDefault(const Constant(0))();
+  /// خصم بمبلغ ثابت (مش نسبة) بيتشال من الإجمالي - مثلاً اتفقنا على
+  /// 15000 والعميل دفع 14000 وعملنا خصم 1000، فالـ 1000 دي مش من
+  /// حقنا أصلاً: مش بتتحسب مديونية عليه ولا إيراد للورشة
+  RealColumn get discountAmount => real().withDefault(const Constant(0))();
+  TextColumn get discountReason => text().withDefault(const Constant(''))();
   IntColumn get deliveryDate => integer()();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
@@ -156,7 +161,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -175,6 +180,11 @@ class AppDatabase extends _$AppDatabase {
           // إضافة جدولي العمال وسجل قبضهم (نسخة 3)
           await m.createTable(workers);
           await m.createTable(workerPayments);
+        }
+        if (from < 4) {
+          // إضافة أعمدة الخصم على الطلبات (نسخة 4)
+          await m.addColumn(orders, orders.discountAmount);
+          await m.addColumn(orders, orders.discountReason);
         }
       },
     );
