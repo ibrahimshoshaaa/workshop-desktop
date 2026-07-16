@@ -35,6 +35,7 @@ class SyncService {
     if (_isSyncing) return;
     _isSyncing = true;
     try {
+      await _repairMissingDiscountsOnce();
       await _syncCustomers();
       await _syncOrders();
       await _syncTransactions();
@@ -48,6 +49,27 @@ class SyncService {
     } finally {
       _isSyncing = false;
     }
+  }
+
+  /// إصلاح لمرة واحدة بس: قبل التصليح، الطلبات اللي عليها خصم كانت
+  /// بتتزامن مع Firebase من غير ما يترفع فيها discountAmount/discountReason
+  /// (باگ في _syncOrders) - فالطلبات دي كانت وصلت لـ Firebase وهي "نضيفة"
+  /// (dirty = false) بمبلغ الخصم فيها صفر، فمش هتترفع تاني لوحدها. الدالة
+  /// دي بتحدد الطلبات اللي عندها خصم محلي (discountAmount != 0) وترجّعها
+  /// "متغيّرة" (dirty) عشان تتبعت تاني في نفس دورة المزامنة دي بالمنطق
+  /// المُصلَّح، وده بيحصل مرة واحدة بس في عمر التطبيق (معلّم بمفتاح ميتا).
+  Future<void> _repairMissingDiscountsOnce() async {
+    final done = await _db.getMeta('discountSyncRepairDone');
+    if (done == '1') return;
+    final discounted = await (_db.select(_db.orders)..where((t) => t.discountAmount.equals(0).not())).get();
+    for (final row in discounted) {
+      await _db.updateOrderFields(OrdersCompanion(
+        id: Value(row.id),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        dirty: const Value(true),
+      ));
+    }
+    await _db.setMeta('discountSyncRepairDone', '1');
   }
 
   // ---------------- Customers ----------------
@@ -136,6 +158,8 @@ class SyncService {
             status: Value(map['status']?.toString() ?? 'جاري التجهيز'),
             totalAmount: Value((map['totalAmount'] as num?)?.toDouble() ?? 0),
             totalPaid: Value((map['totalPaid'] as num?)?.toDouble() ?? 0),
+            discountAmount: Value((map['discountAmount'] as num?)?.toDouble() ?? 0),
+            discountReason: Value(map['discountReason']?.toString() ?? ''),
             deliveryDate: Value((map['deliveryDate'] as num?)?.toInt() ?? remoteUpdatedAt),
             createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
@@ -169,6 +193,8 @@ class SyncService {
           'status': row.status,
           'totalAmount': row.totalAmount,
           'totalPaid': row.totalPaid,
+          'discountAmount': row.discountAmount,
+          'discountReason': row.discountReason,
           'deliveryDate': row.deliveryDate,
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
