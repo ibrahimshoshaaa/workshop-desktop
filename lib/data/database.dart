@@ -92,6 +92,12 @@ class Expenses extends Table {
   /// لو المصروف ده سداد لمديونية ورشة (مورد/صنايعي) - بيربطه بسجل
   /// المديونية في جدول WorkshopDebts، وبيفضل null لباقي المصروفات العادية
   TextColumn get workshopDebtId => text().nullable()();
+  /// تقسيم المصروف على أكتر من طلب - متخزّن كنص JSON:
+  /// [{"orderId":"..","customerId":"..","customerName":"..","amount":123}, ...]
+  /// نفس فكرة imagesJson في جدول الطلبات؛ لو المصروف عام (مش مقسّم على
+  /// طلبات) بتفضل '[]'. الحقول القديمة orderId/customerId/customerName
+  /// فوق بتفضل متسجلة كمان لو طلب واحد بس اتاختار (توافقًا مع الكود القديم)
+  TextColumn get orderAllocationsJson => text().withDefault(const Constant('[]'))();
   IntColumn get date => integer()();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
@@ -204,7 +210,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -250,6 +256,10 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(expenses, expenses.paymentMethod);
           await m.addColumn(expenses, expenses.workshopDebtId);
           await m.createTable(workshopDebts);
+        }
+        if (from < 8) {
+          // إمكانية تقسيم مصروف واحد على أكتر من طلب في نفس الوقت (نسخة 8)
+          await m.addColumn(expenses, expenses.orderAllocationsJson);
         }
       },
     );

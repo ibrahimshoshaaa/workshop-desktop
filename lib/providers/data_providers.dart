@@ -24,9 +24,28 @@ final expensesProvider = StreamProvider<List<Expense>>((ref) {
   return ref.watch(databaseProvider).watchExpenses();
 });
 
-/// مصروفات مرتبطة بطلب معيّن فقط - بنستخدمه في ديالوج تفاصيل الطلب
-final orderExpensesProvider = StreamProvider.family<List<Expense>, String>((ref, orderId) {
-  return ref.watch(databaseProvider).watchExpensesForOrder(orderId);
+/// حصة طلب معيّن من مصروف (ممكن يكون المصروف مقسّم على أكتر من طلب،
+/// فـ [shareAmount] هنا هو نصيب الطلب ده بس، مش إجمالي المصروف كامل)
+class OrderExpenseShare {
+  final Expense expense;
+  final double shareAmount;
+  final int totalOrdersCount;
+  const OrderExpenseShare({required this.expense, required this.shareAmount, required this.totalOrdersCount});
+}
+
+/// مصروفات مرتبطة بطلب معيّن فقط - بتاخد في الاعتبار المصروفات المقسّمة
+/// على أكتر من طلب (كل طلب بياخد نصيبه بس، مش المصروف كامل)
+final orderExpensesProvider = Provider.family<List<OrderExpenseShare>, String>((ref, orderId) {
+  final expenses = ref.watch(expensesProvider).value ?? [];
+  final result = <OrderExpenseShare>[];
+  for (final e in expenses) {
+    final allocs = e.allocations;
+    final match = allocs.where((a) => a.orderId == orderId).toList();
+    if (match.isEmpty) continue;
+    final shareAmount = match.fold<double>(0, (s, a) => s + a.amount);
+    result.add(OrderExpenseShare(expense: e, shareAmount: shareAmount, totalOrdersCount: allocs.length));
+  }
+  return result;
 });
 
 final materialsProvider = StreamProvider<List<MaterialItem>>((ref) {

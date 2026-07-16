@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import 'database.dart';
+import '../core/order_calculations.dart';
 
 /// طبقة وسيطة بين الواجهات وقاعدة البيانات المحلية - كل عملية كتابة هنا
 /// بتحط dirty=true تلقائيًا عشان خدمة المزامنة تعرف تبعتها لـ Firebase
@@ -191,24 +192,26 @@ class LocalRepository {
     required String description,
     String? workerName,
     required DateTime date,
-    String? orderId,
-    String? customerId,
-    String? customerName,
     required String paymentMethod,
+    List<ExpenseOrderAllocation> orderAllocations = const [],
     String? workshopDebtId,
   }) {
     final now = _now;
+    // لو طلب واحد بس متاختار، بنفضل نحتفظ بيه في الأعمدة القديمة كمان
+    // (orderId/customerId/customerName) عشان أي كود قديم لسه بيقرا منها
+    final single = orderAllocations.length == 1 ? orderAllocations.first : null;
     return _db.upsertExpense(ExpensesCompanion(
       id: Value(_uuid.v4()),
       amount: Value(amount),
       category: Value(category),
       description: Value(description),
       workerName: Value(workerName),
-      orderId: Value(orderId),
-      customerId: Value(customerId),
-      customerName: Value(customerName),
+      orderId: Value(single?.orderId),
+      customerId: Value(single?.customerId),
+      customerName: Value(single?.customerName),
       paymentMethod: Value(paymentMethod),
       workshopDebtId: Value(workshopDebtId),
+      orderAllocationsJson: Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
       date: Value(date.millisecondsSinceEpoch),
       updatedAt: Value(now),
       isDeleted: const Value(false),
@@ -223,10 +226,10 @@ class LocalRepository {
     required String description,
     String? workerName,
     required DateTime date,
-    String? customerId,
-    String? customerName,
     required String paymentMethod,
+    List<ExpenseOrderAllocation> orderAllocations = const [],
   }) {
+    final single = orderAllocations.length == 1 ? orderAllocations.first : null;
     return _db.updateExpenseFields(ExpensesCompanion(
       id: Value(expense.id),
       amount: Value(amount),
@@ -234,9 +237,11 @@ class LocalRepository {
       description: Value(description),
       workerName: Value(workerName),
       date: Value(date.millisecondsSinceEpoch),
-      customerId: Value(customerId),
-      customerName: Value(customerName),
+      orderId: Value(single?.orderId),
+      customerId: Value(single?.customerId),
+      customerName: Value(single?.customerName),
       paymentMethod: Value(paymentMethod),
+      orderAllocationsJson: Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
       updatedAt: Value(_now),
       dirty: const Value(true),
     ));

@@ -1011,10 +1011,15 @@ class OrderDetailDialog extends ConsumerWidget {
                       description: descriptionController.text.trim(),
                       workerName: workerName,
                       date: date,
-                      orderId: order.id,
-                      customerId: order.customerId,
-                      customerName: order.customerName,
                       paymentMethod: paymentMethod,
+                      orderAllocations: [
+                        ExpenseOrderAllocation(
+                          orderId: order.id,
+                          customerId: order.customerId,
+                          customerName: order.customerName,
+                          amount: double.parse(amountController.text.trim()),
+                        ),
+                      ],
                     );
                 if (context.mounted) Navigator.pop(context);
               },
@@ -1122,31 +1127,31 @@ class _OrderExpensesList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final expensesAsync = ref.watch(orderExpensesProvider(orderId));
-    return expensesAsync.when(
-      data: (expenses) {
-        if (expenses.isEmpty) {
-          return const Text('لا توجد مصروفات مسجلة على الطلب ده بعد', style: TextStyle(color: Colors.grey));
-        }
-        final sorted = [...expenses]..sort((a, b) => b.date.compareTo(a.date));
-        return Column(
-          children: sorted
-              .map((e) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.receipt_long_rounded, color: AppColors.warning),
-                    title: Text('${e.amount.toStringAsFixed(0)} ج.م - ${expenseCategories[e.category] ?? e.category}'),
-                    subtitle: Text(
-                      e.description.isNotEmpty
-                          ? e.description
-                          : (e.workerName != null ? 'الصنايعي: ${e.workerName}' : ''),
-                    ),
-                    trailing: Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))),
-                  ))
-              .toList(),
-        );
-      },
-      loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Text('خطأ: $e', style: const TextStyle(color: AppColors.danger)),
+    final shares = ref.watch(orderExpensesProvider(orderId));
+    if (shares.isEmpty) {
+      return const Text('لا توجد مصروفات مسجلة على الطلب ده بعد', style: TextStyle(color: Colors.grey));
+    }
+    final sorted = [...shares]..sort((a, b) => b.expense.date.compareTo(a.expense.date));
+    return Column(
+      children: sorted
+          .map((s) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.receipt_long_rounded, color: AppColors.warning),
+                title: Text(
+                  s.totalOrdersCount > 1
+                      ? '${s.shareAmount.toStringAsFixed(0)} ج.م (نصيبك من ${s.expense.amount.toStringAsFixed(0)} ج.م) - ${expenseCategories[s.expense.category] ?? s.expense.category}'
+                      : '${s.shareAmount.toStringAsFixed(0)} ج.م - ${expenseCategories[s.expense.category] ?? s.expense.category}',
+                ),
+                subtitle: Text(
+                  [
+                    if (s.expense.description.isNotEmpty) s.expense.description,
+                    if (s.expense.workerName != null) 'الصنايعي: ${s.expense.workerName}',
+                    if (s.totalOrdersCount > 1) 'مقسّم على ${s.totalOrdersCount} طلبات',
+                  ].join(' - '),
+                ),
+                trailing: Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(s.expense.date))),
+              ))
+          .toList(),
     );
   }
 }

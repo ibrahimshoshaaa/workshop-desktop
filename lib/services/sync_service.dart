@@ -272,6 +272,7 @@ class SyncService {
             customerName: Value(map['customerName']?.toString()),
             paymentMethod: Value(map['paymentMethod']?.toString() ?? 'cash'),
             workshopDebtId: Value(map['workshopDebtId']?.toString()),
+            orderAllocationsJson: Value(map['orderAllocationsJson']?.toString() ?? '[]'),
             date: Value((map['date'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
@@ -304,6 +305,7 @@ class SyncService {
           if (row.customerName != null) 'customerName': row.customerName,
           'paymentMethod': row.paymentMethod,
           if (row.workshopDebtId != null) 'workshopDebtId': row.workshopDebtId,
+          'orderAllocationsJson': row.orderAllocationsJson,
           'date': row.date,
         });
         await _db.updateExpenseFields(ExpensesCompanion(id: Value(row.id), dirty: const Value(false)));

@@ -8,6 +8,7 @@ import '../core/theme.dart';
 import '../core/search_bar.dart';
 import '../core/other_dropdown.dart';
 import '../core/constants.dart';
+import '../core/order_calculations.dart';
 
 /// فئات المصروفات المتاحة للإضافة اليدوية من هنا - بنستبعد "سداد مديونية
 /// ورشة" لأنها بتتسجل أوتوماتيك بس من شاشة "مديونيات الورشة"
@@ -30,6 +31,65 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     super.dispose();
   }
 
+  /// ديالوج فرعي لاختيار أكتر من طلب لتقسيم المصروف عليهم - بيعدّل
+  /// [selectedOrderIds] في مكانه (in place) فور ما المستخدم يضغط تم
+  Future<void> _pickOrders(BuildContext context, List<Order> orders, Set<String> selectedOrderIds) async {
+    String query = '';
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setPickerState) {
+          final q = normalizeForSearch(query);
+          final filtered = q.isEmpty
+              ? orders
+              : orders.where((o) => normalizeForSearch(o.customerName).contains(q) || normalizeForSearch(o.itemType).contains(q)).toList();
+          return AlertDialog(
+            title: const Text('اختار الطلبات'),
+            content: SizedBox(
+              width: 420,
+              height: 440,
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(hintText: 'ابحث بالعميل أو الصنف...', prefixIcon: Icon(Icons.search)),
+                    onChanged: (v) => setPickerState(() => query = v),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(child: Text('لا توجد نتائج', style: TextStyle(color: Colors.grey)))
+                        : ListView.builder(
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) {
+                              final o = filtered[index];
+                              final checked = selectedOrderIds.contains(o.id);
+                              return CheckboxListTile(
+                                value: checked,
+                                title: Text('${o.customerName} - ${o.itemType}'),
+                                subtitle: Text('${o.status} | المتبقي: ${o.remaining.toStringAsFixed(0)} ج.م'),
+                                onChanged: (v) => setPickerState(() {
+                                  if (v == true) {
+                                    selectedOrderIds.add(o.id);
+                                  } else {
+                                    selectedOrderIds.remove(o.id);
+                                  }
+                                }),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('تم')),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _showExpenseDialog(BuildContext context, WidgetRef ref, {Expense? expense}) async {
     if (expense != null && expense.category == 'workshop_debt') {
       // مصروفات سداد مديونية الورشة بتتسجل وبتتعدّل من شاشة "مديونيات
@@ -45,8 +105,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     final descriptionController = TextEditingController(text: expense?.description ?? '');
     final workerController = TextEditingController(text: expense?.workerName ?? '');
     DateTime date = expense != null ? DateTime.fromMillisecondsSinceEpoch(expense.date) : DateTime.now();
-    final customers = ref.read(customersProvider).value ?? [];
-    String? chargedCustomerId = expense?.customerId;
+    final orders = ref.read(ordersProvider).value ?? [];
+    // الطلبات اللي المصروف مقسّم عليها - بيتحسب نصيب كل طلب بالتساوي
+    // وقت الحفظ (إجمالي المصروف ÷ عدد الطلبات المختارة)
+    final selectedOrderIds = expense?.allocations.map((a) => a.orderId).toSet() ?? <String>{};
     // مصدر خروج المبلغ من الخزينة (نقدي/إنستاباي) - حقل إجباري
     String? paymentMethod = expense?.paymentMethod ?? 'cash';
 
@@ -94,16 +156,33 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       onChanged: (v) => setDialogState(() => paymentMethod = v),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<String?>(
-                      value: chargedCustomerId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'تحميل المصروف على عميل (اختياري)'),
-                      items: [
-                        const DropdownMenuItem<String?>(value: null, child: Text('بدون - مصروف عام')),
-                        ...customers.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.name))),
-                      ],
-                      onChanged: (v) => setDialogState(() => chargedCustomerId = v),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('تحميل المصروف على طلبات (اختياري)'),
+                      subtitle: Text(
+                        selectedOrderIds.isEmpty
+                            ? 'مصروف عام - مش مقسّم على أي طلب'
+                            : '${selectedOrderIds.length} طلب مختار - هيتقسم المبلغ عليهم بالتساوي',
+                        style: TextStyle(color: selectedOrderIds.isEmpty ? Colors.grey : AppColors.navy),
+                      ),
+                      trailing: const Icon(Icons.checklist_rounded),
+                      onTap: () async {
+                        await _pickOrders(context, orders, selectedOrderIds);
+                        setDialogState(() {});
+                      },
                     ),
+                    if (selectedOrderIds.isNotEmpty)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: selectedOrderIds.map((id) {
+                          final o = orders.firstWhereOrNull((o) => o.id == id);
+                          return Chip(
+                            label: Text(o != null ? '${o.customerName} - ${o.itemType}' : 'طلب محذوف'),
+                            onDeleted: () => setDialogState(() => selectedOrderIds.remove(id)),
+                          );
+                        }).toList(),
+                      ),
                     const SizedBox(height: 12),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -157,29 +236,32 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 }
                 final repo = ref.read(repositoryProvider);
                 final workerName = category == 'wages' && workerController.text.trim().isNotEmpty ? workerController.text.trim() : null;
-                final chargedCustomer = chargedCustomerId == null ? null : customers.firstWhereOrNull((c) => c.id == chargedCustomerId);
+                final totalAmount = double.parse(amountController.text.trim());
+                final chosenOrders = selectedOrderIds.map((id) => orders.firstWhereOrNull((o) => o.id == id)).whereType<Order>().toList();
+                final shareAmount = chosenOrders.isEmpty ? 0.0 : totalAmount / chosenOrders.length;
+                final orderAllocations = chosenOrders
+                    .map((o) => ExpenseOrderAllocation(orderId: o.id, customerId: o.customerId, customerName: o.customerName, amount: shareAmount))
+                    .toList();
                 if (expense == null) {
                   await repo.addExpense(
-                    amount: double.parse(amountController.text.trim()),
+                    amount: totalAmount,
                     category: category,
                     description: descriptionController.text.trim(),
                     workerName: workerName,
                     date: date,
-                    customerId: chargedCustomer?.id,
-                    customerName: chargedCustomer?.name,
                     paymentMethod: paymentMethod!,
+                    orderAllocations: orderAllocations,
                   );
                 } else {
                   await repo.updateExpense(
                     expense,
-                    amount: double.parse(amountController.text.trim()),
+                    amount: totalAmount,
                     category: category,
                     description: descriptionController.text.trim(),
                     workerName: workerName,
                     date: date,
-                    customerId: chargedCustomer?.id,
-                    customerName: chargedCustomer?.name,
                     paymentMethod: paymentMethod!,
+                    orderAllocations: orderAllocations,
                   );
                 }
                 if (context.mounted) Navigator.pop(context);
@@ -245,13 +327,19 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final e = filtered[index];
+                    final allocs = e.allocations;
+                    final ordersLabel = allocs.isEmpty
+                        ? null
+                        : allocs.length == 1
+                            ? 'محمّل على: ${allocs.first.customerName}'
+                            : 'مقسّم على ${allocs.length} طلبات';
                     return Card(
                       child: ListTile(
                         onTap: () => _showExpenseDialog(context, ref, expense: e),
                         title: Text(e.description.isNotEmpty ? e.description : (expenseCategories[e.category] ?? e.category)),
                         subtitle: Text(
                           '${expenseCategories[e.category] ?? e.category}${e.workerName != null ? ' - ${e.workerName}' : ''}'
-                          '${e.customerName != null ? ' | محمّل على: ${e.customerName}' : ''}'
+                          '${ordersLabel != null ? ' | $ordersLabel' : ''}'
                           ' | ${paymentMethods[e.paymentMethod] ?? e.paymentMethod}'
                           ' | ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))}',
                         ),
