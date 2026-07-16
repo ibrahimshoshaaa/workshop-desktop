@@ -130,7 +130,12 @@ class LocalRepository {
     ));
   }
 
-  Future<void> deleteOrder(String id) => _db.softDeleteOrder(id);
+  /// حذف الطلب بيمسح (soft delete) كل الدفعات المسجلة عليه كمان، عشان
+  /// مبلغها متفضلش محسوبة ضمن "المتاح" في الخزينة وهي مرتبطة بطلب محذوف
+  Future<void> deleteOrder(String id) async {
+    await _db.softDeleteTransactionsForOrder(id);
+    await _db.softDeleteOrder(id);
+  }
 
   /// بتسجّل (أو تعدّل) خصم بمبلغ ثابت على طلب معيّن - المبلغ ده بيتشال
   /// نهائيًا من حساب المديونية والإيراد المستحق على الطلب، مش بس بيظهر

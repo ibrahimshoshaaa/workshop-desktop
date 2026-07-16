@@ -165,8 +165,16 @@ final dashboardStatsProvider = Provider<DashboardStats>((ref) {
   final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
   final totalWorkshopDebts = workshopDebts.fold<double>(0, (s, d) => s + d.remaining);
 
-  double revenueByMethod(String method) =>
-      transactions.where((t) => t.paymentMethod == method).fold<double>(0, (s, t) => s + t.amountPaid);
+  double revenueByMethod(String method) {
+    // بنستبعد أي دفعة مرتبطة بطلب اتحذف - الطلب لما بيتحذف بيفضل تاريخ
+    // الدفعات بتاعته موجود في جدول الدفعات (مش بيتمسح تلقائي معاه)، فلو
+    // حسبناها كلها هيبان "المتاح" أعلى من الإيرادات نفسها وده رقم غلط
+    final liveOrderIds = orders.map((o) => o.id).toSet();
+    return transactions
+        .where((t) => t.paymentMethod == method && liveOrderIds.contains(t.orderId))
+        .fold<double>(0, (s, t) => s + t.amountPaid);
+  }
+
   double expensesByMethod(String method) =>
       expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
 

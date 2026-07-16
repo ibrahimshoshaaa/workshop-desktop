@@ -63,9 +63,12 @@ class ExcelExportService {
       ]);
     }
 
-    // ورقة ملخص - تفنيط "المبلغ المتاح" حسب مصدره (نقدي/إنستاباي)
-    double revenueByMethod(String method) =>
-        transactions.where((t) => t.paymentMethod == method).fold<double>(0, (s, t) => s + t.amountPaid);
+    // ورقة ملخص - تفنيط "المبلغ المتاح" حسب مصدره (نقدي/إنستاباي) - بنستبعد
+    // أي دفعة مرتبطة بطلب اتحذف (شايف نفس الشرح في dashboardStatsProvider)
+    final liveOrderIds = orders.map((o) => o.id).toSet();
+    double revenueByMethod(String method) => transactions
+        .where((t) => t.paymentMethod == method && liveOrderIds.contains(t.orderId))
+        .fold<double>(0, (s, t) => s + t.amountPaid);
     double expensesByMethod(String method) =>
         expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
     final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);

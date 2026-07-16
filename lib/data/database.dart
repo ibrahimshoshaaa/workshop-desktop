@@ -344,6 +344,16 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// بيحذف (soft delete) كل الدفعات المرتبطة بطلب معيّن دفعة واحدة - بننادي
+  /// عليها لما الطلب نفسه بيتحذف، عشان الفلوس المسجلة عليه متفضلش "عالقة"
+  /// في حسابات الخزينة (كاش/إنستاباي) وهي مرتبطة بطلب ملوش وجود أصلًا
+  Future<void> softDeleteTransactionsForOrder(String orderId) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return (update(paymentTransactions)..where((t) => t.orderId.equals(orderId) & t.isDeleted.equals(false))).write(
+      PaymentTransactionsCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
+    );
+  }
+
   /// بيحسب إجمالي المدفوع لطلب معيّن من واقع سجل الدفعات نفسه (مش من رقم
   /// متراكم متخزّن) - ده اللي بيضمن إن الرقم صح دايمًا مهما حصل تعارض
   /// أو تكرار مزامنة، لأن SUM() عملية "idempotent" ومفيهاش تراكم أخطاء
