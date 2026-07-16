@@ -265,6 +265,11 @@ Future<void> _showShareToWorkerDialog(BuildContext context, WidgetRef ref, Order
 /// [presetCustomer] (زي لما بيتفتح من ديالوج طلبات عميل معيّن في صفحة
 /// العملاء) بيثبّت العميل ده تلقائيًا من غير ما يوريلك قايمة الاختيار
 Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? presetCustomer}) async {
+  // بنحتفظ بالـ context الأصلي بتاع الشاشة (مش بتاع نافذة الحوار) عشان
+  // نستخدمه بعد قفل الحوار - لو استخدمنا نفس context بتاع الحوار بعد ما
+  // يتقفل، بيبقى unmounted وأي حاجة بعده (زي عرض شاشة طباعة الإيصال)
+  // بتتجاهل بصمت من غير أي رسالة خطأ.
+  final parentContext = context;
   final customers = ref.read(customersProvider).value ?? [];
   if (presetCustomer == null && customers.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أضف عميل أولًا')));
@@ -436,9 +441,9 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                         );
                       }
                       if (context.mounted) Navigator.pop(context);
-                      if (deposit > 0 && depositTxId != null && context.mounted) {
+                      if (deposit > 0 && depositTxId != null && parentContext.mounted) {
                         await _offerReceiptPrint(
-                          context,
+                          parentContext,
                           customerName: customer.name,
                           itemType: itemType,
                           amount: deposit,
@@ -854,6 +859,8 @@ class OrderDetailDialog extends ConsumerWidget {
   }
 
   void _showAddPaymentDialog(BuildContext context, WidgetRef ref, Order order, double maxAmount) {
+    // نفس ملاحظة showAddOrderDialog: بنمسك context الشاشة قبل ما نفتح الحوار
+    final parentContext = context;
     final controller = TextEditingController();
     String method = 'cash';
     String status = 'completed';
@@ -904,9 +911,9 @@ class OrderDetailDialog extends ConsumerWidget {
                       status: status,
                     );
                 if (context.mounted) Navigator.pop(context);
-                if (context.mounted) {
+                if (parentContext.mounted) {
                   await _offerReceiptPrint(
-                    context,
+                    parentContext,
                     customerName: order.customerName,
                     itemType: order.itemType,
                     amount: amount,

@@ -35,7 +35,7 @@ class DashboardScreen extends ConsumerWidget {
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RevenuesDetailScreen())),
                 ),
                 _StatCard(
-                  title: ' إجمالي المديونيات المستحقه',
+                  title: 'المديونيات المستحقة',
                   value: formatter.format(stats.totalDebts),
                   icon: Icons.warning_amber_rounded,
                   color: AppColors.danger,
@@ -47,12 +47,6 @@ class DashboardScreen extends ConsumerWidget {
                   icon: Icons.receipt_long_rounded,
                   color: AppColors.warning,
                   onTap: () => ref.read(selectedTabProvider.notifier).state = 6,
-                ),
-                _StatCard(
-                  title: 'المبلغ المتاح في الخزنة',
-                  value: formatter.format(stats.netProfit),
-                  icon: Icons.account_balance_rounded,
-                  color: stats.netProfit >= 0 ? AppColors.navy : AppColors.danger,
                 ),
                 _StatCard(
                   title: 'المتاح نقدي (كاش)',
