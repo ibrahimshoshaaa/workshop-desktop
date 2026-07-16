@@ -30,6 +30,16 @@ jobs:
             flutter create --platforms=windows .
           fi
 
+      # فلاتر بيحط اسم افتراضي (اسم المشروع) في شريط عنوان نافذة ويندوز.
+      # الخطوة دي بتستبدله باسم "طاحون رويال هوم" بعد كل توليد لمجلد windows/
+      - name: Set native window title
+        shell: pwsh
+        run: |
+          $path = "windows/runner/main.cpp"
+          $content = Get-Content -Path $path -Raw
+          $content = $content -replace '(window\.Create\(L")[^"]*(")', '$1طاحون رويال هوم$2'
+          Set-Content -Path $path -Value $content -NoNewline -Encoding UTF8BOM
+
       - name: Install dependencies
         run: flutter pub get
         

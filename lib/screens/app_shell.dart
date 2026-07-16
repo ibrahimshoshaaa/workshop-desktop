@@ -67,6 +67,31 @@ class AppShell extends ConsumerWidget {
     final index = screens.isEmpty ? 0 : rawIndex.clamp(0, screens.length - 1);
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.woodDark,
+        elevation: 2,
+        automaticallyImplyLeading: false,
+        titleSpacing: 20,
+        title: Row(
+          children: const [
+            Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
+            SizedBox(width: 12),
+            Text(
+              'طاحون رويال هوم',
+              style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+          ],
+        ),
+        actions: [
+          _SyncButton(),
+          IconButton(
+            tooltip: 'تسجيل الخروج',
+            onPressed: () => ref.read(authRepositoryProvider).logout(),
+            icon: const Icon(Icons.logout_rounded, color: AppColors.amber),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
       body: Row(
         children: [
           NavigationRail(
@@ -78,29 +103,6 @@ class AppShell extends ConsumerWidget {
             unselectedIconTheme: IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
             selectedLabelTextStyle: const TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold),
             unselectedLabelTextStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-            leading: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 32),
-            ),
-            trailing: Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _SyncButton(),
-                      IconButton(
-                        tooltip: 'تسجيل الخروج',
-                        onPressed: () => ref.read(authRepositoryProvider).logout(),
-                        icon: const Icon(Icons.logout_rounded, color: AppColors.amber),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
             destinations: destinations.map((d) => NavigationRailDestination(icon: Icon(d.$1), label: Text(d.$2))).toList(),
           ),
           const VerticalDivider(width: 1),
