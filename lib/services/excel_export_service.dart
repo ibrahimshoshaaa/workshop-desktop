@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../data/database.dart';
 import '../core/order_calculations.dart';
+import '../core/constants.dart';
 
 /// خدمة توليد وحفظ ملف Excel - على سطح المكتب بنسأل المستخدم فين عايز
 /// يحفظ الملف (بدل المشاركة المباشرة زي الموبايل)
@@ -15,6 +16,7 @@ class ExcelExportService {
   Uint8List buildFinancialWorkbook({
     required List<Order> orders,
     required List<Expense> expenses,
+    List<PaymentTransaction> transactions = const [],
   }) {
     final excel = Excel.createExcel();
     final defaultSheetName = excel.getDefaultSheet()!;
@@ -46,18 +48,36 @@ class ExcelExportService {
       TextCellValue('الفئة'),
       TextCellValue('الوصف'),
       TextCellValue('اسم الصنايعي'),
+      TextCellValue('مصدر الدفع'),
       TextCellValue('المبلغ'),
       TextCellValue('التاريخ'),
     ]);
     for (final e in expenses) {
       expensesSheet.appendRow([
-        TextCellValue(e.category),
+        TextCellValue(expenseCategories[e.category] ?? e.category),
         TextCellValue(e.description),
         TextCellValue(e.workerName ?? ''),
+        TextCellValue(paymentMethods[e.paymentMethod] ?? e.paymentMethod),
         DoubleCellValue(e.amount),
         TextCellValue(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))),
       ]);
     }
+
+    // ورقة ملخص - تفنيط "المبلغ المتاح" حسب مصدره (نقدي/إنستاباي)
+    double revenueByMethod(String method) =>
+        transactions.where((t) => t.paymentMethod == method).fold<double>(0, (s, t) => s + t.amountPaid);
+    double expensesByMethod(String method) =>
+        expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
+    final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
+    final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
+
+    final summarySheet = excel['ملخص الخزينة'];
+    summarySheet.appendRow([TextCellValue('البند'), TextCellValue('القيمة')]);
+    summarySheet.appendRow([TextCellValue('إجمالي الإيرادات'), DoubleCellValue(totalRevenue)]);
+    summarySheet.appendRow([TextCellValue('إجمالي المصروفات'), DoubleCellValue(totalExpenses)]);
+    summarySheet.appendRow([TextCellValue('المبلغ المتاح'), DoubleCellValue(totalRevenue - totalExpenses)]);
+    summarySheet.appendRow([TextCellValue('المبلغ المتاح - نقدي'), DoubleCellValue(revenueByMethod('cash') - expensesByMethod('cash'))]);
+    summarySheet.appendRow([TextCellValue('المبلغ المتاح - إنستاباي'), DoubleCellValue(revenueByMethod('instapay') - expensesByMethod('instapay'))]);
 
     excel.delete(defaultSheetName);
     final bytes = excel.save();

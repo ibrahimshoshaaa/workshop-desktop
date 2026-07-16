@@ -194,6 +194,8 @@ class LocalRepository {
     String? orderId,
     String? customerId,
     String? customerName,
+    required String paymentMethod,
+    String? workshopDebtId,
   }) {
     final now = _now;
     return _db.upsertExpense(ExpensesCompanion(
@@ -205,6 +207,8 @@ class LocalRepository {
       orderId: Value(orderId),
       customerId: Value(customerId),
       customerName: Value(customerName),
+      paymentMethod: Value(paymentMethod),
+      workshopDebtId: Value(workshopDebtId),
       date: Value(date.millisecondsSinceEpoch),
       updatedAt: Value(now),
       isDeleted: const Value(false),
@@ -221,6 +225,7 @@ class LocalRepository {
     required DateTime date,
     String? customerId,
     String? customerName,
+    required String paymentMethod,
   }) {
     return _db.updateExpenseFields(ExpensesCompanion(
       id: Value(expense.id),
@@ -231,6 +236,7 @@ class LocalRepository {
       date: Value(date.millisecondsSinceEpoch),
       customerId: Value(customerId),
       customerName: Value(customerName),
+      paymentMethod: Value(paymentMethod),
       updatedAt: Value(_now),
       dirty: const Value(true),
     ));
@@ -300,6 +306,7 @@ class LocalRepository {
     required double amount,
     required DateTime periodStart,
     String? note,
+    String paymentMethod = 'cash',
   }) async {
     final now = _now;
     final expenseId = _uuid.v4();
@@ -309,6 +316,7 @@ class LocalRepository {
       category: const Value('wages'),
       description: Value(note?.trim().isNotEmpty == true ? note!.trim() : 'قبض ${worker.jobTitle} - ${worker.name}'),
       workerName: Value(worker.name),
+      paymentMethod: Value(paymentMethod),
       date: Value(now),
       updatedAt: Value(now),
       isDeleted: const Value(false),
@@ -323,6 +331,78 @@ class LocalRepository {
       periodStart: periodStart.millisecondsSinceEpoch,
       expenseId: Value(expenseId),
       updatedAt: now,
+    ));
+  }
+
+  // ---------------- Workshop Debts ----------------
+
+  /// تسجيل مديونية جديدة مستحقة على الورشة لصالح مورد أو صنايعي
+  Future<void> addWorkshopDebt({
+    required String creditorName,
+    required double totalAmount,
+    String notes = '',
+  }) {
+    final now = _now;
+    return _db.upsertWorkshopDebt(WorkshopDebtsCompanion(
+      id: Value(_uuid.v4()),
+      creditorName: Value(creditorName),
+      totalAmount: Value(totalAmount),
+      paidAmount: const Value(0),
+      notes: Value(notes),
+      createdAt: Value(now),
+      updatedAt: Value(now),
+      isDeleted: const Value(false),
+      dirty: const Value(true),
+    ));
+  }
+
+  Future<void> updateWorkshopDebt(
+    WorkshopDebt debt, {
+    required String creditorName,
+    required double totalAmount,
+    String notes = '',
+  }) {
+    return _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
+      id: Value(debt.id),
+      creditorName: Value(creditorName),
+      totalAmount: Value(totalAmount),
+      notes: Value(notes),
+      updatedAt: Value(_now),
+      dirty: const Value(true),
+    ));
+  }
+
+  Future<void> deleteWorkshopDebt(String id) => _db.softDeleteWorkshopDebt(id);
+
+  /// سداد دفعة من مديونية الورشة - بيسجّلها تلقائيًا كمصروف جديد (فئة
+  /// "سداد مديونية ورشة") بمصدر الدفع المحدد (نقدي/إنستاباي)، وده اللي
+  /// بيخصمها فعليًا من "المبلغ المتاح" في الإيرادات (لأن الإيراد المتاح =
+  /// الإيرادات - المصروفات)، وبيحدّث إجمالي المسدد من المديونية نفسها
+  Future<void> payWorkshopDebt({
+    required WorkshopDebt debt,
+    required double amount,
+    required String paymentMethod,
+    String? note,
+  }) async {
+    final now = _now;
+    await _db.upsertExpense(ExpensesCompanion(
+      id: Value(_uuid.v4()),
+      amount: Value(amount),
+      category: const Value('workshop_debt'),
+      description: Value(note?.trim().isNotEmpty == true ? note!.trim() : 'سداد مديونية - ${debt.creditorName}'),
+      workshopDebtId: Value(debt.id),
+      paymentMethod: Value(paymentMethod),
+      date: Value(now),
+      updatedAt: Value(now),
+      isDeleted: const Value(false),
+      dirty: const Value(true),
+    ));
+    final newPaid = debt.paidAmount + amount;
+    await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
+      id: Value(debt.id),
+      paidAmount: Value(newPaid),
+      updatedAt: Value(now),
+      dirty: const Value(true),
     ));
   }
 

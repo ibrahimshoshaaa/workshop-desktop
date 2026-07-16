@@ -7,8 +7,11 @@ import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/search_bar.dart';
 import '../core/other_dropdown.dart';
+import '../core/constants.dart';
 
-const _categories = {'materials': 'خامات', 'rent': 'إيجار وتشغيل', 'wages': 'أجور الصنايعية', 'other': 'أخرى'};
+/// فئات المصروفات المتاحة للإضافة اليدوية من هنا - بنستبعد "سداد مديونية
+/// ورشة" لأنها بتتسجل أوتوماتيك بس من شاشة "مديونيات الورشة"
+final _categories = Map.fromEntries(expenseCategories.entries.where((e) => e.key != 'workshop_debt'));
 
 class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({super.key});
@@ -28,6 +31,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   }
 
   Future<void> _showExpenseDialog(BuildContext context, WidgetRef ref, {Expense? expense}) async {
+    if (expense != null && expense.category == 'workshop_debt') {
+      // مصروفات سداد مديونية الورشة بتتسجل وبتتعدّل من شاشة "مديونيات
+      // الورشة" بس، عشان تفضل مرتبطة صح بإجمالي المديونية المسدد
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ده مصروف سداد مديونية ورشة - عدّله من شاشة "مديونيات الورشة"')),
+      );
+      return;
+    }
     final formKey = GlobalKey<FormState>();
     String category = expense?.category ?? _categories.keys.first;
     final amountController = TextEditingController(text: expense?.amount.toStringAsFixed(0) ?? '');
@@ -36,6 +47,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     DateTime date = expense != null ? DateTime.fromMillisecondsSinceEpoch(expense.date) : DateTime.now();
     final customers = ref.read(customersProvider).value ?? [];
     String? chargedCustomerId = expense?.customerId;
+    // مصدر خروج المبلغ من الخزينة (نقدي/إنستاباي) - حقل إجباري
+    String? paymentMethod = expense?.paymentMethod ?? 'cash';
 
     await showDialog(
       context: context,
@@ -72,6 +85,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextFormField(controller: descriptionController, maxLines: 2, decoration: const InputDecoration(labelText: 'الوصف (اختياري)')),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: paymentMethod,
+                      decoration: const InputDecoration(labelText: 'اتخصم من (مصدر الدفع)'),
+                      items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                      validator: (v) => v == null ? 'اختر مصدر خروج المبلغ' : null,
+                      onChanged: (v) => setDialogState(() => paymentMethod = v),
+                    ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
                       value: chargedCustomerId,
@@ -146,6 +167,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     date: date,
                     customerId: chargedCustomer?.id,
                     customerName: chargedCustomer?.name,
+                    paymentMethod: paymentMethod!,
                   );
                 } else {
                   await repo.updateExpense(
@@ -157,6 +179,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     date: date,
                     customerId: chargedCustomer?.id,
                     customerName: chargedCustomer?.name,
+                    paymentMethod: paymentMethod!,
                   );
                 }
                 if (context.mounted) Navigator.pop(context);
@@ -191,7 +214,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               children: [
                 ChoiceChip(label: const Text('الكل'), selected: _categoryFilter == null, onSelected: (_) => setState(() => _categoryFilter = null)),
                 const SizedBox(width: 8),
-                ..._categories.entries.map((e) => Padding(
+                ...expenseCategories.entries.map((e) => Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: ChoiceChip(label: Text(e.value), selected: _categoryFilter == e.key, onSelected: (_) => setState(() => _categoryFilter = e.key)),
                     )),
@@ -213,7 +236,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   filtered = filtered.where((e) {
                     return normalizeForSearch(e.description).contains(q) ||
                         normalizeForSearch(e.workerName ?? '').contains(q) ||
-                        normalizeForSearch(_categories[e.category] ?? e.category).contains(q);
+                        normalizeForSearch(expenseCategories[e.category] ?? e.category).contains(q);
                   }).toList();
                 }
                 if (filtered.isEmpty) return const Center(child: Text('لا توجد مصروفات مسجلة', style: TextStyle(color: Colors.grey)));
@@ -225,10 +248,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     return Card(
                       child: ListTile(
                         onTap: () => _showExpenseDialog(context, ref, expense: e),
-                        title: Text(e.description.isNotEmpty ? e.description : (_categories[e.category] ?? e.category)),
+                        title: Text(e.description.isNotEmpty ? e.description : (expenseCategories[e.category] ?? e.category)),
                         subtitle: Text(
-                          '${_categories[e.category] ?? e.category}${e.workerName != null ? ' - ${e.workerName}' : ''}'
+                          '${expenseCategories[e.category] ?? e.category}${e.workerName != null ? ' - ${e.workerName}' : ''}'
                           '${e.customerName != null ? ' | محمّل على: ${e.customerName}' : ''}'
+                          ' | ${paymentMethods[e.paymentMethod] ?? e.paymentMethod}'
                           ' | ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))}',
                         ),
                         trailing: Text('${e.amount.toStringAsFixed(0)} ج.م', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.danger)),

@@ -12,3 +12,10 @@ extension OrderCalculations on Order {
   /// المتبقي الفعلي على العميل بعد الخصم والدفعات
   double get remaining => effectiveTotal - totalPaid;
 }
+
+/// نفس فكرة [OrderCalculations] بس لمديونيات الورشة (الديون اللي علينا
+/// لصالح الموردين/الصنايعية - عكس مديونيات العملاء) - المتبقي = الإجمالي
+/// ناقص المسدد لحد دلوقتي
+extension WorkshopDebtCalculations on WorkshopDebt {
+  double get remaining => totalAmount - paidAmount;
+}

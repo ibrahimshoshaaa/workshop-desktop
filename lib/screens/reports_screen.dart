@@ -83,7 +83,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           .where((e) => DateTime.fromMillisecondsSinceEpoch(e.date).isAfter(_range.start) &&
               DateTime.fromMillisecondsSinceEpoch(e.date).isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
-      final bytes = await PdfExportService.instance.buildFinancialReport(orders: orders, expenses: expenses, from: _range.start, to: _range.end);
+      final transactions = (ref.read(allTransactionsProvider).value ?? [])
+          .where((t) => DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isBefore(_range.end.add(const Duration(days: 1))))
+          .toList();
+      final bytes = await PdfExportService.instance.buildFinancialReport(orders: orders, expenses: expenses, transactions: transactions, from: _range.start, to: _range.end);
       if (mounted) await PdfExportService.instance.preview(context, bytes, 'تقرير_مالي.pdf');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
@@ -103,7 +107,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           .where((e) => DateTime.fromMillisecondsSinceEpoch(e.date).isAfter(_range.start) &&
               DateTime.fromMillisecondsSinceEpoch(e.date).isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
-      final bytes = ExcelExportService.instance.buildFinancialWorkbook(orders: orders, expenses: expenses);
+      final transactions = (ref.read(allTransactionsProvider).value ?? [])
+          .where((t) => DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isBefore(_range.end.add(const Duration(days: 1))))
+          .toList();
+      final bytes = ExcelExportService.instance.buildFinancialWorkbook(orders: orders, expenses: expenses, transactions: transactions);
       final saved = await ExcelExportService.instance.saveWorkbook(bytes, 'تقرير_مالي.xlsx');
       if (mounted && saved) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الملف بنجاح')));

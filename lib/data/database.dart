@@ -86,7 +86,32 @@ class Expenses extends Table {
   TextColumn get orderId => text().nullable()();
   TextColumn get customerId => text().nullable()();
   TextColumn get customerName => text().nullable()();
+  /// مصدر خروج المبلغ من الخزينة: cash (نقدي) / instapay (إنستاباي) -
+  /// بيحدد أي "خزنة" اتخصم منها المصروف ده عشان تفنيط "المبلغ المتاح"
+  TextColumn get paymentMethod => text().withDefault(const Constant('cash'))();
+  /// لو المصروف ده سداد لمديونية ورشة (مورد/صنايعي) - بيربطه بسجل
+  /// المديونية في جدول WorkshopDebts، وبيفضل null لباقي المصروفات العادية
+  TextColumn get workshopDebtId => text().nullable()();
   IntColumn get date => integer()();
+  IntColumn get updatedAt => integer()();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get dirty => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// جدول مديونيات الورشة - الديون اللي على الورشة لصالح الموردين أو
+/// الصنايعية (عكس مديونيات العملاء اللي هي فلوس لينا عندهم)
+class WorkshopDebts extends Table {
+  TextColumn get id => text()();
+  /// اسم المورد/الصنايعي المستحق له المديونية
+  TextColumn get creditorName => text()();
+  RealColumn get totalAmount => real().withDefault(const Constant(0))();
+  /// إجمالي اللي اتسدد لحد دلوقتي من المديونية دي
+  RealColumn get paidAmount => real().withDefault(const Constant(0))();
+  TextColumn get notes => text().withDefault(const Constant(''))();
+  IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   BoolColumn get dirty => boolean().withDefault(const Constant(true))();
@@ -164,12 +189,22 @@ class SyncMeta extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Customers, Orders, PaymentTransactions, Expenses, MaterialItems, Workers, WorkerPayments, SyncMeta])
+@DriftDatabase(tables: [
+  Customers,
+  Orders,
+  PaymentTransactions,
+  Expenses,
+  MaterialItems,
+  Workers,
+  WorkerPayments,
+  WorkshopDebts,
+  SyncMeta,
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -208,6 +243,13 @@ class AppDatabase extends _$AppDatabase {
           // إضافة طريقة الاستلام (نقدي/إنستاباي) وحالة الدفعة على الدفعات (نسخة 6)
           await m.addColumn(paymentTransactions, paymentTransactions.paymentMethod);
           await m.addColumn(paymentTransactions, paymentTransactions.status);
+        }
+        if (from < 7) {
+          // إضافة مصدر خروج المصروف (نقدي/إنستاباي) وربطه بمديونية الورشة
+          // لو موجودة، وإنشاء جدول مديونيات الورشة (نسخة 7)
+          await m.addColumn(expenses, expenses.paymentMethod);
+          await m.addColumn(expenses, expenses.workshopDebtId);
+          await m.createTable(workshopDebts);
         }
       },
     );
@@ -339,6 +381,25 @@ class AppDatabase extends _$AppDatabase {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(expenses)..where((t) => t.id.equals(id))).write(
       ExpensesCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
+    );
+  }
+
+  // ---------------- Workshop Debts ----------------
+
+  Stream<List<WorkshopDebt>> watchWorkshopDebts() {
+    return (select(workshopDebts)..where((t) => t.isDeleted.equals(false))).watch();
+  }
+
+  Future<void> upsertWorkshopDebt(WorkshopDebtsCompanion entry) =>
+      into(workshopDebts).insertOnConflictUpdate(entry);
+
+  Future<void> updateWorkshopDebtFields(WorkshopDebtsCompanion entry) =>
+      (update(workshopDebts)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
+  Future<void> softDeleteWorkshopDebt(String id) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return (update(workshopDebts)..where((t) => t.id.equals(id))).write(
+      WorkshopDebtsCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
     );
   }
 

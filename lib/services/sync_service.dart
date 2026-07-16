@@ -39,6 +39,7 @@ class SyncService {
       await _syncOrders();
       await _syncTransactions();
       await _syncExpenses();
+      await _syncWorkshopDebts();
       await _syncMaterials();
       await _db.setMeta('lastSyncAt', DateTime.now().millisecondsSinceEpoch.toString());
       if (onSynced != null) await onSynced!();
@@ -269,6 +270,8 @@ class SyncService {
             orderId: Value(map['orderId']?.toString()),
             customerId: Value(map['customerId']?.toString()),
             customerName: Value(map['customerName']?.toString()),
+            paymentMethod: Value(map['paymentMethod']?.toString() ?? 'cash'),
+            workshopDebtId: Value(map['workshopDebtId']?.toString()),
             date: Value((map['date'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
@@ -299,9 +302,66 @@ class SyncService {
           if (row.orderId != null) 'orderId': row.orderId,
           if (row.customerId != null) 'customerId': row.customerId,
           if (row.customerName != null) 'customerName': row.customerName,
+          'paymentMethod': row.paymentMethod,
+          if (row.workshopDebtId != null) 'workshopDebtId': row.workshopDebtId,
           'date': row.date,
         });
         await _db.updateExpenseFields(ExpensesCompanion(id: Value(row.id), dirty: const Value(false)));
+      }
+    }
+  }
+
+  // ---------------- Workshop Debts ----------------
+
+  Future<void> _syncWorkshopDebts() async {
+    final remote = await _fetchNode('workshopDebts');
+    final localRows = await _db.select(_db.workshopDebts).get();
+    final localById = {for (final d in localRows) d.id: d};
+
+    if (remote != null) {
+      for (final entry in remote.entries) {
+        final id = entry.key;
+        final map = Map<String, dynamic>.from(entry.value as Map);
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['createdAt'] as num?)?.toInt() ?? 0;
+        final local = localById[id];
+        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+          await _db.upsertWorkshopDebt(WorkshopDebtsCompanion(
+            id: Value(id),
+            creditorName: Value(map['creditorName']?.toString() ?? ''),
+            totalAmount: Value((map['totalAmount'] as num?)?.toDouble() ?? 0),
+            paidAmount: Value((map['paidAmount'] as num?)?.toDouble() ?? 0),
+            notes: Value(map['notes']?.toString() ?? ''),
+            createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
+            updatedAt: Value(remoteUpdatedAt),
+            isDeleted: const Value(false),
+            dirty: const Value(false),
+          ));
+        }
+      }
+    }
+
+    final remoteIds = remote?.keys.toSet() ?? {};
+    for (final local in localById.values) {
+      if (!local.dirty && !remoteIds.contains(local.id)) {
+        await (_db.delete(_db.workshopDebts)..where((t) => t.id.equals(local.id))).go();
+      }
+    }
+
+    final dirtyRows = await (_db.select(_db.workshopDebts)..where((t) => t.dirty.equals(true))).get();
+    for (final row in dirtyRows) {
+      if (row.isDeleted) {
+        await _deleteNode('workshopDebts/${row.id}');
+        await (_db.delete(_db.workshopDebts)..where((t) => t.id.equals(row.id))).go();
+      } else {
+        await _putNode('workshopDebts/${row.id}', {
+          'creditorName': row.creditorName,
+          'totalAmount': row.totalAmount,
+          'paidAmount': row.paidAmount,
+          'notes': row.notes,
+          'createdAt': row.createdAt,
+          'updatedAt': row.updatedAt,
+        });
+        await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }

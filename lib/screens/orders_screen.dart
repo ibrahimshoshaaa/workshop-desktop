@@ -122,7 +122,6 @@ class _ImageThumb extends StatelessWidget {
 const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 
 /// طرق استلام الدفعات المتاحة
-const Map<String, String> paymentMethods = {'cash': 'نقدي', 'instapay': 'إنستاباي'};
 
 /// حالات الدفعة المتاحة
 const Map<String, String> paymentStatuses = {'completed': 'مكتملة', 'pending': 'معلقة'};
@@ -927,11 +926,13 @@ class OrderDetailDialog extends ConsumerWidget {
 
   void _showAddExpenseDialog(BuildContext context, WidgetRef ref, Order order) {
     final formKey = GlobalKey<FormState>();
-    String category = expenseCategories.keys.first;
+    final manualCategories = Map.fromEntries(expenseCategories.entries.where((e) => e.key != 'workshop_debt'));
+    String category = manualCategories.keys.first;
     final amountController = TextEditingController();
     final descriptionController = TextEditingController();
     final workerController = TextEditingController();
     DateTime date = DateTime.now();
+    String paymentMethod = 'cash';
 
     showDialog(
       context: context,
@@ -947,10 +948,10 @@ class OrderDetailDialog extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     OtherCapableDropdown(
-                      options: expenseCategories.entries.where((e) => e.key != 'other').map((e) => e.value).toList(),
+                      options: manualCategories.entries.where((e) => e.key != 'other').map((e) => e.value).toList(),
                       label: 'الفئة',
-                      value: expenseCategories[category] ?? category,
-                      onChanged: (v) => setDialogState(() => category = expenseCategories.entries.firstWhereOrNull((e) => e.value == v)?.key ?? v),
+                      value: manualCategories[category] ?? category,
+                      onChanged: (v) => setDialogState(() => category = manualCategories.entries.firstWhereOrNull((e) => e.value == v)?.key ?? v),
                     ),
                     const SizedBox(height: 12),
                     if (category == 'wages')
@@ -966,6 +967,13 @@ class OrderDetailDialog extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     TextFormField(controller: descriptionController, maxLines: 2, decoration: const InputDecoration(labelText: 'الوصف (اختياري)')),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: paymentMethod,
+                      decoration: const InputDecoration(labelText: 'اتخصم من (مصدر الدفع)'),
+                      items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                      onChanged: (v) => setDialogState(() => paymentMethod = v ?? paymentMethod),
+                    ),
                     const SizedBox(height: 12),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -1006,6 +1014,7 @@ class OrderDetailDialog extends ConsumerWidget {
                       orderId: order.id,
                       customerId: order.customerId,
                       customerName: order.customerName,
+                      paymentMethod: paymentMethod,
                     );
                 if (context.mounted) Navigator.pop(context);
               },

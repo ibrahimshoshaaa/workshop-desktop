@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../data/database.dart';
 import '../core/order_calculations.dart';
+import '../core/constants.dart';
 import '../core/theme.dart';
 
 /// خدمة توليد ملفات PDF - نفس منطق نسخة الموبايل، بس هنا بنستخدم
@@ -65,6 +66,7 @@ class PdfExportService {
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellAlignment: pw.Alignment.centerRight,
+            tableDirection: pw.TextDirection.rtl,
             headers: ['الصنف', 'الحالة', 'الإجمالي', 'المدفوع', 'المتبقي'],
             data: orders
                 .map((o) => [
@@ -101,6 +103,7 @@ class PdfExportService {
   Future<Uint8List> buildFinancialReport({
     required List<Order> orders,
     required List<Expense> expenses,
+    required List<PaymentTransaction> transactions,
     required DateTime from,
     required DateTime to,
   }) async {
@@ -111,6 +114,14 @@ class PdfExportService {
     final totalDebts = orders.fold<double>(0, (s, o) => s + o.remaining);
     final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
     final netProfit = totalRevenue - totalExpenses;
+
+    // تفنيط "المبلغ المتاح" حسب مصدره: كاش/إنستاباي
+    double revenueByMethod(String method) =>
+        transactions.where((t) => t.paymentMethod == method).fold<double>(0, (s, t) => s + t.amountPaid);
+    double expensesByMethod(String method) =>
+        expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
+    final cashAvailable = revenueByMethod('cash') - expensesByMethod('cash');
+    final instapayAvailable = revenueByMethod('instapay') - expensesByMethod('instapay');
 
     doc.addPage(
       pw.MultiPage(
@@ -130,6 +141,14 @@ class PdfExportService {
               _summaryBox('المبلغ المتاح', netProfit, netProfit >= 0 ? PdfColors.blue700 : PdfColors.red700),
             ],
           ),
+          pw.SizedBox(height: 12),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              _summaryBox('المبلغ المتاح - نقدي', cashAvailable, cashAvailable >= 0 ? PdfColors.green700 : PdfColors.red700),
+              _summaryBox('المبلغ المتاح - إنستاباي', instapayAvailable, instapayAvailable >= 0 ? PdfColors.blue700 : PdfColors.red700),
+            ],
+          ),
           pw.SizedBox(height: 24),
           pw.Text('الطلبات', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
@@ -137,6 +156,7 @@ class PdfExportService {
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellAlignment: pw.Alignment.centerRight,
+            tableDirection: pw.TextDirection.rtl,
             headers: ['العميل', 'الصنف', 'الحالة', 'الإجمالي', 'المتبقي'],
             data: orders
                 .map((o) => [o.customerName, o.itemType, o.status, _fmt(o.effectiveTotal), _fmt(o.remaining)])
@@ -149,9 +169,16 @@ class PdfExportService {
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellAlignment: pw.Alignment.centerRight,
-            headers: ['الفئة', 'الوصف', 'التاريخ', 'المبلغ'],
+            tableDirection: pw.TextDirection.rtl,
+            headers: ['الفئة', 'الوصف', 'المصدر', 'التاريخ', 'المبلغ'],
             data: expenses
-                .map((e) => [e.category, e.description, DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date)), _fmt(e.amount)])
+                .map((e) => [
+                      expenseCategories[e.category] ?? e.category,
+                      e.description,
+                      paymentMethods[e.paymentMethod] ?? e.paymentMethod,
+                      DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date)),
+                      _fmt(e.amount),
+                    ])
                 .toList(),
           ),
         ],
@@ -239,6 +266,7 @@ class PdfExportService {
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
               headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
               cellAlignment: pw.Alignment.centerRight,
+              tableDirection: pw.TextDirection.rtl,
               headers: ['تاريخ التسليم', 'العميل', 'الصنف', 'الحالة', 'المتبقي'],
               data: sorted
                   .map((o) => [

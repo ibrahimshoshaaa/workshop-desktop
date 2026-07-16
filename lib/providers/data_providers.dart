@@ -84,6 +84,16 @@ final debtorOrdersProvider = Provider<List<Order>>((ref) {
   return orders.where((o) => o.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
 });
 
+/// مديونيات الورشة (لصالح الموردين/الصنايعية) - عكس [debtorOrdersProvider]
+final workshopDebtsProvider = StreamProvider<List<WorkshopDebt>>((ref) {
+  return ref.watch(databaseProvider).watchWorkshopDebts();
+});
+
+final outstandingWorkshopDebtsProvider = Provider<List<WorkshopDebt>>((ref) {
+  final debts = ref.watch(workshopDebtsProvider).value ?? [];
+  return debts.where((d) => d.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
+});
+
 final lowStockMaterialsProvider = Provider<List<MaterialItem>>((ref) {
   final materials = ref.watch(materialsProvider).value ?? [];
   return materials.where((m) => m.quantity <= m.minThreshold).toList();
@@ -109,24 +119,48 @@ class DashboardStats {
   final double totalDebts;
   final double totalExpenses;
   final double netProfit;
+  /// تفنيط "المبلغ المتاح" حسب مصدره: كاش/إنستاباي - كل واحد فيهم = ما
+  /// دخل من دفعات بنفس الطريقة ناقص المصروفات اللي خرجت من نفس المصدر
+  final double cashAvailable;
+  final double instapayAvailable;
+  final double totalWorkshopDebts;
   DashboardStats({
     required this.totalRevenue,
     required this.totalDebts,
     required this.totalExpenses,
     required this.netProfit,
+    required this.cashAvailable,
+    required this.instapayAvailable,
+    required this.totalWorkshopDebts,
   });
 }
 
 final dashboardStatsProvider = Provider<DashboardStats>((ref) {
   final orders = ref.watch(ordersProvider).value ?? [];
   final expenses = ref.watch(expensesProvider).value ?? [];
+  final transactions = ref.watch(allTransactionsProvider).value ?? [];
+  final workshopDebts = ref.watch(workshopDebtsProvider).value ?? [];
+
   final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
   final totalDebts = orders.fold<double>(0, (s, o) => s + o.remaining);
   final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
+  final totalWorkshopDebts = workshopDebts.fold<double>(0, (s, d) => s + d.remaining);
+
+  double revenueByMethod(String method) =>
+      transactions.where((t) => t.paymentMethod == method).fold<double>(0, (s, t) => s + t.amountPaid);
+  double expensesByMethod(String method) =>
+      expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
+
+  final cashAvailable = revenueByMethod('cash') - expensesByMethod('cash');
+  final instapayAvailable = revenueByMethod('instapay') - expensesByMethod('instapay');
+
   return DashboardStats(
     totalRevenue: totalRevenue,
     totalDebts: totalDebts,
     totalExpenses: totalExpenses,
     netProfit: totalRevenue - totalExpenses,
+    cashAvailable: cashAvailable,
+    instapayAvailable: instapayAvailable,
+    totalWorkshopDebts: totalWorkshopDebts,
   );
 });
