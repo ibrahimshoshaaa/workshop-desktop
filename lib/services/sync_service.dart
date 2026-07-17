@@ -61,7 +61,7 @@ class SyncService {
   Future<void> _repairMissingDiscountsOnce() async {
     final done = await _db.getMeta('discountSyncRepairDone');
     if (done == '1') return;
-    final discounted = await (_db.select(_db.orders)..where((t) => t.discountAmount.equals(0).not())).get();
+    final discounted = await (_db.select(_db.orders)..where((t) => t.discountAmount.isBiggerThanValue(0))).get();
     for (final row in discounted) {
       await _db.updateOrderFields(OrdersCompanion(
         id: Value(row.id),
