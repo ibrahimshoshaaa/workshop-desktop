@@ -474,6 +474,12 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> insertWorkerPayment(WorkerPaymentsCompanion entry) => into(workerPayments).insert(entry);
 
+  Future<void> upsertWorkerPayment(WorkerPaymentsCompanion entry) =>
+      into(workerPayments).insertOnConflictUpdate(entry);
+
+  Future<void> updateWorkerPaymentFields(WorkerPaymentsCompanion entry) =>
+      (update(workerPayments)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
   // ---------------- Sync Meta ----------------
 
   Future<String?> getMeta(String key) async {
