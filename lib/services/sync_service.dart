@@ -42,6 +42,8 @@ class SyncService {
       await _syncExpenses();
       await _syncWorkshopDebts();
       await _syncMaterials();
+      await _syncWorkers();
+      await _syncWorkerPayments();
       await _db.setMeta('lastSyncAt', DateTime.now().millisecondsSinceEpoch.toString());
       if (onSynced != null) await onSynced!();
     } catch (_) {
@@ -444,6 +446,124 @@ class SyncService {
           'updatedAt': row.updatedAt,
         });
         await _db.updateMaterialFields(MaterialItemsCompanion(id: Value(row.id), dirty: const Value(false)));
+      }
+    }
+  }
+
+  // ---------------- Workers ----------------
+
+  Future<void> _syncWorkers() async {
+    final remote = await _fetchNode('workers');
+    final localRows = await _db.select(_db.workers).get();
+    final localById = {for (final w in localRows) w.id: w};
+
+    if (remote != null) {
+      for (final entry in remote.entries) {
+        final id = entry.key;
+        final map = Map<String, dynamic>.from(entry.value as Map);
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['createdAt'] as num?)?.toInt() ?? 0;
+        final local = localById[id];
+        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+          await _db.upsertWorker(WorkersCompanion(
+            id: Value(id),
+            name: Value(map['name']?.toString() ?? ''),
+            jobTitle: Value(map['jobTitle']?.toString() ?? ''),
+            salaryType: Value(map['salaryType']?.toString() ?? 'monthly'),
+            salaryAmount: Value((map['salaryAmount'] as num?)?.toDouble() ?? 0),
+            payWeekday: Value((map['payWeekday'] as num?)?.toInt() ?? 4),
+            phone: Value(map['phone']?.toString() ?? ''),
+            notes: Value(map['notes']?.toString() ?? ''),
+            createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
+            updatedAt: Value(remoteUpdatedAt),
+            isDeleted: const Value(false),
+            dirty: const Value(false),
+          ));
+        }
+      }
+    }
+
+    final remoteIds = remote?.keys.toSet() ?? {};
+    for (final local in localById.values) {
+      if (!local.dirty && !remoteIds.contains(local.id)) {
+        await (_db.delete(_db.workers)..where((t) => t.id.equals(local.id))).go();
+      }
+    }
+
+    final dirtyRows = await (_db.select(_db.workers)..where((t) => t.dirty.equals(true))).get();
+    for (final row in dirtyRows) {
+      if (row.isDeleted) {
+        await _deleteNode('workers/${row.id}');
+        await (_db.delete(_db.workers)..where((t) => t.id.equals(row.id))).go();
+      } else {
+        await _putNode('workers/${row.id}', {
+          'name': row.name,
+          'jobTitle': row.jobTitle,
+          'salaryType': row.salaryType,
+          'salaryAmount': row.salaryAmount,
+          'payWeekday': row.payWeekday,
+          'phone': row.phone,
+          'notes': row.notes,
+          'createdAt': row.createdAt,
+          'updatedAt': row.updatedAt,
+        });
+        await _db.updateWorkerFields(WorkersCompanion(id: Value(row.id), dirty: const Value(false)));
+      }
+    }
+  }
+
+  // ---------------- Worker Payments ----------------
+
+  Future<void> _syncWorkerPayments() async {
+    final remote = await _fetchNode('workerPayments');
+    final localRows = await _db.select(_db.workerPayments).get();
+    final localById = {for (final p in localRows) p.id: p};
+
+    if (remote != null) {
+      for (final entry in remote.entries) {
+        final id = entry.key;
+        final map = Map<String, dynamic>.from(entry.value as Map);
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['paymentDate'] as num?)?.toInt() ?? 0;
+        final local = localById[id];
+        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+          await _db.upsertWorkerPayment(WorkerPaymentsCompanion(
+            id: Value(id),
+            workerId: Value(map['workerId']?.toString() ?? ''),
+            workerName: Value(map['workerName']?.toString() ?? ''),
+            amount: Value((map['amount'] as num?)?.toDouble() ?? 0),
+            paymentDate: Value((map['paymentDate'] as num?)?.toInt() ?? remoteUpdatedAt),
+            periodStart: Value((map['periodStart'] as num?)?.toInt() ?? remoteUpdatedAt),
+            expenseId: Value(map['expenseId']?.toString()),
+            updatedAt: Value(remoteUpdatedAt),
+            isDeleted: const Value(false),
+            dirty: const Value(false),
+          ));
+        }
+      }
+    }
+
+    final remoteIds = remote?.keys.toSet() ?? {};
+    for (final local in localById.values) {
+      if (!local.dirty && !remoteIds.contains(local.id)) {
+        await (_db.delete(_db.workerPayments)..where((t) => t.id.equals(local.id))).go();
+      }
+    }
+
+    final dirtyRows = await (_db.select(_db.workerPayments)..where((t) => t.dirty.equals(true))).get();
+    for (final row in dirtyRows) {
+      if (row.isDeleted) {
+        await _deleteNode('workerPayments/${row.id}');
+        await (_db.delete(_db.workerPayments)..where((t) => t.id.equals(row.id))).go();
+      } else {
+        await _putNode('workerPayments/${row.id}', {
+          'workerId': row.workerId,
+          'workerName': row.workerName,
+          'amount': row.amount,
+          'paymentDate': row.paymentDate,
+          'periodStart': row.periodStart,
+          if (row.expenseId != null) 'expenseId': row.expenseId,
+          'updatedAt': row.updatedAt,
+        });
+        await _db.updateWorkerPaymentFields(WorkerPaymentsCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
