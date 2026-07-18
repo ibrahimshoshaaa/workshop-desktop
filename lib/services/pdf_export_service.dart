@@ -55,7 +55,7 @@ class PdfExportService {
         build: (context) => [
           pw.Text('فاتورة عميل', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
-          pw.Text('طاحون رويال هوم', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+          pw.Text('Tahoun Royal Home', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
           pw.Divider(height: 24),
           pw.Text('اسم العميل: ${customer.name}', style: const pw.TextStyle(fontSize: 14)),
           pw.Text('رقم الهاتف: ${customer.phone}', style: const pw.TextStyle(fontSize: 14)),
@@ -209,7 +209,7 @@ class PdfExportService {
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
             pw.Center(child: pw.Text('إيصال استلام', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold))),
-            pw.Center(child: pw.Text('طاحون رويال هوم', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700))),
+            pw.Center(child: pw.Text('Tahoun Royal Home', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700))),
             pw.Divider(height: 24),
             pw.SizedBox(height: 8),
             _receiptRow('اسم العميل', customerName),

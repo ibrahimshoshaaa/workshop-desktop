@@ -77,7 +77,7 @@ class AppShell extends ConsumerWidget {
             Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
             SizedBox(width: 12),
             Text(
-              'طاحون رويال هوم',
+              'Tahoun Royal Home',
               style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold, fontSize: 20),
             ),
           ],

@@ -67,7 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 32),
                 ),
                 const SizedBox(height: 16),
-                const Text('طاحون رويال هوم',
+                const Text('Tahoun Royal Home',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.woodDark)),
                 const SizedBox(height: 4),
                 const Text('سجّل الدخول لإدارة المتجر', style: TextStyle(color: Colors.grey, fontSize: 13)),

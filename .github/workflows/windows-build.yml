@@ -31,13 +31,30 @@ jobs:
           fi
 
       # فلاتر بيحط اسم افتراضي (اسم المشروع) في شريط عنوان نافذة ويندوز.
-      # الخطوة دي بتستبدله باسم "طاحون رويال هوم" بعد كل توليد لمجلد windows/
+      # الخطوة دي بتستبدله باسم "Tahoun Royal Home" بعد كل توليد لمجلد windows/
       - name: Set native window title
         shell: pwsh
         run: |
           $path = "windows/runner/main.cpp"
           $content = Get-Content -Path $path -Raw
-          $content = $content -replace '(window\.Create\(L")[^"]*(")', '$1طاحون رويال هوم$2'
+          $content = $content -replace '(window\.Create\(L")[^"]*(")', '$1Tahoun Royal Home$2'
+          Set-Content -Path $path -Value $content -NoNewline -Encoding UTF8BOM
+
+      # أيقونة التطبيق (لوجو طاحون رويال هوم) - بتستبدل أيقونة فلاتر
+      # الافتراضية بعد كل توليد لمجلد windows/
+      - name: Apply custom app icon
+        shell: bash
+        run: cp assets/icon/app_icon.ico windows/runner/resources/app_icon.ico
+
+      # اسم المنتج ووصف الملف اللي بيظهر لما تعمل مرور بالماوس على التطبيق
+      # في الـ Taskbar أو في خصائص الملف (Properties) على ويندوز
+      - name: Set product name metadata
+        shell: pwsh
+        run: |
+          $path = "windows/runner/Runner.rc"
+          $content = Get-Content -Path $path -Raw
+          $content = $content -replace '(VALUE "FileDescription", ")[^"]*(")', '${1}Tahoun Royal Home${2}'
+          $content = $content -replace '(VALUE "ProductName", ")[^"]*(")', '${1}Tahoun Royal Home${2}'
           Set-Content -Path $path -Value $content -NoNewline -Encoding UTF8BOM
 
       - name: Install dependencies
@@ -61,3 +78,4 @@ jobs:
         with:
           name: workshop-desktop-windows
           path: workshop-desktop-windows.zip
+          retention-days: 7
