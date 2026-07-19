@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # بيسمح للـ GITHUB_TOKEN إنه ينشئ/يعدّل Release - مطلوب لخطوة الرفع
+    # الأخيرة (الرفع كـ Release بدل Artifact)
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -73,9 +77,13 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath workshop-desktop-windows.zip
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Windows build to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: workshop-desktop-windows
-          path: workshop-desktop-windows.zip
-          retention-days: 7
+          tag_name: latest-windows
+          name: "آخر نسخة ويندوز"
+          body: "آخر بناء ناجح من الفرع ${{ github.ref_name }} - كوميت ${{ github.sha }}"
+          files: workshop-desktop-windows.zip
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

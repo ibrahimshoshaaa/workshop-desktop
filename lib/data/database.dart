@@ -195,6 +195,24 @@ class SyncMeta extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+/// سجل عمليات "سحب إنستاباي كاش" - مبلغ اتسحب من رصيد إنستاباي عن طريق
+/// ماكينة صراف آلي (ATM) وتحوّل لسيولة نقدية (كاش) في الخزينة. العملية
+/// دي مش مصروف حقيقي ومش إيراد جديد - هي بس نقل نفس الفلوس من مصدر
+/// لمصدر تاني، فبتتخزن في جدول منفصل عشان متأثرش على "إجمالي
+/// المصروفات" أو "إجمالي الإيرادات" في التقارير
+class CashTransfers extends Table {
+  TextColumn get id => text()();
+  RealColumn get amount => real()();
+  TextColumn get note => text().withDefault(const Constant(''))();
+  IntColumn get date => integer()();
+  IntColumn get updatedAt => integer()();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get dirty => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(tables: [
   Customers,
   Orders,
@@ -204,13 +222,14 @@ class SyncMeta extends Table {
   Workers,
   WorkerPayments,
   WorkshopDebts,
+  CashTransfers,
   SyncMeta,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
@@ -260,6 +279,10 @@ class AppDatabase extends _$AppDatabase {
         if (from < 8) {
           // إمكانية تقسيم مصروف واحد على أكتر من طلب في نفس الوقت (نسخة 8)
           await m.addColumn(expenses, expenses.orderAllocationsJson);
+        }
+        if (from < 9) {
+          // جدول سحب إنستاباي كاش (نسخة 9)
+          await m.createTable(cashTransfers);
         }
       },
     );
@@ -420,6 +443,25 @@ class AppDatabase extends _$AppDatabase {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(workshopDebts)..where((t) => t.id.equals(id))).write(
       WorkshopDebtsCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
+    );
+  }
+
+  // ---------------- Cash Transfers (سحب إنستاباي كاش) ----------------
+
+  Stream<List<CashTransfer>> watchCashTransfers() {
+    return (select(cashTransfers)..where((t) => t.isDeleted.equals(false))).watch();
+  }
+
+  Future<void> upsertCashTransfer(CashTransfersCompanion entry) =>
+      into(cashTransfers).insertOnConflictUpdate(entry);
+
+  Future<void> updateCashTransferFields(CashTransfersCompanion entry) =>
+      (update(cashTransfers)..where((t) => t.id.equals(entry.id.value))).write(entry);
+
+  Future<void> softDeleteCashTransfer(String id) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return (update(cashTransfers)..where((t) => t.id.equals(id))).write(
+      CashTransfersCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
     );
   }
 

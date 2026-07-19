@@ -113,6 +113,11 @@ final outstandingWorkshopDebtsProvider = Provider<List<WorkshopDebt>>((ref) {
   return debts.where((d) => d.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
 });
 
+/// سجل عمليات سحب إنستاباي كاش
+final cashTransfersProvider = StreamProvider<List<CashTransfer>>((ref) {
+  return ref.watch(databaseProvider).watchCashTransfers();
+});
+
 final lowStockMaterialsProvider = Provider<List<MaterialItem>>((ref) {
   final materials = ref.watch(materialsProvider).value ?? [];
   return materials.where((m) => m.quantity <= m.minThreshold).toList();
@@ -178,8 +183,14 @@ final dashboardStatsProvider = Provider<DashboardStats>((ref) {
   double expensesByMethod(String method) =>
       expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
 
-  final cashAvailable = revenueByMethod('cash') - expensesByMethod('cash');
-  final instapayAvailable = revenueByMethod('instapay') - expensesByMethod('instapay');
+  final cashTransfers = ref.watch(cashTransfersProvider).value ?? [];
+  final totalTransferred = cashTransfers.fold<double>(0, (s, t) => s + t.amount);
+
+  // سحب إنستاباي كاش: بينقل رصيد من "المتاح إنستاباي" لـ "المتاح نقدي"
+  // بس - مش مصروف ولا إيراد جديد، فمعادلة الأرباح فوق (totalRevenue/
+  // totalExpenses) متأثرتش خالص
+  final cashAvailable = revenueByMethod('cash') - expensesByMethod('cash') + totalTransferred;
+  final instapayAvailable = revenueByMethod('instapay') - expensesByMethod('instapay') - totalTransferred;
 
   return DashboardStats(
     totalRevenue: totalRevenue,

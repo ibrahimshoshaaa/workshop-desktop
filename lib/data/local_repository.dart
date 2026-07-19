@@ -384,6 +384,26 @@ class LocalRepository {
 
   Future<void> deleteWorkshopDebt(String id) => _db.softDeleteWorkshopDebt(id);
 
+  // ---------------- Cash Transfers (سحب إنستاباي كاش) ----------------
+
+  /// تسجيل عملية سحب رصيد إنستاباي من الصراف الآلي وتحويله لكاش. مش
+  /// مصروف ومش إيراد - بس نقل بين مصدرين، فمش بيدخل في "إجمالي
+  /// المصروفات/الإيرادات"
+  Future<void> addCashTransfer({required double amount, String note = ''}) {
+    final now = _now;
+    return _db.upsertCashTransfer(CashTransfersCompanion(
+      id: Value(_uuid.v4()),
+      amount: Value(amount),
+      note: Value(note),
+      date: Value(now),
+      updatedAt: Value(now),
+      isDeleted: const Value(false),
+      dirty: const Value(true),
+    ));
+  }
+
+  Future<void> deleteCashTransfer(String id) => _db.softDeleteCashTransfer(id);
+
   /// سداد دفعة من مديونية الورشة - بيسجّلها تلقائيًا كمصروف جديد (فئة
   /// "سداد مديونية ورشة") بمصدر الدفع المحدد (نقدي/إنستاباي)، وده اللي
   /// بيخصمها فعليًا من "المبلغ المتاح" في الإيرادات (لأن الإيراد المتاح =

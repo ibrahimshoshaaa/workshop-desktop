@@ -44,6 +44,7 @@ class SyncService {
       await _syncMaterials();
       await _syncWorkers();
       await _syncWorkerPayments();
+      await _syncCashTransfers();
       await _db.setMeta('lastSyncAt', DateTime.now().millisecondsSinceEpoch.toString());
       if (onSynced != null) await onSynced!();
     } catch (_) {
@@ -393,6 +394,57 @@ class SyncService {
           'updatedAt': row.updatedAt,
         });
         await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(id: Value(row.id), dirty: const Value(false)));
+      }
+    }
+  }
+
+  // ---------------- Cash Transfers (سحب إنستاباي كاش) ----------------
+
+  Future<void> _syncCashTransfers() async {
+    final remote = await _fetchNode('cashTransfers');
+    final localRows = await _db.select(_db.cashTransfers).get();
+    final localById = {for (final t in localRows) t.id: t};
+
+    if (remote != null) {
+      for (final entry in remote.entries) {
+        final id = entry.key;
+        final map = Map<String, dynamic>.from(entry.value as Map);
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['date'] as num?)?.toInt() ?? 0;
+        final local = localById[id];
+        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+          await _db.upsertCashTransfer(CashTransfersCompanion(
+            id: Value(id),
+            amount: Value((map['amount'] as num?)?.toDouble() ?? 0),
+            note: Value(map['note']?.toString() ?? ''),
+            date: Value((map['date'] as num?)?.toInt() ?? remoteUpdatedAt),
+            updatedAt: Value(remoteUpdatedAt),
+            isDeleted: const Value(false),
+            dirty: const Value(false),
+          ));
+        }
+      }
+    }
+
+    final remoteIds = remote?.keys.toSet() ?? {};
+    for (final local in localById.values) {
+      if (!local.dirty && !remoteIds.contains(local.id)) {
+        await (_db.delete(_db.cashTransfers)..where((t) => t.id.equals(local.id))).go();
+      }
+    }
+
+    final dirtyRows = await (_db.select(_db.cashTransfers)..where((t) => t.dirty.equals(true))).get();
+    for (final row in dirtyRows) {
+      if (row.isDeleted) {
+        await _deleteNode('cashTransfers/${row.id}');
+        await (_db.delete(_db.cashTransfers)..where((t) => t.id.equals(row.id))).go();
+      } else {
+        await _putNode('cashTransfers/${row.id}', {
+          'amount': row.amount,
+          'note': row.note,
+          'date': row.date,
+          'updatedAt': row.updatedAt,
+        });
+        await _db.updateCashTransferFields(CashTransfersCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
