@@ -109,8 +109,8 @@ class LocalRepository {
     required String details,
     required double totalAmount,
     required DateTime deliveryDate,
-  }) {
-    return _db.updateOrderFields(OrdersCompanion(
+  }) async {
+    await _db.updateOrderFields(OrdersCompanion(
       id: Value(order.id),
       itemType: Value(itemType),
       details: Value(details),
@@ -119,6 +119,14 @@ class LocalRepository {
       updatedAt: Value(_now),
       dirty: const Value(true),
     ));
+    await _reconcileOrderOverpaymentDebt(
+      orderId: order.id,
+      customerName: order.customerName,
+      itemType: itemType,
+      totalAmount: totalAmount,
+      discountAmount: order.discountAmount,
+      totalPaid: order.totalPaid,
+    );
   }
 
   Future<void> updateOrderStatus(String orderId, String status) {
@@ -140,14 +148,22 @@ class LocalRepository {
   /// بتسجّل (أو تعدّل) خصم بمبلغ ثابت على طلب معيّن - المبلغ ده بيتشال
   /// نهائيًا من حساب المديونية والإيراد المستحق على الطلب، مش بس بيظهر
   /// "متبقي صفر" عن طريق تعديل يدوي في المبلغ الإجمالي
-  Future<void> setOrderDiscount(Order order, {required double discountAmount, String reason = ''}) {
-    return _db.updateOrderFields(OrdersCompanion(
+  Future<void> setOrderDiscount(Order order, {required double discountAmount, String reason = ''}) async {
+    await _db.updateOrderFields(OrdersCompanion(
       id: Value(order.id),
       discountAmount: Value(discountAmount),
       discountReason: Value(reason),
       updatedAt: Value(_now),
       dirty: const Value(true),
     ));
+    await _reconcileOrderOverpaymentDebt(
+      orderId: order.id,
+      customerName: order.customerName,
+      itemType: order.itemType,
+      totalAmount: order.totalAmount,
+      discountAmount: discountAmount,
+      totalPaid: order.totalPaid,
+    );
   }
 
   // ---------------- Payments ----------------
@@ -181,6 +197,20 @@ class LocalRepository {
     // نفس المبلغ تاني وقت الرفع لـ Firebase) فيحصل تراكم أخطاء أو ضياع
     // تحديثات لو حصل تعارض توقيت
     await _db.recomputeOrderTotalPaid(orderId);
+
+    // لو الدفعة دي خلت العميل يدفع أكتر من الاتفاق النهائي (نادر، بس
+    // ممكن يحصل غلط)، سجّلها كمديونية على الورشة تلقائيًا زي ظبط السعر
+    final freshOrder = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
+    if (freshOrder != null) {
+      await _reconcileOrderOverpaymentDebt(
+        orderId: freshOrder.id,
+        customerName: freshOrder.customerName,
+        itemType: freshOrder.itemType,
+        totalAmount: freshOrder.totalAmount,
+        discountAmount: freshOrder.discountAmount,
+        totalPaid: freshOrder.totalPaid,
+      );
+    }
     return id;
   }
 
@@ -351,6 +381,7 @@ class LocalRepository {
     required String creditorName,
     required double totalAmount,
     String notes = '',
+    String orderId = '',
   }) {
     final now = _now;
     return _db.upsertWorkshopDebt(WorkshopDebtsCompanion(
@@ -359,6 +390,7 @@ class LocalRepository {
       totalAmount: Value(totalAmount),
       paidAmount: const Value(0),
       notes: Value(notes),
+      orderId: Value(orderId),
       createdAt: Value(now),
       updatedAt: Value(now),
       isDeleted: const Value(false),
@@ -383,6 +415,48 @@ class LocalRepository {
   }
 
   Future<void> deleteWorkshopDebt(String id) => _db.softDeleteWorkshopDebt(id);
+
+  /// بتتأكد إن مديونية الورشة الناتجة عن دفع العميل أكتر من السعر
+  /// النهائي المتفق عليه لطلب معيّن (لو موجودة) متسقة مع حالة الطلب
+  /// الحالية - بتنشئها لو لسه مفيش وفيه فايض، تحدّثها لو موجودة والمبلغ
+  /// اتغيّر، أو تمسحها لو مبقاش فيه فايض خالص. بتتنادى تلقائيًا من جوه
+  /// [updateOrder] و [setOrderDiscount] - مفيش داعي تتنادى يدوي
+  Future<void> _reconcileOrderOverpaymentDebt({
+    required String orderId,
+    required String customerName,
+    required String itemType,
+    required double totalAmount,
+    required double discountAmount,
+    required double totalPaid,
+  }) async {
+    final overpaid = totalPaid - (totalAmount - discountAmount);
+    final existing = await (_db.select(_db.workshopDebts)
+          ..where((t) => t.orderId.equals(orderId) & t.isDeleted.equals(false)))
+        .getSingleOrNull();
+
+    if (overpaid <= 0) {
+      if (existing != null) {
+        await _db.softDeleteWorkshopDebt(existing.id);
+      }
+      return;
+    }
+
+    if (existing == null) {
+      await addWorkshopDebt(
+        creditorName: customerName,
+        totalAmount: overpaid,
+        notes: 'دفع أكتر من الاتفاق النهائي على طلب "$itemType" بعد تعديل السعر',
+        orderId: orderId,
+      );
+    } else if (existing.totalAmount != overpaid) {
+      await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
+        id: Value(existing.id),
+        totalAmount: Value(overpaid),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ));
+    }
+  }
 
   // ---------------- Cash Transfers (سحب إنستاباي كاش) ----------------
 
