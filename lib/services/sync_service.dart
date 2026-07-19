@@ -363,6 +363,7 @@ class SyncService {
             totalAmount: Value((map['totalAmount'] as num?)?.toDouble() ?? 0),
             paidAmount: Value((map['paidAmount'] as num?)?.toDouble() ?? 0),
             notes: Value(map['notes']?.toString() ?? ''),
+            orderId: Value(map['orderId']?.toString() ?? ''),
             createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
@@ -390,6 +391,7 @@ class SyncService {
           'totalAmount': row.totalAmount,
           'paidAmount': row.paidAmount,
           'notes': row.notes,
+          'orderId': row.orderId,
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
         });
