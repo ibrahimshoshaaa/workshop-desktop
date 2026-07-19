@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../data/database.dart';
 
