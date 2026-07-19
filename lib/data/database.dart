@@ -111,12 +111,17 @@ class Expenses extends Table {
 /// الصنايعية (عكس مديونيات العملاء اللي هي فلوس لينا عندهم)
 class WorkshopDebts extends Table {
   TextColumn get id => text()();
-  /// اسم المورد/الصنايعي المستحق له المديونية
+  /// اسم المورد/الصنايعي المستحق له المديونية (أو اسم العميل لو المديونية
+  /// دي ناتجة عن دفعه أكتر من الاتفاق النهائي على طلب - راجع orderId)
   TextColumn get creditorName => text()();
   RealColumn get totalAmount => real().withDefault(const Constant(0))();
   /// إجمالي اللي اتسدد لحد دلوقتي من المديونية دي
   RealColumn get paidAmount => real().withDefault(const Constant(0))();
   TextColumn get notes => text().withDefault(const Constant(''))();
+  /// لو المديونية دي اتولّدت تلقائيًا من طلب معيّن (العميل دفع أكتر من
+  /// السعر النهائي بعد تعديله) - بيربطها بالطلب عشان تتحدّث/تتشال
+  /// تلقائيًا لو السعر اتعدّل تاني. فاضي للمديونيات العادية (موردين/صنايعية)
+  TextColumn get orderId => text().withDefault(const Constant(''))();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
@@ -229,7 +234,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration {
@@ -283,6 +288,11 @@ class AppDatabase extends _$AppDatabase {
         if (from < 9) {
           // جدول سحب إنستاباي كاش (نسخة 9)
           await m.createTable(cashTransfers);
+        }
+        if (from < 10) {
+          // ربط مديونية الورشة بالطلب اللي ولّدها (نسخة 10) - لحالة العميل
+          // اللي دفع أكتر من السعر النهائي بعد تعديله
+          await m.addColumn(workshopDebts, workshopDebts.orderId);
         }
       },
     );
