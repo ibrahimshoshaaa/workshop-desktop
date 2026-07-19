@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:drift/drift.dart' show Value;
+import 'package:uuid/uuid.dart';
 import '../data/database.dart';
 
 /// خدمة المزامنة مع Firebase Realtime Database عن طريق REST API مباشرة
@@ -45,6 +46,7 @@ class SyncService {
       await _syncWorkers();
       await _syncWorkerPayments();
       await _syncCashTransfers();
+      await _repairMissingOverpaymentDebtsOnce();
       await _db.setMeta('lastSyncAt', DateTime.now().millisecondsSinceEpoch.toString());
       if (onSynced != null) await onSynced!();
     } catch (_) {
@@ -74,6 +76,56 @@ class SyncService {
       ));
     }
     await _db.setMeta('discountSyncRepairDone', '1');
+  }
+
+  /// إصلاح لمرة واحدة بس: طلبات كانت موجودة أصلاً قبل ما ميزة "مديونية
+  /// الورشة التلقائية عند الدفع الزيادة" تتضاف - الطلبات دي ممكن يكون
+  /// العميل فيها دفع أكتر من الاتفاق النهائي من زمان (دفعة قديمة أو
+  /// تعديل سعر قديم) من غير ما حد يسجّلها كمديونية، لأن المنطق الجديد
+  /// بيتفعّل بس وقت إضافة دفعة أو تعديل سعر جديد، مش بيراجع القديم
+  /// تلقائي. الدالة دي بتراجع كل الطلبات مرة واحدة بس (معلّمة بمفتاح
+  /// ميتا) وتصلّح أي حالة زيادة قديمة كانت فاتت
+  Future<void> _repairMissingOverpaymentDebtsOnce() async {
+    final done = await _db.getMeta('overpaymentDebtRepairDone');
+    if (done == '1') return;
+    final orders = await (_db.select(_db.orders)..where((t) => t.isDeleted.equals(false))).get();
+    for (final order in orders) {
+      final overpaid = order.totalPaid - (order.totalAmount - order.discountAmount);
+      final existing = await (_db.select(_db.workshopDebts)
+            ..where((t) => t.orderId.equals(order.id) & t.isDeleted.equals(false)))
+          .getSingleOrNull();
+
+      if (overpaid <= 0) {
+        if (existing != null) {
+          await _db.softDeleteWorkshopDebt(existing.id);
+        }
+        continue;
+      }
+
+      if (existing == null) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await _db.upsertWorkshopDebt(WorkshopDebtsCompanion(
+          id: Value(const Uuid().v4()),
+          creditorName: Value(order.customerName),
+          totalAmount: Value(overpaid),
+          paidAmount: const Value(0),
+          notes: Value('دفع أكتر من الاتفاق النهائي على طلب "${order.itemType}" (تصليح تلقائي لطلب قديم)'),
+          orderId: Value(order.id),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          dirty: const Value(true),
+        ));
+      } else if (existing.totalAmount != overpaid) {
+        await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
+          id: Value(existing.id),
+          totalAmount: Value(overpaid),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+          dirty: const Value(true),
+        ));
+      }
+    }
+    await _db.setMeta('overpaymentDebtRepairDone', '1');
   }
 
   // ---------------- Customers ----------------
