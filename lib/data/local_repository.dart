@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import 'database.dart';
 import '../core/order_calculations.dart';
