@@ -67,14 +67,14 @@ class PdfExportService {
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellAlignment: pw.Alignment.centerRight,
             tableDirection: pw.TextDirection.rtl,
-            headers: ['الصنف', 'الحالة', 'الإجمالي', 'المدفوع', 'المتبقي'],
+            headers: ['المتبقي', 'المدفوع', 'الإجمالي', 'الحالة', 'الصنف'],
             data: orders
                 .map((o) => [
-                      o.itemType,
-                      o.status,
-                      _fmt(o.effectiveTotal),
-                      _fmt(o.totalPaid),
                       _fmt(o.remaining),
+                      _fmt(o.totalPaid),
+                      _fmt(o.effectiveTotal),
+                      o.status,
+                      o.itemType,
                     ])
                 .toList(),
           ),
@@ -94,6 +94,26 @@ class PdfExportService {
               ],
             ),
           ),
+          if (orders.any((o) => o.details.trim().isNotEmpty)) ...[
+            pw.SizedBox(height: 20),
+            pw.Text('تفاصيل الطلبات', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 8),
+            ...orders.where((o) => o.details.trim().isNotEmpty).map(
+                  (o) => pw.Container(
+                    margin: const pw.EdgeInsets.only(bottom: 8),
+                    padding: const pw.EdgeInsets.all(10),
+                    decoration: pw.BoxDecoration(color: PdfColors.grey100, borderRadius: pw.BorderRadius.circular(8)),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(o.itemType, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                        pw.SizedBox(height: 4),
+                        pw.Text(o.details.trim(), style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey800)),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
         ],
       ),
     );
@@ -160,9 +180,9 @@ class PdfExportService {
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellAlignment: pw.Alignment.centerRight,
             tableDirection: pw.TextDirection.rtl,
-            headers: ['العميل', 'الصنف', 'الحالة', 'الإجمالي', 'المتبقي'],
+            headers: ['المتبقي', 'الإجمالي', 'الحالة', 'الصنف', 'العميل'],
             data: orders
-                .map((o) => [o.customerName, o.itemType, o.status, _fmt(o.effectiveTotal), _fmt(o.remaining)])
+                .map((o) => [_fmt(o.remaining), _fmt(o.effectiveTotal), o.status, o.itemType, o.customerName])
                 .toList(),
           ),
           pw.SizedBox(height: 24),
@@ -173,14 +193,14 @@ class PdfExportService {
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellAlignment: pw.Alignment.centerRight,
             tableDirection: pw.TextDirection.rtl,
-            headers: ['الفئة', 'الوصف', 'المصدر', 'التاريخ', 'المبلغ'],
+            headers: ['المبلغ', 'التاريخ', 'المصدر', 'الوصف', 'الفئة'],
             data: expenses
                 .map((e) => [
-                      expenseCategories[e.category] ?? e.category,
-                      e.description,
-                      paymentMethods[e.paymentMethod] ?? e.paymentMethod,
-                      DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date)),
                       _fmt(e.amount),
+                      DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date)),
+                      paymentMethods[e.paymentMethod] ?? e.paymentMethod,
+                      e.description,
+                      expenseCategories[e.category] ?? e.category,
                     ])
                 .toList(),
           ),
@@ -270,14 +290,14 @@ class PdfExportService {
               headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
               cellAlignment: pw.Alignment.centerRight,
               tableDirection: pw.TextDirection.rtl,
-              headers: ['تاريخ التسليم', 'العميل', 'الصنف', 'الحالة', 'المتبقي'],
+              headers: ['المتبقي', 'تاريخ التسليم', 'الحالة', 'الصنف', 'العميل'],
               data: sorted
                   .map((o) => [
-                        DateFormat('EEEE d/M', 'ar_EG').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate)),
-                        o.customerName,
-                        o.itemType,
-                        o.status,
                         _fmt(o.remaining),
+                        DateFormat('EEEE d/M', 'ar_EG').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate)),
+                        o.status,
+                        o.itemType,
+                        o.customerName,
                       ])
                   .toList(),
             ),
