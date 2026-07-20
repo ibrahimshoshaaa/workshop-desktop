@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../data/database.dart';
 import '../providers/data_providers.dart';
 import '../services/pdf_export_service.dart';
 import '../services/excel_export_service.dart';
@@ -15,6 +17,7 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   DateTimeRange _range = DateTimeRange(start: DateTime.now().subtract(const Duration(days: 30)), end: DateTime.now());
   String? _selectedCustomerId;
+  String? _selectedOrderId;
   bool _isExporting = false;
 
   Future<void> _pickRange() async {
@@ -132,9 +135,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     try {
       final customers = ref.read(customersProvider).value ?? [];
       final customer = customers.firstWhere((c) => c.id == _selectedCustomerId);
-      final orders = (ref.read(ordersProvider).value ?? []).where((o) => o.customerId == _selectedCustomerId).toList();
+      var orders = (ref.read(ordersProvider).value ?? []).where((o) => o.customerId == _selectedCustomerId).toList();
+      if (_selectedOrderId != null) {
+        orders = orders.where((o) => o.id == _selectedOrderId).toList();
+      }
       final bytes = await PdfExportService.instance.buildCustomerInvoice(customer: customer, orders: orders);
-      if (mounted) await PdfExportService.instance.preview(context, bytes, 'فاتورة_${customer.name}.pdf');
+      final fileSuffix = orders.length == 1 ? '${customer.name}_${orders.first.itemType}' : customer.name;
+      if (mounted) await PdfExportService.instance.preview(context, bytes, 'فاتورة_$fileSuffix.pdf');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
     } finally {
@@ -145,6 +152,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final customers = ref.watch(customersProvider).value ?? [];
+    final allOrders = ref.watch(ordersProvider).value ?? [];
+    final customerOrders = _selectedCustomerId == null
+        ? const <Order>[]
+        : allOrders.where((o) => o.customerId == _selectedCustomerId).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('التقارير والتصدير'), backgroundColor: AppColors.wood, foregroundColor: Colors.white),
@@ -219,8 +230,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           value: _selectedCustomerId,
                           decoration: const InputDecoration(labelText: 'اختر العميل'),
                           items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                          onChanged: (v) => setState(() => _selectedCustomerId = v),
+                          onChanged: (v) => setState(() {
+                            _selectedCustomerId = v;
+                            _selectedOrderId = null;
+                          }),
                         ),
+                        if (_selectedCustomerId != null && customerOrders.length > 1) ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String?>(
+                            value: _selectedOrderId,
+                            decoration: const InputDecoration(labelText: 'نوع الطلب'),
+                            items: [
+                              const DropdownMenuItem<String?>(value: null, child: Text('كل الطلبات')),
+                              ...customerOrders.map((o) => DropdownMenuItem<String?>(
+                                    value: o.id,
+                                    child: Text('${o.itemType} - ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
+                                  )),
+                            ],
+                            onChanged: (v) => setState(() => _selectedOrderId = v),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         ElevatedButton.icon(onPressed: _exportCustomerInvoice, icon: const Icon(Icons.receipt_long_rounded), label: const Text('تصدير فاتورة PDF')),
                       ],

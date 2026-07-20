@@ -61,10 +61,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircleAvatar(
-                  radius: 32,
-                  backgroundColor: AppColors.wood,
-                  child: Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 32),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    'assets/icon/app_icon.png',
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const Text('Tahoun Royal Home',
