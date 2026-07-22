@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../data/database.dart';
+import 'firebase_rest_auth.dart';
 
 /// خدمة المزامنة مع Firebase Realtime Database عن طريق REST API مباشرة
 /// (مفيش SDK رسمي لويندوز). المنطق: أي سجل "متغيّر" محليًا (dirty) بيتبعت
@@ -675,9 +676,12 @@ class SyncService {
   }
 
   // ---------------- HTTP Helpers ----------------
+  // كل نداء هنا بيعدّي على FirebaseRestAuth.withAuth() عشان يضيف توكن
+  // الدخول الحالي - من غيره قواعد الأمان (auth != null) هترفض أي طلب
 
   Future<Map<String, dynamic>?> _fetchNode(String path) async {
-    final response = await http.get(Uri.parse('$_baseUrl/$path.json')).timeout(_timeout);
+    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
+    final response = await http.get(uri).timeout(_timeout);
     if (response.statusCode != 200) return null;
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) return null;
@@ -685,10 +689,12 @@ class SyncService {
   }
 
   Future<void> _putNode(String path, Map<String, dynamic> data) async {
-    await http.put(Uri.parse('$_baseUrl/$path.json'), body: jsonEncode(data)).timeout(_timeout);
+    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
+    await http.put(uri, body: jsonEncode(data)).timeout(_timeout);
   }
 
   Future<void> _deleteNode(String path) async {
-    await http.delete(Uri.parse('$_baseUrl/$path.json')).timeout(_timeout);
+    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
+    await http.delete(uri).timeout(_timeout);
   }
 }
