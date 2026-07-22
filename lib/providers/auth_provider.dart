@@ -1,15 +1,17 @@
 import 'dart:convert';
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/constants/app_credentials.dart';
 import '../core/firebase_config.dart';
+import '../core/auth_email_mapper.dart';
 import '../models/app_user_model.dart';
 import '../services/user_account_service.dart';
+import '../services/firebase_rest_auth.dart';
 import 'database_provider.dart';
 
 const _keyUsername = 'session_username';
 const _keyIsAdmin = 'session_is_admin';
 const _keyPermsJson = 'session_permissions_json';
+const _keyRefreshToken = 'session_refresh_token';
 
 /// جلسة المستخدم الحالي - مين داخل، هو أدمن ولا عامل، وإيه الشاشات
 /// المسموح له يشوفها
@@ -32,12 +34,20 @@ final appUsersProvider = FutureProvider<List<AppUserModel>>((ref) {
   return ref.watch(userAccountServiceProvider).fetchUsers();
 });
 
-/// بيقرأ آخر جلسة محفوظة محليًا (لو موجودة) عشان المستخدم يفضل داخل حتى
-/// لو قفل التطبيق وفتحه تاني - بنفس سلوك الموبايل تمامًا
+/// بيقرأ آخر جلسة محفوظة محليًا (لو موجودة)، وبيحاول يستعيد توكن Firebase
+/// من الـ refresh token المحفوظ (بدل ما يفترض إن الجلسة سليمة من غير أي
+/// تحقق حقيقي) - بنفس فكرة "Firebase بيحتفظ بالجلسة لوحده" بتاعة الموبايل،
+/// لكن هنا بنعمل التخزين والاستعادة يدويًا بما إننا REST مش SDK
 final sessionProvider = FutureProvider<SessionUser?>((ref) async {
   final db = ref.watch(databaseProvider);
   final username = await db.getMeta(_keyUsername);
   if (username == null || username.isEmpty) return null;
+
+  final refreshToken = await db.getMeta(_keyRefreshToken);
+  if (refreshToken == null || refreshToken.isEmpty) return null;
+
+  final restored = await FirebaseRestAuth.restoreSession(refreshToken);
+  if (!restored) return null; // الـ refresh token بقى غير صالح - يدخل تاني يدويًا
 
   final isAdmin = (await db.getMeta(_keyIsAdmin)) == 'true';
   final permsRaw = await db.getMeta(_keyPermsJson);
@@ -56,27 +66,41 @@ class AuthRepository {
   /// بيرجع رسالة خطأ لو فشل الدخول، أو null لو نجح
   Future<String?> login(String username, String password) async {
     final trimmedUser = username.trim();
+    final email = usernameToAuthEmail(trimmedUser);
 
-    // الحساب الرئيسي الثابت في الكود - خط أمان دائم، يفضل شغال حتى لو
-    // مفيش نت أو حصلت أي مشكلة في app_users
-    if (trimmedUser == AppCredentials.username && password == AppCredentials.password) {
-      await _persistSession(username: trimmedUser, isAdmin: true, permissions: {});
-      return null;
-    }
+    final error = await FirebaseRestAuth.signIn(email, password);
+    if (error != null) return error;
 
-    AppUserModel? extraUser;
+    // نجح الدخول في Firebase - نحدد هل ده الأدمن (UID مطابق لـ
+    // config/adminUid) ولا عامل (له سجل في app_users)
+    final uid = FirebaseRestAuth.currentUid;
+    bool admin = false;
+    Map<String, bool> permissions = {};
+    bool foundValidAccount = false;
+
     try {
-      extraUser = await _ref.read(userAccountServiceProvider).verifyUser(trimmedUser, password);
+      if (uid != null && await _ref.read(userAccountServiceProvider).isAdminUid(uid)) {
+        admin = true;
+        foundValidAccount = true;
+      } else {
+        final users = await _ref.read(userAccountServiceProvider).fetchUsers();
+        final match = users.firstWhereOrNull((u) => u.username == trimmedUser);
+        if (match != null) {
+          permissions = match.permissions;
+          foundValidAccount = true;
+        }
+      }
     } catch (_) {
-      extraUser = null;
+      // مفيش نت نقدر نتأكد بيه - منسمحش بالدخول لحد ما نتأكد فعليًا
     }
 
-    if (extraUser != null) {
-      await _persistSession(username: extraUser.username, isAdmin: false, permissions: extraUser.permissions);
-      return null;
+    if (!foundValidAccount) {
+      FirebaseRestAuth.clear();
+      return 'الحساب ده متشالة صلاحياته أو مش موجود في التطبيق';
     }
 
-    return 'اليوزر أو الباسورد غلط، أو مفيش إنترنت للتحقق من الحساب';
+    await _persistSession(username: trimmedUser, isAdmin: admin, permissions: permissions);
+    return null;
   }
 
   Future<void> _persistSession({
@@ -88,6 +112,7 @@ class AuthRepository {
     await db.setMeta(_keyUsername, username);
     await db.setMeta(_keyIsAdmin, isAdmin.toString());
     await db.setMeta(_keyPermsJson, jsonEncode(permissions));
+    await db.setMeta(_keyRefreshToken, FirebaseRestAuth.refreshTokenForPersistence ?? '');
     _ref.invalidate(sessionProvider);
   }
 
@@ -96,6 +121,8 @@ class AuthRepository {
     await db.setMeta(_keyUsername, '');
     await db.setMeta(_keyIsAdmin, '');
     await db.setMeta(_keyPermsJson, '');
+    await db.setMeta(_keyRefreshToken, '');
+    FirebaseRestAuth.clear();
     _ref.invalidate(sessionProvider);
   }
 
