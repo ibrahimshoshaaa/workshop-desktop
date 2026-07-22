@@ -114,9 +114,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _showEditUserDialog(BuildContext context, AppUserModel user) async {
-    final formKey = GlobalKey<FormState>();
-    final passwordController = TextEditingController();
-    final confirmController = TextEditingController();
     bool isSaving = false;
     final permissions = <String, bool>{
       for (final s in AppUserModel.permissionScreens) s.key: user.canAccess(s.key),
@@ -129,45 +126,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: Text('تعديل حساب "${user.username}"'),
           content: SizedBox(
             width: 420,
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('الشاشات المسموح بيها', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ...AppUserModel.permissionScreens.map((s) => CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          title: Text(s.value),
-                          value: permissions[s.key],
-                          activeColor: AppColors.wood,
-                          onChanged: (v) => setDialogState(() => permissions[s.key] = v ?? true),
-                        )),
-                    const Divider(height: 24),
-                    const Text('تغيير كلمة المرور (اختياري - سيبها فاضية لو مش عايز تغيّرها)',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: passwordController,
-                      textDirection: TextDirection.ltr,
-                      decoration: const InputDecoration(labelText: 'كلمة مرور جديدة'),
-                      validator: (v) =>
-                          (v != null && v.isNotEmpty && v.length < 4) ? 'لازم 4 حروف/أرقام على الأقل' : null,
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: confirmController,
-                      textDirection: TextDirection.ltr,
-                      decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور'),
-                      validator: (v) => (passwordController.text.isNotEmpty && v != passwordController.text)
-                          ? 'مش متطابقة'
-                          : null,
-                    ),
-                  ],
-                ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('الشاشات المسموح بيها', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ...AppUserModel.permissionScreens.map((s) => CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(s.value),
+                        value: permissions[s.key],
+                        activeColor: AppColors.wood,
+                        onChanged: (v) => setDialogState(() => permissions[s.key] = v ?? true),
+                      )),
+                  const Divider(height: 24),
+                  Text(
+                    'مش ممكن نغيّر باسورد حساب عامل مباشرة (قيد أماني حقيقي في '
+                    'Firebase نفسه). لو عايز تغيّره، احذف الحساب وضيفه تاني '
+                    'بباسورد جديد.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
               ),
             ),
           ),
@@ -177,14 +158,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onPressed: isSaving
                   ? null
                   : () async {
-                      if (!formKey.currentState!.validate()) return;
                       setDialogState(() => isSaving = true);
                       final service = ref.read(userAccountServiceProvider);
                       try {
                         await service.updateUserPermissions(user.id, permissions);
-                        if (passwordController.text.isNotEmpty) {
-                          await service.updateUserPassword(user.id, passwordController.text);
-                        }
                         ref.invalidate(appUsersProvider);
                         if (context.mounted) Navigator.pop(context);
                       } catch (e) {
