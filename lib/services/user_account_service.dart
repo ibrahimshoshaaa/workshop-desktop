@@ -1,11 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/app_user_model.dart';
+import 'firebase_rest_auth.dart';
+import '../core/auth_email_mapper.dart';
 
 /// خدمة إدارة حسابات العمال (app_users) عن طريق REST API مباشرة - بنفس
 /// طريقة SyncService بالظبط (مفيش SDK رسمي لـ Firebase على ويندوز).
 /// دي نفس العقدة اللي بيستخدمها تطبيق الموبايل، فأي حساب يتضاف/يتعدّل من
 /// هنا يظهر فورًا في الموبايل والعكس.
+///
+/// كل طلب هنا بيعدّي على FirebaseRestAuth.withAuth() عشان يضيف توكن
+/// الدخول الحالي - من غيره قواعد الأمان (auth != null) هترفض الطلب.
 class UserAccountService {
   UserAccountService({required String databaseUrl}) : _baseUrl = databaseUrl;
 
@@ -14,7 +19,8 @@ class UserAccountService {
   static const _path = 'app_users';
 
   Future<List<AppUserModel>> fetchUsers() async {
-    final response = await http.get(Uri.parse('$_baseUrl/$_path.json')).timeout(_timeout);
+    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path.json'));
+    final response = await http.get(uri).timeout(_timeout);
     if (response.statusCode != 200) return [];
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) return [];
@@ -32,26 +38,37 @@ class UserAccountService {
     return result;
   }
 
-  /// بيرجع اليوزر لو اليوزرنيم والباسورد مطابقين لحساب موجود في app_users،
-  /// أو null لو مفيش تطابق أو حصل خطأ اتصال (زي مفيش نت)
-  Future<AppUserModel?> verifyUser(String username, String password) async {
-    final users = await fetchUsers();
-    for (final u in users) {
-      if (u.username == username && u.password == password) return u;
+  /// بيتحقق هل الـ UID ده هو حساب الأدمن الرئيسي (config/adminUid المتحدد
+  /// يدويًا من Firebase Console). بيرجع false افتراضيًا لو مش متأكدين
+  Future<bool> isAdminUid(String uid) async {
+    try {
+      final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/config/adminUid.json'));
+      final response = await http.get(uri).timeout(_timeout);
+      if (response.statusCode != 200) return false;
+      final decoded = jsonDecode(response.body);
+      return decoded != null && decoded.toString() == uid;
+    } catch (_) {
+      return false;
     }
-    return null;
   }
 
-  /// إضافة حساب جديد - لو مبعتش [permissions] بيتضاف بكل الصلاحيات مفعّلة
-  /// افتراضيًا (زي أي حساب عامل جديد من الموبايل)، وتقدر تحدد صلاحيات
-  /// مخصوصة من الأول وقت الإضافة لو حبيت
+  /// إضافة حساب عامل جديد - بينشئ حساب Firebase Authentication حقيقي
+  /// (باسورد مهشّر عند Firebase، مش متخزّن عندنا خالص)، وبعدين سجل بياناته
+  /// (بدون الباسورد) في app_users. بما إن ده REST بلا جلسة محلية، النداء
+  /// ده مبيأثرش على جلسة الأدمن الحالية المسجّل بيها فعليًا.
   Future<String> addUser(String username, String password, {Map<String, bool>? permissions}) async {
+    final trimmedUsername = username.trim();
+    final email = usernameToAuthEmail(trimmedUsername);
+
+    final error = await FirebaseRestAuth.createAccount(email, password);
+    if (error != null) throw Exception(error);
+
+    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path.json'));
     final response = await http
         .post(
-          Uri.parse('$_baseUrl/$_path.json'),
+          uri,
           body: jsonEncode({
-            'username': username,
-            'password': password,
+            'username': trimmedUsername,
             'createdAt': DateTime.now().millisecondsSinceEpoch,
             'permissions': permissions ?? {for (final s in AppUserModel.permissionScreens) s.key: true},
           }),
@@ -61,19 +78,13 @@ class UserAccountService {
     return decoded['name'] as String;
   }
 
-  Future<void> updateUserPassword(String id, String newPassword) async {
-    await http
-        .patch(Uri.parse('$_baseUrl/$_path/$id.json'), body: jsonEncode({'password': newPassword}))
-        .timeout(_timeout);
-  }
-
   Future<void> updateUserPermissions(String id, Map<String, bool> permissions) async {
-    await http
-        .patch(Uri.parse('$_baseUrl/$_path/$id.json'), body: jsonEncode({'permissions': permissions}))
-        .timeout(_timeout);
+    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path/$id.json'));
+    await http.patch(uri, body: jsonEncode({'permissions': permissions})).timeout(_timeout);
   }
 
   Future<void> deleteUser(String id) async {
-    await http.delete(Uri.parse('$_baseUrl/$_path/$id.json')).timeout(_timeout);
+    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path/$id.json'));
+    await http.delete(uri).timeout(_timeout);
   }
 }
