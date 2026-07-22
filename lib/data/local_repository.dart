@@ -481,7 +481,18 @@ class LocalRepository {
   /// سداد دفعة من مديونية الورشة - بيسجّلها تلقائيًا كمصروف جديد (فئة
   /// "سداد مديونية ورشة") بمصدر الدفع المحدد (نقدي/إنستاباي)، وده اللي
   /// بيخصمها فعليًا من "المبلغ المتاح" في الإيرادات (لأن الإيراد المتاح =
-  /// الإيرادات - المصروفات)، وبيحدّث إجمالي المسدد من المديونية نفسها
+  /// الإيرادات - المصروفات).
+  ///
+  /// لو المديونية دي ناتجة تلقائيًا من طلب معيّن (orderId موجود، يعني
+  /// العميل كان دفع أكتر من الاتفاق النهائي بعد تعديل السعر)، السداد هنا
+  /// معناه إننا فعليًا رجّعنا فلوس للعميل - فبدل ما نتبعها في paidAmount
+  /// بس (وده كان بيسيب "المتبقي" في تفاصيل الطلب والداش بورد واقف على
+  /// الرقم القديم للأبد حتى بعد السداد)، بنسجّل دفعة سالبة (refund) على
+  /// الطلب نفسه، وده بيخلي [addPayment] يعيد حساب totalPaid ويصفّي/يقلل
+  /// مديونية الورشة تلقائيًا (عبر _reconcileOrderOverpaymentDebt) - بكده
+  /// أي شاشة بتعرض بيانات الطلب بتتحدث لوحدها من غير ما نحتاج نلحقها
+  /// واحدة واحدة. لو مش مرتبطة بطلب (مديونية عادية زي مورد)، بنزوّد
+  /// paidAmount عادي زي ما كان
   Future<void> payWorkshopDebt({
     required WorkshopDebt debt,
     required double amount,
@@ -489,6 +500,25 @@ class LocalRepository {
     String? note,
   }) async {
     final now = _now;
+
+    if (debt.orderId.isNotEmpty) {
+      final order = await (_db.select(_db.orders)..where((t) => t.id.equals(debt.orderId))).getSingleOrNull();
+      if (order != null) {
+        // معلش هنا مش بنسجل مصروف منفصل زي الحالة التانية تحت - الدفعة
+        // السالبة دي نفسها بتقلل "الإيراد حسب طريقة الدفع" وبالتالي
+        // "المبلغ المتاح" بنفس قيمة الفلوس اللي خرجت فعليًا، فلو سجّلنا
+        // مصروف كمان هنخصم نفس المبلغ مرتين من الخزينة غلط
+        await addPayment(
+          orderId: order.id,
+          customerId: order.customerId,
+          amount: -amount,
+          paymentType: 'refund',
+          paymentMethod: paymentMethod,
+        );
+        return;
+      }
+    }
+
     await _db.upsertExpense(ExpensesCompanion(
       id: Value(_uuid.v4()),
       amount: Value(amount),

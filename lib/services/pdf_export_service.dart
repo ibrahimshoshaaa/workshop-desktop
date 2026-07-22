@@ -169,7 +169,10 @@ class PdfExportService {
     final doc = pw.Document();
 
     final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-    final totalDebts = orders.fold<double>(0, (s, o) => s + o.remaining);
+    // بنجمع بس الطلبات اللي لسه عليها متبقٍ فعلي - نفس شرح
+    // dashboardStatsProvider بالظبط (طلب متبقيه سالب معناه العميل دفع
+    // زيادة، وده مش "مديونية عميل")
+    final totalDebts = orders.where((o) => o.remaining > 0).fold<double>(0, (s, o) => s + o.remaining);
     final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
     final netProfit = totalRevenue - totalExpenses;
 

@@ -166,7 +166,11 @@ final dashboardStatsProvider = Provider<DashboardStats>((ref) {
   final workshopDebts = ref.watch(workshopDebtsProvider).value ?? [];
 
   final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-  final totalDebts = orders.fold<double>(0, (s, o) => s + o.remaining);
+  // بنجمع بس الطلبات اللي لسه عليها متبقٍ فعلي (زي debtorOrdersProvider
+  // بالظبط) - لو جمعنا كل الطلبات من غير فلترة، طلب "مدفوع زيادة" (متبقي
+  // سالب) كان هيقلل الإجمالي هنا من غير ما يفرق مع صفحة المديونيات اللي
+  // بتستبعده أصلاً، وده اللي كان بيسبب فرق بين رقم الداش بورد والصفحة
+  final totalDebts = orders.where((o) => o.remaining > 0).fold<double>(0, (s, o) => s + o.remaining);
   final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
   final totalWorkshopDebts = workshopDebts.fold<double>(0, (s, d) => s + d.remaining);
 

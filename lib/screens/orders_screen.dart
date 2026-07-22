@@ -8,6 +8,7 @@ import 'package:collection/collection.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import '../providers/data_providers.dart';
+import '../providers/navigation_provider.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
@@ -715,6 +716,38 @@ class OrderDetailDialog extends ConsumerWidget {
                   label: Text(currentOrder.discountAmount > 0 ? 'تعديل الخصم' : 'عمل خصم'),
                 ),
               ),
+              if (remaining < 0) ...[
+                const SizedBox(height: 12),
+                Builder(builder: (context) {
+                  final linkedDebt = (ref.watch(workshopDebtsProvider).value ?? [])
+                      .firstWhereOrNull((d) => d.orderId == currentOrder.id);
+                  final owed = linkedDebt?.remaining ?? remaining.abs();
+                  if (owed <= 0) return const SizedBox.shrink();
+                  return InkWell(
+                    onTap: () => ref.read(selectedTabProvider.notifier).state = 4,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: AppColors.wood.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.storefront_rounded, color: AppColors.wood, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'العميل دفع ${owed.toStringAsFixed(0)} ج.م زيادة عن الاتفاق الحالي - '
+                              'مسجّلة كمديونية ورشة، سدّدها من هناك وهتتظبط تلقائي',
+                              style: const TextStyle(fontSize: 12, color: AppColors.wood, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_left_rounded, color: AppColors.wood, size: 18),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
               const SizedBox(height: 16),
               const Align(alignment: Alignment.centerRight, child: Text('صور الطلب', style: TextStyle(fontWeight: FontWeight.bold))),
               const SizedBox(height: 8),
