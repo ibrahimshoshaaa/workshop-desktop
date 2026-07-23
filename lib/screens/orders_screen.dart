@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:collection/collection.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -32,7 +33,8 @@ Future<void> _offerReceiptPrint(
   final shouldPrint = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('تسجيل الدفعة تم بنجاح'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('تسجيل الدفعة تم بنجاح', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
       content: const Text('هل تريد طباعة إيصال استلام الآن؟'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('لا')),
@@ -96,10 +98,10 @@ class _ImageThumb extends StatelessWidget {
     return Stack(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           child: GestureDetector(
             onTap: onTap,
-            child: SizedBox(width: 72, height: 72, child: image),
+            child: SizedBox(width: 76, height: 76, child: image),
           ),
         ),
         if (onRemove != null)
@@ -109,7 +111,7 @@ class _ImageThumb extends StatelessWidget {
             child: GestureDetector(
               onTap: onRemove,
               child: Container(
-                padding: const EdgeInsets.all(2),
+                padding: const EdgeInsets.all(3),
                 decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle),
                 child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
               ),
@@ -120,9 +122,34 @@ class _ImageThumb extends StatelessWidget {
   }
 }
 
-const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
+/// مربع رفع/إضافة صورة موحّد الشكل - نفس مقاس _ImageThumb بالظبط
+class _AddImageTile extends StatelessWidget {
+  final VoidCallback? onTap;
+  final bool loading;
+  const _AddImageTile({this.onTap, this.loading = false});
 
-/// طرق استلام الدفعات المتاحة
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: loading ? null : onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 76,
+        height: 76,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.grey.shade50,
+        ),
+        child: loading
+            ? const Padding(padding: EdgeInsets.all(22), child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.wood))
+            : Icon(Icons.add_photo_alternate_rounded, color: Colors.grey.shade400),
+      ),
+    );
+  }
+}
+
+const _itemTypes = ['أنتريه', 'صالون', 'ركنة', 'ستائر', 'سرير', 'كنب', 'أخرى'];
 
 /// حالات الدفعة المتاحة
 const Map<String, String> paymentStatuses = {'completed': 'مكتملة', 'pending': 'معلقة'};
@@ -219,7 +246,8 @@ Future<void> _showShareToWorkerDialog(BuildContext context, WidgetRef ref, Order
             ? workers
             : workers.where((w) => normalizeForSearch(w.name).contains(q) || normalizeForSearch(w.jobTitle).contains(q)).toList();
         return AlertDialog(
-          title: const Text('ابعت المواصفات لأي صنايعي؟'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('ابعت المواصفات لأي صنايعي؟', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
           content: SizedBox(
             width: 380,
             height: 420,
@@ -233,15 +261,15 @@ Future<void> _showShareToWorkerDialog(BuildContext context, WidgetRef ref, Order
                 ),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('لا يوجد صنايعي بالاسم ده', style: TextStyle(color: Colors.grey)))
+                      ? const _EmptyState(icon: Icons.engineering_rounded, text: 'لا يوجد صنايعي بالاسم ده')
                       : ListView.builder(
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
                             final w = filtered[index];
-                            return ListTile(
-                              leading: const Icon(Icons.engineering_rounded, color: AppColors.wood),
-                              title: Text(w.name),
-                              subtitle: Text(w.jobTitle.isNotEmpty ? '${w.jobTitle} - ${w.phone}' : w.phone),
+                            return _MiniRow(
+                              icon: Icons.engineering_rounded,
+                              title: w.name,
+                              subtitle: w.jobTitle.isNotEmpty ? '${w.jobTitle} - ${w.phone}' : w.phone,
                               onTap: () {
                                 Navigator.pop(context);
                                 _shareOrderWithWorker(context, ref, order, w);
@@ -291,9 +319,11 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: Text(presetCustomer == null ? 'طلب جديد' : 'طلب جديد لـ ${presetCustomer.name}'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(presetCustomer == null ? 'طلب جديد' : 'طلب جديد لـ ${presetCustomer.name}',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 17)),
         content: SizedBox(
-          width: 420,
+          width: 440,
           child: Form(
             key: formKey,
             child: SingleChildScrollView(
@@ -303,7 +333,7 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                   if (presetCustomer == null)
                     DropdownButtonFormField<String>(
                       value: customerId,
-                      decoration: const InputDecoration(labelText: 'العميل'),
+                      decoration: _fieldDecoration('العميل', Icons.person_outline_rounded),
                       items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text('${c.name} - ${c.phone}'))).toList(),
                       onChanged: (v) => setDialogState(() => customerId = v),
                     )
@@ -311,32 +341,33 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                     TextFormField(
                       initialValue: '${presetCustomer.name} - ${presetCustomer.phone}',
                       enabled: false,
-                      decoration: const InputDecoration(labelText: 'العميل'),
+                      decoration: _fieldDecoration('العميل', Icons.person_outline_rounded),
                     ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   OtherCapableDropdown(
                     options: _itemTypes.where((t) => t != kOtherOptionValue).toList(),
                     label: 'نوع الصنف',
                     value: itemType,
                     onChanged: (v) => setDialogState(() => itemType = v),
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(controller: detailsController, maxLines: 2, decoration: const InputDecoration(labelText: 'المواصفات')),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text('صور الطلب', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: detailsController,
+                    maxLines: 2,
+                    decoration: _fieldDecoration('المواصفات', Icons.notes_rounded),
                   ),
+                  const SizedBox(height: 16),
+                  _FieldLabel('صور الطلب'),
                   const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 10,
+                    runSpacing: 10,
                     children: [
                       ...pickedImages.map((f) => _ImageThumb(
                             image: Image.memory(f.bytes!, fit: BoxFit.cover),
                             onRemove: () => setDialogState(() => pickedImages.remove(f)),
                           )),
-                      InkWell(
+                      _AddImageTile(
                         onTap: () async {
                           final result = await FilePicker.platform.pickFiles(
                             type: FileType.image,
@@ -347,24 +378,13 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                             setDialogState(() => pickedImages.addAll(result.files.where((f) => f.bytes != null)));
                           }
                         },
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade400),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.add_photo_alternate_rounded, color: Colors.grey),
-                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('تاريخ التسليم'),
-                    subtitle: Text('${deliveryDate.year}/${deliveryDate.month}/${deliveryDate.day}'),
-                    trailing: const Icon(Icons.calendar_month_rounded),
+                  const SizedBox(height: 16),
+                  _DatePickerRow(
+                    label: 'تاريخ التسليم',
+                    date: deliveryDate,
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
@@ -375,23 +395,23 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                       if (picked != null) setDialogState(() => deliveryDate = picked);
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   TextFormField(
                     controller: totalController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'إجمالي الاتفاق (ج.م)'),
+                    decoration: _fieldDecoration('إجمالي الاتفاق (ج.م)', Icons.request_quote_outlined),
                     validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل مبلغ صحيح' : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   TextFormField(
                     controller: depositController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'العربون المدفوع الآن (اختياري)'),
+                    decoration: _fieldDecoration('العربون المدفوع الآن (اختياري)', Icons.savings_outlined),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
                     value: depositMethod,
-                    decoration: const InputDecoration(labelText: 'طريقة الاستلام'),
+                    decoration: _fieldDecoration('طريقة الاستلام', Icons.payments_outlined),
                     items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
                     onChanged: (v) => setDialogState(() => depositMethod = v!),
                   ),
@@ -496,14 +516,15 @@ class _StatusChip extends ConsumerWidget {
     return PopupMenuButton<String>(
       tooltip: 'تغيير حالة الطلب',
       onSelected: (v) => ref.read(repositoryProvider).updateOrderStatus(order.id, v),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       itemBuilder: (context) => orderStatuses.map((s) => PopupMenuItem(value: s, child: Text(s))).toList(),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(order.status, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+            Text(order.status, style: GoogleFonts.cairo(color: color, fontWeight: FontWeight.w700, fontSize: 11.5)),
             const SizedBox(width: 2),
             Icon(Icons.arrow_drop_down_rounded, color: color, size: 16),
           ],
@@ -534,35 +555,56 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(ordersProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('الطلبات'),
-        backgroundColor: AppColors.wood,
-        foregroundColor: Colors.white,
-        actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => showAddOrderDialog(context, ref))],
-      ),
-      body: Column(
+    return Container(
+      color: const Color(0xFFFAF6F0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              children: [
-                ChoiceChip(label: const Text('الكل'), selected: _statusFilter == null, onSelected: (_) => setState(() => _statusFilter = null)),
-                const SizedBox(width: 8),
-                ...orderStatuses.map((s) => Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ChoiceChip(label: Text(s), selected: _statusFilter == s, onSelected: (_) => setState(() => _statusFilter = s)),
-                    )),
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 28, 28, 0),
+            child: _PageHeader(
+              title: 'الطلبات',
+              subtitle: 'متابعة كل طلبات العملاء وحالتها',
+              icon: Icons.checkroom_rounded,
+              badge: ordersAsync.value != null ? '${ordersAsync.value!.length} طلب' : null,
+              actionLabel: 'طلب جديد',
+              actionIcon: Icons.add_rounded,
+              onAction: () => showAddOrderDialog(context, ref),
             ),
           ),
-          AppSearchBar(
-            controller: _searchController,
-            hintText: 'ابحث باسم العميل أو نوع الصنف...',
-            onChanged: (v) => setState(() => _query = v),
-            onClear: () => setState(() => _query = ''),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+            child: SizedBox(
+              height: 38,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _FilterChip(label: 'الكل', selected: _statusFilter == null, onTap: () => setState(() => _statusFilter = null)),
+                  const SizedBox(width: 8),
+                  ...orderStatuses.map((s) => Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: _FilterChip(
+                          label: s,
+                          color: _statusColor(s),
+                          selected: _statusFilter == s,
+                          onTap: () => setState(() => _statusFilter = s),
+                        ),
+                      )),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 14, 28, 0),
+            child: _HoverCard(
+              borderRadius: BorderRadius.circular(16),
+              child: AppSearchBar(
+                controller: _searchController,
+                hintText: 'ابحث باسم العميل أو نوع الصنف...',
+                onChanged: (v) => setState(() => _query = v),
+                onClear: () => setState(() => _query = ''),
+              ),
+            ),
           ),
           Expanded(
             child: ordersAsync.when(
@@ -576,47 +618,72 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                         normalizeForSearch(o.details).contains(q);
                   }).toList();
                 }
-                if (filtered.isEmpty) return const Center(child: Text('لا توجد طلبات', style: TextStyle(color: Colors.grey)));
+                if (filtered.isEmpty) {
+                  return const _EmptyState(icon: Icons.checkroom_outlined, text: 'لا توجد طلبات');
+                }
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final o = filtered[index];
                     final remaining = o.remaining;
-                    return Card(
-                      child: ListTile(
-                        title: Text('${o.customerName} - ${o.itemType}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _HoverCard(
+                        onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                           child: Row(
                             children: [
-                              Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
-                              const SizedBox(width: 8),
-                              _StatusChip(order: o),
+                              Container(
+                                width: 4,
+                                height: 40,
+                                decoration: BoxDecoration(color: _statusColor(o.status), borderRadius: BorderRadius.circular(4)),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${o.customerName} - ${o.itemType}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}',
+                                            style: GoogleFonts.cairo(fontSize: 11.5, color: Colors.grey.shade500)),
+                                        const SizedBox(width: 8),
+                                        _StatusChip(order: o),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                remaining > 0 ? 'متبقي ${remaining.toStringAsFixed(0)}' : 'مكتمل',
+                                style: TextStyle(
+                                  color: remaining > 0 ? AppColors.danger : AppColors.success,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'مشاركة على واتساب',
+                                icon: const Icon(Icons.share_rounded, color: AppColors.success, size: 20),
+                                onPressed: () => _showShareToWorkerDialog(context, ref, o),
+                              ),
                             ],
                           ),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              remaining > 0 ? 'متبقي ${remaining.toStringAsFixed(0)}' : 'مكتمل',
-                              style: TextStyle(color: remaining > 0 ? AppColors.danger : AppColors.success, fontWeight: FontWeight.bold),
-                            ),
-                            IconButton(
-                              tooltip: 'مشاركة على واتساب',
-                              icon: const Icon(Icons.share_rounded, color: AppColors.success),
-                              onPressed: () => _showShareToWorkerDialog(context, ref, o),
-                            ),
-                          ],
-                        ),
-                        onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
                       ),
                     );
                   },
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.wood)),
               error: (e, _) => Center(child: Text('خطأ: $e')),
             ),
           ),
@@ -640,9 +707,13 @@ class OrderDetailDialog extends ConsumerWidget {
     final remaining = currentOrder.remaining;
 
     return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       title: Row(
         children: [
-          Expanded(child: Text('${currentOrder.customerName} - ${currentOrder.itemType}')),
+          Expanded(
+            child: Text('${currentOrder.customerName} - ${currentOrder.itemType}',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+          ),
           IconButton(
             tooltip: 'مشاركة على واتساب',
             icon: const Icon(Icons.share_rounded, color: AppColors.success),
@@ -651,17 +722,18 @@ class OrderDetailDialog extends ConsumerWidget {
         ],
       ),
       content: SizedBox(
-        width: 420,
+        width: 440,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (currentOrder.details.isNotEmpty) Text(currentOrder.details, style: TextStyle(color: Colors.grey.shade700)),
-              const SizedBox(height: 12),
+              if (currentOrder.details.isNotEmpty)
+                Text(currentOrder.details, style: GoogleFonts.cairo(color: Colors.grey.shade700, fontSize: 13)),
+              const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 value: currentOrder.status,
-                decoration: const InputDecoration(labelText: 'حالة الطلب'),
+                decoration: _fieldDecoration('حالة الطلب', Icons.flag_outlined),
                 items: orderStatuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (v) {
                   if (v != null) ref.read(repositoryProvider).updateOrderStatus(currentOrder.id, v);
@@ -669,23 +741,29 @@ class OrderDetailDialog extends ConsumerWidget {
               ),
               if (currentOrder.discountAmount > 0)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     'الاتفاق الأصلي: ${currentOrder.totalAmount.toStringAsFixed(0)} ج.م - خصم ${currentOrder.discountAmount.toStringAsFixed(0)} ج.م'
                     '${currentOrder.discountReason.isNotEmpty ? ' (${currentOrder.discountReason})' : ''}',
-                    style: const TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.cairo(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _MoneyBox(label: 'الإجمالي', value: currentOrder.effectiveTotal),
-                  _MoneyBox(label: 'المدفوع', value: currentOrder.totalPaid, color: AppColors.success),
-                  _MoneyBox(label: 'المتبقي', value: remaining, color: remaining > 0 ? AppColors.danger : AppColors.success),
-                ],
+              const SizedBox(height: 18),
+              _HoverCard(
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _MoneyBox(label: 'الإجمالي', value: currentOrder.effectiveTotal),
+                      _MoneyBox(label: 'المدفوع', value: currentOrder.totalPaid, color: AppColors.success),
+                      _MoneyBox(label: 'المتبقي', value: remaining, color: remaining > 0 ? AppColors.danger : AppColors.success),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   if (remaining > 0)
@@ -706,7 +784,7 @@ class OrderDetailDialog extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -717,28 +795,28 @@ class OrderDetailDialog extends ConsumerWidget {
                 ),
               ),
               if (remaining < 0) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Builder(builder: (context) {
                   final linkedDebt = (ref.watch(workshopDebtsProvider).value ?? [])
                       .firstWhereOrNull((d) => d.orderId == currentOrder.id);
                   final owed = linkedDebt?.remaining ?? remaining.abs();
                   if (owed <= 0) return const SizedBox.shrink();
-                  return InkWell(
+                  return _HoverCard(
+                    borderRadius: BorderRadius.circular(14),
                     onTap: () => ref.read(selectedTabProvider.notifier).state = 4,
-                    borderRadius: BorderRadius.circular(10),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: AppColors.wood.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)),
                       child: Row(
                         children: [
                           const Icon(Icons.storefront_rounded, color: AppColors.wood, size: 20),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'العميل دفع ${owed.toStringAsFixed(0)} ج.م زيادة عن الاتفاق الحالي - '
                               'مسجّلة كمديونية ورشة، سدّدها من هناك وهتتظبط تلقائي',
-                              style: const TextStyle(fontSize: 12, color: AppColors.wood, fontWeight: FontWeight.w600),
+                              style: GoogleFonts.cairo(fontSize: 12, color: AppColors.wood, fontWeight: FontWeight.w600),
                             ),
                           ),
                           const Icon(Icons.chevron_left_rounded, color: AppColors.wood, size: 18),
@@ -748,49 +826,58 @@ class OrderDetailDialog extends ConsumerWidget {
                   );
                 }),
               ],
-              const SizedBox(height: 16),
-              const Align(alignment: Alignment.centerRight, child: Text('صور الطلب', style: TextStyle(fontWeight: FontWeight.bold))),
-              const SizedBox(height: 8),
+              const SizedBox(height: 20),
+              _FieldLabel('صور الطلب'),
+              const SizedBox(height: 10),
               _OrderImagesSection(order: currentOrder),
-              const SizedBox(height: 16),
-              const Align(alignment: Alignment.centerRight, child: Text('سجل الدفعات', style: TextStyle(fontWeight: FontWeight.bold))),
-              const SizedBox(height: 8),
+              const SizedBox(height: 20),
+              _FieldLabel('سجل الدفعات'),
+              const SizedBox(height: 10),
               if (orderTransactions.isEmpty)
-                const Text('لا توجد دفعات مسجلة بعد', style: TextStyle(color: Colors.grey))
+                const _EmptyState(icon: Icons.receipt_outlined, text: 'لا توجد دفعات مسجلة بعد')
               else
-                ...orderTransactions.map((t) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(t.paymentType == 'deposit' ? Icons.savings_rounded : Icons.payments_rounded, color: AppColors.wood),
-                      title: Text('${t.amountPaid.toStringAsFixed(0)} ج.م'),
-                      subtitle: Text(
-                        '${t.paymentType == 'deposit' ? 'عربون' : 'قسط/دفعة'} - ${paymentMethods[t.paymentMethod] ?? t.paymentMethod}',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              final next = t.status == 'completed' ? 'pending' : 'completed';
-                              ref.read(repositoryProvider).updatePaymentStatus(t.id, next);
-                            },
-                            child: Chip(
-                              label: Text(paymentStatuses[t.status] ?? t.status, style: const TextStyle(fontSize: 11)),
-                              backgroundColor: t.status == 'completed'
-                                  ? AppColors.success.withValues(alpha: 0.15)
-                                  : AppColors.warning.withValues(alpha: 0.15),
-                              labelStyle: TextStyle(color: t.status == 'completed' ? AppColors.success : AppColors.warning),
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
+                ...orderTransactions.map((t) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _MiniRow(
+                        icon: t.paymentType == 'deposit' ? Icons.savings_rounded : Icons.payments_rounded,
+                        title: '${t.amountPaid.toStringAsFixed(0)} ج.م',
+                        subtitle: '${t.paymentType == 'deposit' ? 'عربون' : 'قسط/دفعة'} - ${paymentMethods[t.paymentMethod] ?? t.paymentMethod}',
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                final next = t.status == 'completed' ? 'pending' : 'completed';
+                                ref.read(repositoryProvider).updatePaymentStatus(t.id, next);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: t.status == 'completed'
+                                      ? AppColors.success.withValues(alpha: 0.15)
+                                      : AppColors.warning.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  paymentStatuses[t.status] ?? t.status,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: t.status == 'completed' ? AppColors.success : AppColors.warning,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(t.paymentDate)), style: const TextStyle(fontSize: 12)),
-                        ],
+                            const SizedBox(width: 8),
+                            Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(t.paymentDate)),
+                                style: GoogleFonts.cairo(fontSize: 11.5, color: Colors.grey.shade500)),
+                          ],
+                        ),
                       ),
                     )),
-              const SizedBox(height: 16),
-              const Align(alignment: Alignment.centerRight, child: Text('سجل المصروفات', style: TextStyle(fontWeight: FontWeight.bold))),
-              const SizedBox(height: 8),
+              const SizedBox(height: 20),
+              _FieldLabel('سجل المصروفات'),
+              const SizedBox(height: 10),
               _OrderExpensesList(orderId: order.id),
             ],
           ),
@@ -802,6 +889,7 @@ class OrderDetailDialog extends ConsumerWidget {
             final confirm = await showDialog<bool>(
               context: context,
               builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 title: const Text('حذف الطلب'),
                 content: const Text('هل أنت متأكد من حذف هذا الطلب؟'),
                 actions: [
@@ -833,7 +921,8 @@ class OrderDetailDialog extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('خصم على الطلب'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('خصم على الطلب', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
         content: SizedBox(
           width: 380,
           child: Form(
@@ -846,14 +935,14 @@ class OrderDetailDialog extends ConsumerWidget {
                   child: Text(
                     'الخصم مبلغ ثابت (مش نسبة) - بيتشال من الاتفاق الأصلي (${order.totalAmount.toStringAsFixed(0)} ج.م)، '
                     'ومش بيتحسب مديونية عليه ولا إيراد للورشة',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: GoogleFonts.cairo(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextFormField(
                   controller: amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'مبلغ الخصم (ج.م)'),
+                  decoration: _fieldDecoration('مبلغ الخصم (ج.م)', Icons.percent_rounded),
                   validator: (v) {
                     final amount = double.tryParse(v ?? '');
                     if (amount == null || amount < 0) return 'أدخل مبلغ صحيح';
@@ -861,8 +950,8 @@ class OrderDetailDialog extends ConsumerWidget {
                     return null;
                   },
                 ),
-                const SizedBox(height: 12),
-                TextFormField(controller: reasonController, decoration: const InputDecoration(labelText: 'السبب (اختياري)')),
+                const SizedBox(height: 14),
+                TextFormField(controller: reasonController, decoration: _fieldDecoration('السبب (اختياري)', Icons.notes_rounded)),
               ],
             ),
           ),
@@ -901,7 +990,8 @@ class OrderDetailDialog extends ConsumerWidget {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('تسجيل دفعة'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('تسجيل دفعة', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
           content: SizedBox(
             width: 360,
             child: Column(
@@ -910,19 +1000,19 @@ class OrderDetailDialog extends ConsumerWidget {
                 TextField(
                   controller: controller,
                   keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: 'المبلغ (المتبقي ${maxAmount.toStringAsFixed(0)} ج.م)'),
+                  decoration: _fieldDecoration('المبلغ (المتبقي ${maxAmount.toStringAsFixed(0)} ج.م)', Icons.payments_outlined),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   value: method,
-                  decoration: const InputDecoration(labelText: 'طريقة الاستلام'),
+                  decoration: _fieldDecoration('طريقة الاستلام', Icons.account_balance_wallet_outlined),
                   items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
                   onChanged: (v) => setDialogState(() => method = v!),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   value: status,
-                  decoration: const InputDecoration(labelText: 'حالة الدفعة'),
+                  decoration: _fieldDecoration('حالة الدفعة', Icons.flag_outlined),
                   items: paymentStatuses.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
                   onChanged: (v) => setDialogState(() => status = v!),
                 ),
@@ -978,7 +1068,8 @@ class OrderDetailDialog extends ConsumerWidget {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('تسجيل مصروف على الطلب'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('تسجيل مصروف على الطلب', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
           content: SizedBox(
             width: 380,
             child: Form(
@@ -993,33 +1084,32 @@ class OrderDetailDialog extends ConsumerWidget {
                       value: manualCategories[category] ?? category,
                       onChanged: (v) => setDialogState(() => category = manualCategories.entries.firstWhereOrNull((e) => e.value == v)?.key ?? v),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     if (category == 'wages')
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: TextFormField(controller: workerController, decoration: const InputDecoration(labelText: 'اسم الصنايعي')),
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: TextFormField(controller: workerController, decoration: _fieldDecoration('اسم الصنايعي', Icons.engineering_outlined)),
                       ),
                     TextFormField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'المبلغ (ج.م)'),
+                      decoration: _fieldDecoration('المبلغ (ج.م)', Icons.payments_outlined),
                       validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل مبلغ صحيح' : null,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(controller: descriptionController, maxLines: 2, decoration: const InputDecoration(labelText: 'الوصف (اختياري)')),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                        controller: descriptionController, maxLines: 2, decoration: _fieldDecoration('الوصف (اختياري)', Icons.notes_rounded)),
+                    const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
                       value: paymentMethod,
-                      decoration: const InputDecoration(labelText: 'اتخصم من (مصدر الدفع)'),
+                      decoration: _fieldDecoration('اتخصم من (مصدر الدفع)', Icons.account_balance_wallet_outlined),
                       items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
                       onChanged: (v) => setDialogState(() => paymentMethod = v ?? paymentMethod),
                     ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('التاريخ'),
-                      subtitle: Text('${date.year}/${date.month}/${date.day}'),
-                      trailing: const Icon(Icons.calendar_month_rounded),
+                    const SizedBox(height: 14),
+                    _DatePickerRow(
+                      label: 'التاريخ',
+                      date: date,
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -1111,6 +1201,7 @@ class _OrderImagesSectionState extends ConsumerState<_OrderImagesSection> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('حذف الصورة'),
         content: const Text('هل أنت متأكد من حذف هذه الصورة من الطلب؟'),
         actions: [
@@ -1136,25 +1227,15 @@ class _OrderImagesSectionState extends ConsumerState<_OrderImagesSection> {
     final images = _parseOrderImages(currentOrder.imagesJson);
 
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: [
         ...images.map((url) => _ImageThumb(
               image: Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_rounded)),
               onTap: () => _showFullImage(context, url),
               onRemove: () => _removeImage(url),
             )),
-        InkWell(
-          onTap: _isUploading ? null : _pickAndUpload,
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(8)),
-            child: _isUploading
-                ? const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.add_photo_alternate_rounded, color: Colors.grey),
-          ),
-        ),
+        _AddImageTile(onTap: _pickAndUpload, loading: _isUploading),
       ],
     );
   }
@@ -1169,27 +1250,27 @@ class _OrderExpensesList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final shares = ref.watch(orderExpensesProvider(orderId));
     if (shares.isEmpty) {
-      return const Text('لا توجد مصروفات مسجلة على الطلب ده بعد', style: TextStyle(color: Colors.grey));
+      return const _EmptyState(icon: Icons.receipt_long_outlined, text: 'لا توجد مصروفات مسجلة على الطلب ده بعد');
     }
     final sorted = [...shares]..sort((a, b) => b.expense.date.compareTo(a.expense.date));
     return Column(
       children: sorted
-          .map((s) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.receipt_long_rounded, color: AppColors.warning),
-                title: Text(
-                  s.totalOrdersCount > 1
+          .map((s) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _MiniRow(
+                  icon: Icons.receipt_long_rounded,
+                  iconColor: AppColors.warning,
+                  title: s.totalOrdersCount > 1
                       ? '${s.shareAmount.toStringAsFixed(0)} ج.م (نصيبك من ${s.expense.amount.toStringAsFixed(0)} ج.م) - ${expenseCategories[s.expense.category] ?? s.expense.category}'
                       : '${s.shareAmount.toStringAsFixed(0)} ج.م - ${expenseCategories[s.expense.category] ?? s.expense.category}',
-                ),
-                subtitle: Text(
-                  [
+                  subtitle: [
                     if (s.expense.description.isNotEmpty) s.expense.description,
                     if (s.expense.workerName != null) 'الصنايعي: ${s.expense.workerName}',
                     if (s.totalOrdersCount > 1) 'مقسّم على ${s.totalOrdersCount} طلبات',
                   ].join(' - '),
+                  trailing: Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(s.expense.date)),
+                      style: GoogleFonts.cairo(fontSize: 11.5, color: Colors.grey.shade500)),
                 ),
-                trailing: Text(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(s.expense.date))),
               ))
           .toList(),
     );
@@ -1206,10 +1287,304 @@ class _MoneyBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-        const SizedBox(height: 4),
-        Text(value.toStringAsFixed(0), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+        Text(label, style: GoogleFonts.cairo(color: Colors.grey.shade500, fontSize: 12)),
+        const SizedBox(height: 5),
+        Text(value.toStringAsFixed(0), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16, color: color ?? const Color(0xFF2A2320))),
       ],
+    );
+  }
+}
+
+// ==================== الويدجت المشتركة (نفس أسلوب الداشبورد) ====================
+
+InputDecoration _fieldDecoration(String label, [IconData? icon]) {
+  return InputDecoration(
+    labelText: label,
+    prefixIcon: icon != null ? Icon(icon, size: 20, color: AppColors.wood) : null,
+    filled: true,
+    fillColor: Colors.grey.shade50,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+    focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: AppColors.wood, width: 1.5)),
+  );
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Text(text, style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+    );
+  }
+}
+
+class _DatePickerRow extends StatelessWidget {
+  final String label;
+  final DateTime date;
+  final VoidCallback onTap;
+  const _DatePickerRow({required this.label, required this.date, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_month_rounded, color: AppColors.wood, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500)),
+                  Text('${date.year}/${date.month}/${date.day}', style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_left_rounded, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color? color;
+  final VoidCallback onTap;
+  const _FilterChip({required this.label, required this.selected, required this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? AppColors.wood;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? c : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? c : Colors.grey.shade300),
+        ),
+        child: Text(label,
+            style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? Colors.white : Colors.grey.shade700)),
+      ),
+    );
+  }
+}
+
+class _MiniRow extends StatelessWidget {
+  final IconData icon;
+  final Color? iconColor;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  const _MiniRow({required this.icon, required this.title, required this.subtitle, this.iconColor, this.trailing, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return _HoverCard(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: (iconColor ?? AppColors.wood).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, size: 18, color: iconColor ?? AppColors.wood),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF2A2320))),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.cairo(fontSize: 11.5, color: Colors.grey.shade500)),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) trailing!,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PageHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String? badge;
+  final String actionLabel;
+  final IconData actionIcon;
+  final VoidCallback onAction;
+  const _PageHeader({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.actionLabel,
+    required this.actionIcon,
+    required this.onAction,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final narrow = constraints.maxWidth < 620;
+      final title0 = Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
+            child: Icon(icon, color: AppColors.wood, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+                  if (badge != null) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+                      child: Text(badge!, style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.wood)),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(subtitle, style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600)),
+            ],
+          ),
+        ],
+      );
+
+      final action = _HoverCard(
+        onTap: onAction,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.wood, AppColors.woodDark]), borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(actionIcon, size: 18, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(actionLabel, style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+            ],
+          ),
+        ),
+      );
+
+      if (narrow) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title0, const SizedBox(height: 16), action]);
+      }
+      return Row(children: [Expanded(child: title0), action]);
+    });
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _EmptyState({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 42, color: Colors.grey.shade300),
+          const SizedBox(height: 12),
+          Text(text, style: GoogleFonts.cairo(fontSize: 13.5, color: Colors.grey.shade400)),
+        ],
+      ),
+    );
+  }
+}
+
+/// كارت بأثر hover ناعم (رفعة خفيفة + ظل أكبر) - نفس فكرة اللي في
+/// dashboard_screen.dart بالظبط، بس متكرر هنا لأن الويدجتس الخاصة
+/// (بادئة _) ملهاش مشاركة بين الملفات في دارت
+class _HoverCard extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final BorderRadius borderRadius;
+  const _HoverCard({required this.child, this.onTap, this.borderRadius = const BorderRadius.all(Radius.circular(18))});
+
+  @override
+  State<_HoverCard> createState() => _HoverCardState();
+}
+
+class _HoverCardState extends State<_HoverCard> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, _hovering ? -3 : 0, 0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: widget.borderRadius,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.wood.withValues(alpha: _hovering ? 0.14 : 0.06),
+              blurRadius: _hovering ? 26 : 16,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: widget.borderRadius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(onTap: widget.onTap, borderRadius: widget.borderRadius, child: widget.child),
+        ),
+      ),
     );
   }
 }
