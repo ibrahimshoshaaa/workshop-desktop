@@ -214,7 +214,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                             child: const Icon(Icons.notifications_active_rounded, color: AppColors.warning, size: 20),
                           ),
                           const SizedBox(width: 12),
-                          Text('النهاردة يوم القبض الأسبوعي!', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 14)),
+                          Text('فيه عمال مستحقين لسه ما اتأكدش دفعهم', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 14)),
                         ],
                       ),
                       const SizedBox(height: 12),
