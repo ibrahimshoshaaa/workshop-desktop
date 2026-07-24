@@ -761,7 +761,7 @@ class _DueWorkersBanner extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('النهاردة يوم القبض الأسبوعي',
+                  Text('فيه عمال مستحقين لسه ما اتأكدش دفعهم',
                       style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 14, color: const Color(0xFF2A2320))),
                   const SizedBox(height: 3),
                   Text('مستني تأكيد الدفع: $names',
