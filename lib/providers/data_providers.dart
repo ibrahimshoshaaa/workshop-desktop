@@ -86,14 +86,16 @@ bool isWorkerPaidForCurrentPeriod(Worker worker, List<WorkerPayment> payments, D
   return payments.any((p) => p.workerId == worker.id && DateTime.fromMillisecondsSinceEpoch(p.periodStart).isAtSameMomentAs(anchor));
 }
 
-/// العمال الأسبوعيين اللي موعد قبضهم النهاردة بالظبط ولسه ما اتأكدش
-/// دفعهم - ده اللي بيبني عليه بانر "موعد القبض" في صفحة العمال والرئيسية
+/// كل العمال (يومي/أسبوعي/شهري) اللي معاد قبضهم وصل (أو فات) ولسه ما
+/// اتأكدش دفعهم للفترة الحالية - ده اللي بيبني عليه بانر "موعد القبض" في
+/// صفحة العمال والرئيسية. التنبيه ده بيفضل ظاهر لحد ما يتسجل القبض
+/// فعليًا (مش بيختفي لوحده في اليوم اللي بعده حتى لو فات معاد
+/// الاستحقاق)، عشان محدش ينسى يدفع لعامل اتأخر معاده
 final workersDueTodayProvider = Provider<List<Worker>>((ref) {
   final workers = ref.watch(workersProvider).value ?? [];
   final payments = ref.watch(workerPaymentsProvider).value ?? [];
   final now = DateTime.now();
   return workers.where((w) {
-    if (w.salaryType != 'weekly' || w.payWeekday != now.weekday) return false;
     return !isWorkerPaidForCurrentPeriod(w, payments, now);
   }).toList();
 });
