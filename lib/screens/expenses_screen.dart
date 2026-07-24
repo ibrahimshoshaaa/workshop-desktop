@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:collection/collection.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
@@ -44,20 +45,21 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               ? orders
               : orders.where((o) => normalizeForSearch(o.customerName).contains(q) || normalizeForSearch(o.itemType).contains(q)).toList();
           return AlertDialog(
-            title: const Text('اختار الطلبات'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('اختار الطلبات', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
             content: SizedBox(
               width: 420,
               height: 440,
               child: Column(
                 children: [
                   TextField(
-                    decoration: const InputDecoration(hintText: 'ابحث بالعميل أو الصنف...', prefixIcon: Icon(Icons.search)),
+                    decoration: _fieldDecoration('ابحث بالعميل أو الصنف...', Icons.search_rounded),
                     onChanged: (v) => setPickerState(() => query = v),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Expanded(
                     child: filtered.isEmpty
-                        ? const Center(child: Text('لا توجد نتائج', style: TextStyle(color: Colors.grey)))
+                        ? const _EmptyState(icon: Icons.search_off_rounded, text: 'لا توجد نتائج')
                         : ListView.builder(
                             itemCount: filtered.length,
                             itemBuilder: (context, index) {
@@ -65,8 +67,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               final checked = selectedOrderIds.contains(o.id);
                               return CheckboxListTile(
                                 value: checked,
-                                title: Text('${o.customerName} - ${o.itemType}'),
-                                subtitle: Text('${o.status} | المتبقي: ${o.remaining.toStringAsFixed(0)} ج.م'),
+                                activeColor: AppColors.wood,
+                                title: Text('${o.customerName} - ${o.itemType}', style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                                subtitle: Text('${o.status} | المتبقي: ${o.remaining.toStringAsFixed(0)} ج.م', style: GoogleFonts.cairo(fontSize: 11.5)),
                                 onChanged: (v) => setPickerState(() {
                                   if (v == true) {
                                     selectedOrderIds.add(o.id);
@@ -116,9 +119,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(expense == null ? 'إضافة مصروف' : 'تعديل المصروف'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(expense == null ? 'إضافة مصروف' : 'تعديل المصروف', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
           content: SizedBox(
-            width: 400,
+            width: 420,
             child: Form(
               key: formKey,
               child: SingleChildScrollView(
@@ -133,62 +137,87 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                         () => category = _categories.entries.firstWhereOrNull((e) => e.value == v)?.key ?? v,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     if (category == 'wages')
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: TextFormField(controller: workerController, decoration: const InputDecoration(labelText: 'اسم الصنايعي')),
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: TextFormField(controller: workerController, decoration: _fieldDecoration('اسم الصنايعي', Icons.engineering_outlined)),
                       ),
                     TextFormField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'المبلغ (ج.م)'),
+                      decoration: _fieldDecoration('المبلغ (ج.م)', Icons.payments_outlined),
                       validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل مبلغ صحيح' : null,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(controller: descriptionController, maxLines: 2, decoration: const InputDecoration(labelText: 'الوصف (اختياري)')),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                        controller: descriptionController, maxLines: 2, decoration: _fieldDecoration('الوصف (اختياري)', Icons.notes_rounded)),
+                    const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
                       value: paymentMethod,
-                      decoration: const InputDecoration(labelText: 'اتخصم من (مصدر الدفع)'),
+                      decoration: _fieldDecoration('اتخصم من (مصدر الدفع)', Icons.account_balance_wallet_outlined),
                       items: paymentMethods.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
                       validator: (v) => v == null ? 'اختر مصدر خروج المبلغ' : null,
                       onChanged: (v) => setDialogState(() => paymentMethod = v),
                     ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('تحميل المصروف على طلبات (اختياري)'),
-                      subtitle: Text(
-                        selectedOrderIds.isEmpty
-                            ? 'مصروف عام - مش مقسّم على أي طلب'
-                            : '${selectedOrderIds.length} طلب مختار - هيتقسم المبلغ عليهم بالتساوي',
-                        style: TextStyle(color: selectedOrderIds.isEmpty ? Colors.grey : AppColors.navy),
-                      ),
-                      trailing: const Icon(Icons.checklist_rounded),
+                    const SizedBox(height: 14),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(12),
                       onTap: () async {
                         await _pickOrders(context, orders, selectedOrderIds);
                         setDialogState(() {});
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.checklist_rounded, color: AppColors.wood, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('تحميل المصروف على طلبات (اختياري)', style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500)),
+                                  Text(
+                                    selectedOrderIds.isEmpty
+                                        ? 'مصروف عام - مش مقسّم على أي طلب'
+                                        : '${selectedOrderIds.length} طلب مختار - هيتقسم المبلغ عليهم بالتساوي',
+                                    style: GoogleFonts.cairo(
+                                        fontSize: 13, fontWeight: FontWeight.w600, color: selectedOrderIds.isEmpty ? Colors.grey.shade600 : AppColors.navy),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_left_rounded, color: Colors.grey.shade400),
+                          ],
+                        ),
+                      ),
                     ),
                     if (selectedOrderIds.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: selectedOrderIds.map((id) {
-                          final o = orders.firstWhereOrNull((o) => o.id == id);
-                          return Chip(
-                            label: Text(o != null ? '${o.customerName} - ${o.itemType}' : 'طلب محذوف'),
-                            onDeleted: () => setDialogState(() => selectedOrderIds.remove(id)),
-                          );
-                        }).toList(),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: selectedOrderIds.map((id) {
+                            final o = orders.firstWhereOrNull((o) => o.id == id);
+                            return Chip(
+                              label: Text(o != null ? '${o.customerName} - ${o.itemType}' : 'طلب محذوف', style: GoogleFonts.cairo(fontSize: 11.5)),
+                              onDeleted: () => setDialogState(() => selectedOrderIds.remove(id)),
+                              backgroundColor: AppColors.wood.withValues(alpha: 0.08),
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('التاريخ'),
-                      subtitle: Text('${date.year}/${date.month}/${date.day}'),
-                      trailing: const Icon(Icons.calendar_month_rounded),
+                    const SizedBox(height: 14),
+                    _DatePickerRow(
+                      label: 'التاريخ',
+                      date: date,
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -211,6 +240,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (context) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       title: const Text('حذف المصروف'),
                       content: const Text('هل أنت متأكد من حذف هذا المصروف؟'),
                       actions: [
@@ -269,7 +299,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               child: const Text('حفظ'),
             ),
           ],
-
         ),
       ),
     );
@@ -279,35 +308,51 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   Widget build(BuildContext context) {
     final expensesAsync = ref.watch(expensesProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('المصروفات'),
-        backgroundColor: AppColors.wood,
-        foregroundColor: Colors.white,
-        actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => _showExpenseDialog(context, ref))],
-      ),
-      body: Column(
+    return Container(
+      color: const Color(0xFFFAF6F0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              children: [
-                ChoiceChip(label: const Text('الكل'), selected: _categoryFilter == null, onSelected: (_) => setState(() => _categoryFilter = null)),
-                const SizedBox(width: 8),
-                ...expenseCategories.entries.map((e) => Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ChoiceChip(label: Text(e.value), selected: _categoryFilter == e.key, onSelected: (_) => setState(() => _categoryFilter = e.key)),
-                    )),
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 28, 28, 0),
+            child: _PageHeader(
+              title: 'المصروفات',
+              subtitle: 'كل المصروفات المسجّلة على الورشة',
+              icon: Icons.receipt_long_rounded,
+              badge: expensesAsync.value != null ? '${expensesAsync.value!.length} مصروف' : null,
+              actionLabel: 'إضافة مصروف',
+              actionIcon: Icons.add_rounded,
+              onAction: () => _showExpenseDialog(context, ref),
             ),
           ),
-          AppSearchBar(
-            controller: _searchController,
-            hintText: 'ابحث بالوصف أو اسم الصنايعي...',
-            onChanged: (v) => setState(() => _query = v),
-            onClear: () => setState(() => _query = ''),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+            child: SizedBox(
+              height: 38,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _FilterChip(label: 'الكل', selected: _categoryFilter == null, onTap: () => setState(() => _categoryFilter = null)),
+                  const SizedBox(width: 8),
+                  ...expenseCategories.entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: _FilterChip(label: e.value, selected: _categoryFilter == e.key, onTap: () => setState(() => _categoryFilter = e.key)),
+                      )),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 14, 28, 0),
+            child: _HoverCard(
+              borderRadius: BorderRadius.circular(16),
+              child: AppSearchBar(
+                controller: _searchController,
+                hintText: 'ابحث بالوصف أو اسم الصنايعي...',
+                onChanged: (v) => setState(() => _query = v),
+                onClear: () => setState(() => _query = ''),
+              ),
+            ),
           ),
           Expanded(
             child: expensesAsync.when(
@@ -321,9 +366,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                         normalizeForSearch(expenseCategories[e.category] ?? e.category).contains(q);
                   }).toList();
                 }
-                if (filtered.isEmpty) return const Center(child: Text('لا توجد مصروفات مسجلة', style: TextStyle(color: Colors.grey)));
+                if (filtered.isEmpty) {
+                  return const _EmptyState(icon: Icons.receipt_long_outlined, text: 'لا توجد مصروفات مسجلة');
+                }
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final e = filtered[index];
@@ -333,27 +380,287 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                         : allocs.length == 1
                             ? 'محمّل على: ${allocs.first.customerName}'
                             : 'مقسّم على ${allocs.length} طلبات';
-                    return Card(
-                      child: ListTile(
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _HoverCard(
                         onTap: () => _showExpenseDialog(context, ref, expense: e),
-                        title: Text(e.description.isNotEmpty ? e.description : (expenseCategories[e.category] ?? e.category)),
-                        subtitle: Text(
-                          '${expenseCategories[e.category] ?? e.category}${e.workerName != null ? ' - ${e.workerName}' : ''}'
-                          '${ordersLabel != null ? ' | $ordersLabel' : ''}'
-                          ' | ${paymentMethods[e.paymentMethod] ?? e.paymentMethod}'
-                          ' | ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))}',
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), shape: BoxShape.circle),
+                                child: const Icon(Icons.receipt_long_rounded, color: AppColors.warning, size: 20),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      e.description.isNotEmpty ? e.description : (expenseCategories[e.category] ?? e.category),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320)),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${expenseCategories[e.category] ?? e.category}${e.workerName != null ? ' - ${e.workerName}' : ''}'
+                                      '${ordersLabel != null ? ' - $ordersLabel' : ''}'
+                                      ' - ${paymentMethods[e.paymentMethod] ?? e.paymentMethod}'
+                                      ' - ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.cairo(fontSize: 11.5, color: Colors.grey.shade500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text('${e.amount.toStringAsFixed(0)} ج.م',
+                                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800, color: AppColors.danger, fontSize: 14)),
+                              const SizedBox(width: 4),
+                              Icon(Icons.chevron_left_rounded, color: Colors.grey.shade300),
+                            ],
+                          ),
                         ),
-                        trailing: Text('${e.amount.toStringAsFixed(0)} ج.م', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.danger)),
                       ),
                     );
                   },
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.wood)),
               error: (e, _) => Center(child: Text('خطأ: $e')),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+InputDecoration _fieldDecoration(String label, [IconData? icon]) {
+  return InputDecoration(
+    labelText: label,
+    prefixIcon: icon != null ? Icon(icon, size: 20, color: AppColors.wood) : null,
+    filled: true,
+    fillColor: Colors.grey.shade50,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+    focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: AppColors.wood, width: 1.5)),
+  );
+}
+
+class _DatePickerRow extends StatelessWidget {
+  final String label;
+  final DateTime date;
+  final VoidCallback onTap;
+  const _DatePickerRow({required this.label, required this.date, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_month_rounded, color: AppColors.wood, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500)),
+                  Text('${date.year}/${date.month}/${date.day}', style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_left_rounded, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _FilterChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.wood : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? AppColors.wood : Colors.grey.shade300),
+        ),
+        child: Text(label,
+            style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? Colors.white : Colors.grey.shade700)),
+      ),
+    );
+  }
+}
+
+class _PageHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String? badge;
+  final String actionLabel;
+  final IconData actionIcon;
+  final VoidCallback onAction;
+  const _PageHeader({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.actionLabel,
+    required this.actionIcon,
+    required this.onAction,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final narrow = constraints.maxWidth < 620;
+      final title0 = Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
+            child: Icon(icon, color: AppColors.wood, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+                  if (badge != null) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+                      child: Text(badge!, style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.wood)),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(subtitle, style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600)),
+            ],
+          ),
+        ],
+      );
+
+      final action = _HoverCard(
+        onTap: onAction,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.wood, AppColors.woodDark]), borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(actionIcon, size: 18, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(actionLabel, style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+            ],
+          ),
+        ),
+      );
+
+      if (narrow) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title0, const SizedBox(height: 16), action]);
+      }
+      return Row(children: [Expanded(child: title0), action]);
+    });
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _EmptyState({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 48, color: Colors.grey.shade300),
+          const SizedBox(height: 14),
+          Text(text, style: GoogleFonts.cairo(fontSize: 14.5, color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+}
+
+/// كارت بأثر hover ناعم (رفعة خفيفة + ظل أكبر) - نفس فكرة اللي في
+/// dashboard_screen.dart بالظبط، بس متكرر هنا لأن الويدجتس الخاصة
+/// (بادئة _) ملهاش مشاركة بين الملفات في دارت
+class _HoverCard extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final BorderRadius borderRadius;
+  const _HoverCard({required this.child, this.onTap, this.borderRadius = const BorderRadius.all(Radius.circular(18))});
+
+  @override
+  State<_HoverCard> createState() => _HoverCardState();
+}
+
+class _HoverCardState extends State<_HoverCard> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, _hovering ? -3 : 0, 0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: widget.borderRadius,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.wood.withValues(alpha: _hovering ? 0.14 : 0.06),
+              blurRadius: _hovering ? 26 : 16,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: widget.borderRadius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(onTap: widget.onTap, borderRadius: widget.borderRadius, child: widget.child),
+        ),
       ),
     );
   }
