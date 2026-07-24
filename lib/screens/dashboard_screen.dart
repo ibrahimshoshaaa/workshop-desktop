@@ -10,6 +10,7 @@ import '../data/database.dart';
 import '../providers/data_providers.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/sync_provider.dart';
+import 'customers_screen.dart' show CustomerOrdersDialog;
 import 'orders_screen.dart';
 import 'revenues_detail_screen.dart';
 
@@ -173,7 +174,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(context),
+            _buildHeader(
+              context,
+              dueWorkersCount: dueWorkers.length,
+              debtorOrdersCount: debtorOrders.length,
+              workshopDebtsCount: outstandingWorkshopDebts.length,
+              onWorkersTap: () => ref.read(selectedTabProvider.notifier).state = 5,
+              onDebtorsTap: () => ref.read(selectedTabProvider.notifier).state = 3,
+              onWorkshopDebtsTap: () => ref.read(selectedTabProvider.notifier).state = 4,
+            ),
             const SizedBox(height: 28),
             if (dueWorkers.isNotEmpty) ...[
               _DueWorkersBanner(
@@ -182,86 +191,73 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               const SizedBox(height: 20),
             ],
-            Wrap(
-              spacing: 18,
-              runSpacing: 18,
+            Row(
               children: [
-                _KpiCard(
-                  title: 'إجمالي الإيرادات',
-                  value: formatter.format(stats.totalRevenue),
-                  caption: 'من كل الطلبات',
-                  icon: Icons.trending_up_rounded,
-                  color: AppColors.success,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RevenuesDetailScreen())),
-                ),
-                _KpiCard(
-                  title: 'المديونيات المستحقة',
-                  value: formatter.format(stats.totalDebts),
-                  caption: 'مستحقة على العملاء',
-                  icon: Icons.warning_amber_rounded,
-                  color: AppColors.danger,
-                  onTap: () => ref.read(selectedTabProvider.notifier).state = 3,
-                ),
-                _KpiCard(
-                  title: 'إجمالي المصروفات',
-                  value: formatter.format(stats.totalExpenses),
-                  caption: 'كل المصروفات المسجّلة',
-                  icon: Icons.receipt_long_rounded,
-                  color: AppColors.warning,
-                  onTap: () => ref.read(selectedTabProvider.notifier).state = 6,
-                ),
-                _KpiCard(
-                  title: 'المتاح نقدي (كاش)',
-                  value: formatter.format(stats.cashAvailable),
-                  caption: 'نقد متاح الآن',
-                  icon: Icons.payments_rounded,
-                  color: stats.cashAvailable >= 0 ? AppColors.success : AppColors.danger,
-                ),
-                _KpiCard(
-                  title: 'المتاح إنستاباي',
-                  value: formatter.format(stats.instapayAvailable),
-                  caption: 'اضغط لسحب كاش',
-                  icon: Icons.phone_iphone_rounded,
-                  color: stats.instapayAvailable >= 0 ? AppColors.navy : AppColors.danger,
-                  onTap: () => _showCashTransferDialog(context, ref, stats.instapayAvailable),
-                ),
-                _KpiCard(
-                  title: 'مديونيات الورشة (علينا)',
-                  value: formatter.format(stats.totalWorkshopDebts),
-                  caption: 'مستحقة على الورشة',
-                  icon: Icons.store_rounded,
-                  color: AppColors.danger,
-                  onTap: () => ref.read(selectedTabProvider.notifier).state = 4,
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _ResponsiveRow(
-              breakpoint: 980,
-              spacing: 20,
-              flexes: const [3, 2],
-              children: [
-                _SectionCard(
-                  title: 'نظرة عامة على الأداء',
-                  icon: Icons.show_chart_rounded,
-                  trailing: _MonthsRangeDropdown(
-                    value: _monthsRange,
-                    onChanged: (v) => setState(() => _monthsRange = v),
+                Expanded(
+                  child: _KpiCard(
+                    title: 'إجمالي الإيرادات',
+                    value: formatter.format(stats.totalRevenue),
+                    icon: Icons.trending_up_rounded,
+                    color: AppColors.success,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RevenuesDetailScreen())),
                   ),
-                  child: _RevenueExpenseChart(points: monthlySeries),
                 ),
-                _SectionCard(
-                  title: 'توزيع المصروفات',
-                  icon: Icons.donut_large_rounded,
-                  child: _ExpenseDonut(slices: expenseSlices, total: stats.totalExpenses, formatter: formatter),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _KpiCard(
+                    title: 'المديونيات المستحقة',
+                    value: formatter.format(stats.totalDebts),
+                    icon: Icons.warning_amber_rounded,
+                    color: AppColors.danger,
+                    onTap: () => ref.read(selectedTabProvider.notifier).state = 3,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _KpiCard(
+                    title: 'إجمالي المصروفات',
+                    value: formatter.format(stats.totalExpenses),
+                    icon: Icons.receipt_long_rounded,
+                    color: AppColors.warning,
+                    onTap: () => ref.read(selectedTabProvider.notifier).state = 6,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _KpiCard(
+                    title: 'المتاح نقدي (كاش)',
+                    value: formatter.format(stats.cashAvailable),
+                    icon: Icons.payments_rounded,
+                    color: stats.cashAvailable >= 0 ? AppColors.success : AppColors.danger,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _KpiCard(
+                    title: 'المتاح إنستاباي',
+                    value: formatter.format(stats.instapayAvailable),
+                    icon: Icons.phone_iphone_rounded,
+                    color: stats.instapayAvailable >= 0 ? AppColors.navy : AppColors.danger,
+                    onTap: () => _showCashTransferDialog(context, ref, stats.instapayAvailable),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _KpiCard(
+                    title: 'مديونيات الورشة (علينا)',
+                    value: formatter.format(stats.totalWorkshopDebts),
+                    icon: Icons.store_rounded,
+                    color: AppColors.danger,
+                    onTap: () => ref.read(selectedTabProvider.notifier).state = 4,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 20),
             _ResponsiveRow(
-              breakpoint: 980,
+              breakpoint: 900,
               spacing: 20,
-              flexes: const [1, 1, 1],
+              flexes: const [1, 1],
               children: [
                 _SectionCard(
                   title: 'التسليمات القادمة',
@@ -281,6 +277,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               leadingColor: daysLeft == 0 ? AppColors.danger : AppColors.navy,
                               title: '${o.customerName} - ${o.itemType}',
                               subtitle: '${DateFormat('d/M/yyyy').format(delivery)} • $label',
+                              trailingAction: IconButton(
+                                tooltip: 'مشاركة على واتساب',
+                                icon: const Icon(Icons.share_rounded, color: AppColors.success, size: 18),
+                                onPressed: () => showShareToWorkerDialog(context, ref, o),
+                              ),
                               onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
                             );
                           }).toList(),
@@ -304,17 +305,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           }).toList(),
                         ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _ResponsiveRow(
+              breakpoint: 980,
+              spacing: 20,
+              flexes: const [3, 2],
+              children: [
                 _SectionCard(
-                  title: 'التنبيهات',
-                  icon: Icons.notifications_active_rounded,
-                  child: _NotificationsList(
-                    dueWorkersCount: dueWorkers.length,
-                    debtorOrdersCount: debtorOrders.length,
-                    workshopDebtsCount: outstandingWorkshopDebts.length,
-                    onWorkersTap: () => ref.read(selectedTabProvider.notifier).state = 5,
-                    onDebtorsTap: () => ref.read(selectedTabProvider.notifier).state = 3,
-                    onWorkshopDebtsTap: () => ref.read(selectedTabProvider.notifier).state = 4,
+                  title: 'نظرة عامة على الأداء',
+                  icon: Icons.show_chart_rounded,
+                  trailing: _MonthsRangeDropdown(
+                    value: _monthsRange,
+                    onChanged: (v) => setState(() => _monthsRange = v),
                   ),
+                  child: _RevenueExpenseChart(points: monthlySeries),
+                ),
+                _SectionCard(
+                  title: 'توزيع المصروفات',
+                  icon: Icons.donut_large_rounded,
+                  child: _ExpenseDonut(slices: expenseSlices, total: stats.totalExpenses, formatter: formatter),
                 ),
               ],
             ),
@@ -336,7 +347,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               leadingColor: AppColors.wood,
                               title: c.name,
                               subtitle: c.phone,
-                              onTap: () => ref.read(selectedTabProvider.notifier).state = 1,
+                              onTap: () => showDialog(context: context, builder: (context) => CustomerOrdersDialog(customer: c)),
                             );
                           }).toList(),
                         ),
@@ -359,7 +370,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(
+    BuildContext context, {
+    required int dueWorkersCount,
+    required int debtorOrdersCount,
+    required int workshopDebtsCount,
+    required VoidCallback onWorkersTap,
+    required VoidCallback onDebtorsTap,
+    required VoidCallback onWorkshopDebtsTap,
+  }) {
     final dateStr = DateFormat('EEEE، d MMMM yyyy', 'ar_EG').format(DateTime.now());
     return LayoutBuilder(builder: (context, constraints) {
       final narrow = constraints.maxWidth < 720;
@@ -378,6 +397,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         children: [
           Text(dateStr, style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.wood)),
           const SizedBox(width: 14),
+          _NotificationBell(
+            dueWorkersCount: dueWorkersCount,
+            debtorOrdersCount: debtorOrdersCount,
+            workshopDebtsCount: workshopDebtsCount,
+            onWorkersTap: onWorkersTap,
+            onDebtorsTap: onDebtorsTap,
+            onWorkshopDebtsTap: onWorkshopDebtsTap,
+          ),
+          const SizedBox(width: 10),
           _HoverCard(
             borderRadius: BorderRadius.circular(14),
             onTap: _isSyncing ? null : _syncNow,
@@ -577,6 +605,7 @@ class _ListRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final String? trailingText;
+  final Widget? trailingAction;
   final VoidCallback? onTap;
   const _ListRow({
     this.leadingIcon,
@@ -585,6 +614,7 @@ class _ListRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.trailingText,
+    this.trailingAction,
     this.onTap,
   });
 
@@ -627,6 +657,7 @@ class _ListRow extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(trailingText!, style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.success)),
               ],
+              if (trailingAction != null) trailingAction!,
               if (onTap != null) ...[
                 const SizedBox(width: 4),
                 Icon(Icons.chevron_left_rounded, color: Colors.grey.shade300, size: 18),
@@ -644,14 +675,12 @@ class _ListRow extends StatelessWidget {
 class _KpiCard extends StatelessWidget {
   final String title;
   final String value;
-  final String caption;
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
   const _KpiCard({
     required this.title,
     required this.value,
-    required this.caption,
     required this.icon,
     required this.color,
     this.onTap,
@@ -659,41 +688,44 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 268,
-      child: _HoverCard(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [color.withValues(alpha: 0.20), color.withValues(alpha: 0.08)],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
+    return _HoverCard(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [color.withValues(alpha: 0.20), color.withValues(alpha: 0.08)],
                     ),
-                    child: Icon(icon, color: color, size: 22),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const Spacer(),
-                  if (onTap != null) Icon(Icons.north_east_rounded, size: 14, color: Colors.grey.shade300),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(value, style: GoogleFonts.cairo(fontSize: 21, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
-              const SizedBox(height: 5),
-              Text(title, style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.grey.shade700)),
-              const SizedBox(height: 2),
-              Text(caption, style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade400)),
-            ],
-          ),
+                  child: Icon(icon, color: color, size: 16),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.cairo(fontSize: 16.5, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+          ],
         ),
       ),
     );
@@ -1013,6 +1045,89 @@ class _DonutChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DonutChartPainter oldDelegate) => oldDelegate.slices != slices || oldDelegate.total != total;
+}
+
+/// جرس التنبيهات - أيقونة فوق جنب التاريخ بدل ما كانت بوكس لوحدها تحت.
+/// الرقم على الجرس بيعدّ فئات التنبيهات النشطة (قبض عمال / مديونيات
+/// عملاء / مديونيات ورشة) - مش عدد كل عنصر لوحده، عشان الرقم يفضل صغير
+/// ومفهوم بدل ما يبقى رقم كبير مربك
+class _NotificationBell extends StatelessWidget {
+  final int dueWorkersCount;
+  final int debtorOrdersCount;
+  final int workshopDebtsCount;
+  final VoidCallback onWorkersTap;
+  final VoidCallback onDebtorsTap;
+  final VoidCallback onWorkshopDebtsTap;
+  const _NotificationBell({
+    required this.dueWorkersCount,
+    required this.debtorOrdersCount,
+    required this.workshopDebtsCount,
+    required this.onWorkersTap,
+    required this.onDebtorsTap,
+    required this.onWorkshopDebtsTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeCategories =
+        (dueWorkersCount > 0 ? 1 : 0) + (debtorOrdersCount > 0 ? 1 : 0) + (workshopDebtsCount > 0 ? 1 : 0);
+
+    return _HoverCard(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('التنبيهات', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+          content: SizedBox(
+            width: 380,
+            child: _NotificationsList(
+              dueWorkersCount: dueWorkersCount,
+              debtorOrdersCount: debtorOrdersCount,
+              workshopDebtsCount: workshopDebtsCount,
+              onWorkersTap: () {
+                Navigator.pop(context);
+                onWorkersTap();
+              },
+              onDebtorsTap: () {
+                Navigator.pop(context);
+                onDebtorsTap();
+              },
+              onWorkshopDebtsTap: () {
+                Navigator.pop(context);
+                onWorkshopDebtsTap();
+              },
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق'))],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(11),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.notifications_rounded, size: 20, color: AppColors.wood),
+            if (activeCategories > 0)
+              Positioned(
+                top: -6,
+                right: -6,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle),
+                  child: Text(
+                    '$activeCategories',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, height: 1),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _NotificationsList extends StatelessWidget {
