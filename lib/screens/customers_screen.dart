@@ -143,7 +143,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       padding: const EdgeInsets.only(bottom: 14),
                       child: _CustomerRow(
                         customer: c,
-                        onTap: () => showDialog(context: context, builder: (context) => _CustomerOrdersDialog(customer: c)),
+                        onTap: () => showDialog(context: context, builder: (context) => CustomerOrdersDialog(customer: c)),
                         onEdit: () => _showCustomerDialog(context, ref, customer: c),
                         onDelete: () async {
                           final confirm = await showDialog<bool>(
@@ -254,9 +254,9 @@ class _CustomerRow extends StatelessWidget {
 /// صفحة العملاء، وبيديك تفاصيل سريعة (الحالة والمتبقي) لكل طلب، ولو
 /// دوست على طلب بيفتحلك نفس ديالوج تفاصيل الطلب اللي في صفحة الطلبات
 /// (بكل إمكانياته: تغيير الحالة، تسجيل دفعة، تسجيل مصروف... إلخ)
-class _CustomerOrdersDialog extends ConsumerWidget {
+class CustomerOrdersDialog extends ConsumerWidget {
   final Customer customer;
-  const _CustomerOrdersDialog({required this.customer});
+  const CustomerOrdersDialog({super.key, required this.customer});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
