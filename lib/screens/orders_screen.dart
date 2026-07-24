@@ -229,7 +229,7 @@ Future<void> _shareOrderWithWorker(BuildContext context, WidgetRef ref, Order or
 
 /// ديالوج اختيار الصنايعي اللي هتتبعتله مواصفات الطلب - فيه بحث
 /// بالاسم أو المهنة عشان يبقى سهل لو عدد العمال كبير
-Future<void> _showShareToWorkerDialog(BuildContext context, WidgetRef ref, Order order) async {
+Future<void> showShareToWorkerDialog(BuildContext context, WidgetRef ref, Order order) async {
   final workers = ref.read(workersProvider).value ?? [];
   if (workers.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أضف صنايعي أولًا من صفحة العمال')));
@@ -673,7 +673,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                               IconButton(
                                 tooltip: 'مشاركة على واتساب',
                                 icon: const Icon(Icons.share_rounded, color: AppColors.success, size: 20),
-                                onPressed: () => _showShareToWorkerDialog(context, ref, o),
+                                onPressed: () => showShareToWorkerDialog(context, ref, o),
                               ),
                             ],
                           ),
@@ -717,7 +717,7 @@ class OrderDetailDialog extends ConsumerWidget {
           IconButton(
             tooltip: 'مشاركة على واتساب',
             icon: const Icon(Icons.share_rounded, color: AppColors.success),
-            onPressed: () => _showShareToWorkerDialog(context, ref, currentOrder),
+            onPressed: () => showShareToWorkerDialog(context, ref, currentOrder),
           ),
         ],
       ),
