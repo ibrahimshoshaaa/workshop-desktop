@@ -12,6 +12,7 @@ import 'workshop_debts_screen.dart';
 import 'workers_screen.dart';
 import 'expenses_screen.dart';
 import 'reports_screen.dart';
+import 'activity_log_screen.dart';  // ← جديد
 import 'settings_screen.dart';
 
 class AppShell extends ConsumerWidget {
@@ -28,6 +29,7 @@ class AppShell extends ConsumerWidget {
     (Icons.engineering_rounded, 'العمال', 'workers'),
     (Icons.receipt_long_rounded, 'المصروفات', 'expenses'),
     (Icons.summarize_rounded, 'التقارير', 'reports'),
+    (Icons.history_rounded, 'سجل النشاط', admin_only),           // ← جديد
     (Icons.settings_rounded, 'الإعدادات', 'admin_only'),
   ];
 
@@ -40,6 +42,7 @@ class AppShell extends ConsumerWidget {
     WorkersScreen(),
     ExpensesScreen(),
     ReportsScreen(),
+    ActivityLogScreen(),  // ← جديد
     SettingsScreen(),
   ];
 
@@ -48,7 +51,7 @@ class AppShell extends ConsumerWidget {
     final session = ref.watch(sessionProvider).value;
 
     // نبني قائمة الفهارس المسموحة بس حسب صلاحيات المستخدم الحالي
-    final visibleIndexes = <int>[];
+    final visibleIndexes = [];
     for (var i = 0; i < _allDestinations.length; i++) {
       final permKey = _allDestinations[i].$3;
       if (permKey == null) {
@@ -121,7 +124,7 @@ class _SyncButton extends ConsumerStatefulWidget {
 class _SyncButtonState extends ConsumerState<_SyncButton> {
   bool _isSyncing = false;
 
-  Future<void> _sync() async {
+  Future _sync() async {
     setState(() => _isSyncing = true);
     await ref.read(syncServiceProvider).syncAll();
     if (mounted) setState(() => _isSyncing = false);
