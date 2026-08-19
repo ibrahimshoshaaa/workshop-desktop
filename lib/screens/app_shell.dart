@@ -12,15 +12,14 @@ import 'workshop_debts_screen.dart';
 import 'workers_screen.dart';
 import 'expenses_screen.dart';
 import 'reports_screen.dart';
-import 'activity_log_screen.dart';  // ← جديد
+import 'activity_log_screen.dart';
 import 'settings_screen.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
-  // كل شاشة مرتبطة بمفتاح الصلاحية بتاعها. null = متاحة للكل دايمًا.
-  // 'admin_only' = الأدمن بس (مش مرتبطة بصلاحيات المستخدم العادية)
-  static const _allDestinations = [
+  // null = متاح للكل. 'admin_only' = الأدمن بس. أي قيمة تانية = صلاحية عادية.
+  static final _allDestinations = [
     (Icons.dashboard_rounded, 'الرئيسية', null),
     (Icons.people_alt_rounded, 'العملاء', 'customers'),
     (Icons.checkroom_rounded, 'الطلبات', 'orders'),
@@ -29,29 +28,28 @@ class AppShell extends ConsumerWidget {
     (Icons.engineering_rounded, 'العمال', 'workers'),
     (Icons.receipt_long_rounded, 'المصروفات', 'expenses'),
     (Icons.summarize_rounded, 'التقارير', 'reports'),
-    (Icons.history_rounded, 'سجل النشاط', admin_only),           // ← جديد
+    (Icons.history_rounded, 'سجل النشاط', null),
     (Icons.settings_rounded, 'الإعدادات', 'admin_only'),
   ];
 
-  static const _allScreens = [
-    DashboardScreen(),
-    CustomersScreen(),
-    OrdersScreen(),
-    DebtsScreen(),
-    WorkshopDebtsScreen(),
-    WorkersScreen(),
-    ExpensesScreen(),
-    ReportsScreen(),
-    ActivityLogScreen(),  // ← جديد
-    SettingsScreen(),
+  static final _allScreens = [
+    const DashboardScreen(),
+    const CustomersScreen(),
+    const OrdersScreen(),
+    const DebtsScreen(),
+    const WorkshopDebtsScreen(),
+    const WorkersScreen(),
+    const ExpensesScreen(),
+    const ReportsScreen(),
+    const ActivityLogScreen(),
+    const SettingsScreen(),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider).value;
 
-    // نبني قائمة الفهارس المسموحة بس حسب صلاحيات المستخدم الحالي
-    final visibleIndexes = [];
+    final visibleIndexes = <int>[];
     for (var i = 0; i < _allDestinations.length; i++) {
       final permKey = _allDestinations[i].$3;
       if (permKey == null) {
@@ -75,8 +73,8 @@ class AppShell extends ConsumerWidget {
         elevation: 2,
         automaticallyImplyLeading: false,
         titleSpacing: 20,
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
             SizedBox(width: 12),
             Text(
@@ -86,7 +84,7 @@ class AppShell extends ConsumerWidget {
           ],
         ),
         actions: [
-          _SyncButton(),
+          const _SyncButton(),
           IconButton(
             tooltip: 'تسجيل الخروج',
             onPressed: () => ref.read(authRepositoryProvider).logout(),
@@ -117,6 +115,8 @@ class AppShell extends ConsumerWidget {
 }
 
 class _SyncButton extends ConsumerStatefulWidget {
+  const _SyncButton();
+
   @override
   ConsumerState<_SyncButton> createState() => _SyncButtonState();
 }
@@ -124,7 +124,7 @@ class _SyncButton extends ConsumerStatefulWidget {
 class _SyncButtonState extends ConsumerState<_SyncButton> {
   bool _isSyncing = false;
 
-  Future _sync() async {
+  Future<void> _sync() async {
     setState(() => _isSyncing = true);
     await ref.read(syncServiceProvider).syncAll();
     if (mounted) setState(() => _isSyncing = false);
