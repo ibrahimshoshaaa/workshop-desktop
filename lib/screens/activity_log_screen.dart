@@ -92,7 +92,7 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: items.isEmpty
-                ? _EmptyState(icon: Icons.history_rounded, text: 'لسه مفيش أي نشاط مسجّل')
+                ? const _EmptyState(icon: Icons.history_rounded, text: 'لسه مفيش أي نشاط مسجّل')
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
                     children: grouped.entries.expand((group) {
@@ -136,7 +136,7 @@ class _ActivityCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: item.color.withOpacity(0.12),
+                color: item.color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(item.icon, size: 20, color: item.color),
@@ -200,7 +200,7 @@ class _PageHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.wood.withOpacity(0.1),
+            color: AppColors.wood.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(icon, color: AppColors.wood, size: 22),
@@ -225,7 +225,7 @@ class _PageHeader extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AppColors.wood.withOpacity(0.1),
+                        color: AppColors.wood.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -337,7 +337,7 @@ class _HoverCardState extends State<_HoverCard> {
           borderRadius: widget.borderRadius,
           boxShadow: [
             BoxShadow(
-              color: AppColors.wood.withOpacity(_hovering ? 0.14 : 0.06),
+              color: AppColors.wood.withValues(alpha: _hovering ? 0.14 : 0.06),
               blurRadius: _hovering ? 26 : 16,
               offset: const Offset(0, 10),
             ),
