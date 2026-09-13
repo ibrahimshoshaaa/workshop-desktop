@@ -387,6 +387,16 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// بيحذف دفعة واحدة بس (اتسجلت غلط) - عكس [softDeleteTransactionsForOrder]
+  /// اللي بيحذف كل دفعات الطلب مرة واحدة. لازم يتبع باستدعاء
+  /// [recomputeOrderTotalPaid] بعديها عشان المتبقي/المديونية يتظبطوا
+  Future<void> softDeleteTransaction(String id) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return (update(paymentTransactions)..where((t) => t.id.equals(id))).write(
+      PaymentTransactionsCompanion(isDeleted: const Value(true), dirty: const Value(true), updatedAt: Value(now)),
+    );
+  }
+
   /// بيحسب إجمالي المدفوع لطلب معيّن من واقع سجل الدفعات نفسه (مش من رقم
   /// متراكم متخزّن) - ده اللي بيضمن إن الرقم صح دايمًا مهما حصل تعارض
   /// أو تكرار مزامنة، لأن SUM() عملية "idempotent" ومفيهاش تراكم أخطاء
