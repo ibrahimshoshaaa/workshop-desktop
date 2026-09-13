@@ -50,22 +50,6 @@ jobs:
         shell: bash
         run: cp assets/icon/app_icon.ico windows/runner/resources/app_icon.ico
 
-      # مكتبة flutter_local_notifications (بلجن الإشعارات) بتستخدم
-      # <experimental/coroutine> اللي بقى مرفوض (deprecated) في نسخ فيجوال
-      # ستوديو الحديثة على windows-latest runner، وبيوقف البناء بخطأ
-      # STL1011 لحد ما مكتبة الإشعارات نفسها تتحدّث تستخدم std::coroutine
-      # بدالها. الحل المؤقت المعروف: نضيف define في CMakeLists.txt الرئيسي
-      # بتاع مجلد windows/ (بيتطبّق على كل البلجنز الفرعية كمان لأنه على
-      # مستوى الـ directory scope) عشان يسكت الخطأ ده من غير ما نلمس كود
-      # المكتبة نفسها
-      - name: Silence deprecated experimental coroutine error (MSVC/STL fix)
-        shell: pwsh
-        run: |
-          $path = "windows/CMakeLists.txt"
-          $content = Get-Content -Path $path -Raw
-          $content = $content -replace '(project\(runner LANGUAGES CXX\))', "`$1`r`nadd_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)"
-          Set-Content -Path $path -Value $content -NoNewline -Encoding UTF8BOM
-
       # اسم المنتج ووصف الملف اللي بيظهر لما تعمل مرور بالماوس على التطبيق
       # في الـ Taskbar أو في خصائص الملف (Properties) على ويندوز
       - name: Set product name metadata
@@ -79,7 +63,36 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-        
+
+      # مكتبة flutter_local_notifications (بلجن الإشعارات) بتستخدم جوّاها
+      # <experimental/coroutine> اللي بقى مرفوض (deprecated) في نسخة فيجوال
+      # ستوديو الحديثة على windows-latest runner، وبيوقف البناء بخطأ
+      # STL1011. المحاولة الأولى (تعديل windows/CMakeLists.txt الرئيسي)
+      # مانفعتش - على الأغلب الـ define ماكانش بيوصل فعليًا للبلجن. الحل
+      # ده بيعدّل CMakeLists.txt بتاع البلجن نفسه جوه الـ pub cache مباشرة
+      # (بعد ما flutter pub get ينزّله)، عشان نضمن إن الـ define بيتطبّق
+      # على نفس الـ target اللي بيفشل بالظبط
+      - name: Silence deprecated experimental coroutine error (MSVC/STL fix)
+        shell: pwsh
+        run: |
+          $pubCache = $env:PUB_CACHE
+          if (-not $pubCache) { $pubCache = "$env:LOCALAPPDATA\Pub\Cache" }
+          $pluginDir = Get-ChildItem -Path "$pubCache\hosted\pub.dev" -Directory -Filter "flutter_local_notifications_windows-*" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $pluginDir) {
+            Write-Error "مش لاقي فولدر flutter_local_notifications_windows جوه pub cache - راجع المسار: $pubCache"
+            exit 1
+          }
+          $cmakePath = Join-Path $pluginDir.FullName "windows\CMakeLists.txt"
+          Write-Host "بتعديل: $cmakePath"
+          $content = Get-Content -Path $cmakePath -Raw
+          if ($content -notmatch "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS") {
+            $content = "add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)`r`n" + $content
+            Set-Content -Path $cmakePath -Value $content -NoNewline -Encoding UTF8BOM
+            Write-Host "✅ اتعدّل بنجاح"
+          } else {
+            Write-Host "الملف متعدّل من الأول"
+          }
+
       - name: Generate Drift code
         run: dart run build_runner build --delete-conflicting-outputs
 
