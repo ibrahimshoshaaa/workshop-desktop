@@ -6,10 +6,12 @@ import 'providers/sync_provider.dart';
 import 'providers/auth_provider.dart';
 import 'screens/app_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar_EG', null);
+  await NotificationService.instance.init();
   runApp(const ProviderScope(child: WorkshopDesktopApp()));
 }
 

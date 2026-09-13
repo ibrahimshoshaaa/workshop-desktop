@@ -19,6 +19,7 @@ import '../core/order_calculations.dart';
 import '../core/other_dropdown.dart';
 import '../services/cloudinary_service.dart';
 import '../services/pdf_export_service.dart';
+import '../services/notification_service.dart';
 
 /// بعد تسجيل أي دفعة، بيسأل المستخدم لو عايز يطبع إيصال استلام فورًا
 Future<void> _offerReceiptPrint(
@@ -450,6 +451,12 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
                         deliveryDate: deliveryDate,
                         imageUrls: imageUrls,
                       );
+                      await NotificationService.instance.scheduleOrderDeliveryReminders(
+                        orderId: orderId,
+                        customerName: customer.name,
+                        itemType: itemType,
+                        deliveryDate: deliveryDate,
+                      );
                       final deposit = double.tryParse(depositController.text.trim()) ?? 0;
                       String? depositTxId;
                       if (deposit > 0) {
@@ -489,6 +496,161 @@ Future<void> showAddOrderDialog(BuildContext context, WidgetRef ref, {Customer? 
   );
 }
 
+/// ديالوج تعديل طلب موجود - نفس فكرة شاشة EditOrderScreen في نسخة الموبايل
+/// بالظبط (نوع الصنف، المواصفات، الصور، تاريخ التسليم، الإجمالي)، بس هنا
+/// كديالوج زي باقي عمليات الديسكتوب بدل شاشة منفصلة. الخصم ليه ديالوج
+/// منفصل بالفعل (_showDiscountDialog) فمش مكرر هنا
+Future<void> showEditOrderDialog(BuildContext context, WidgetRef ref, Order order) async {
+  final formKey = GlobalKey<FormState>();
+  String itemType = order.itemType;
+  final detailsController = TextEditingController(text: order.details);
+  final totalController = TextEditingController(text: order.totalAmount.toStringAsFixed(0));
+  DateTime deliveryDate = DateTime.fromMillisecondsSinceEpoch(order.deliveryDate);
+  final existingImageUrls = _parseOrderImages(order.imagesJson);
+  final removedImageUrls = <String>[];
+  final newImages = <PlatformFile>[];
+  bool isSaving = false;
+
+  await showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('تعديل الطلب', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 17)),
+        content: SizedBox(
+          width: 440,
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OtherCapableDropdown(
+                    options: _itemTypes.where((t) => t != kOtherOptionValue).toList(),
+                    label: 'نوع الصنف',
+                    value: itemType,
+                    onChanged: (v) => setDialogState(() => itemType = v),
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: detailsController,
+                    maxLines: 2,
+                    decoration: _fieldDecoration('المواصفات', Icons.notes_rounded),
+                  ),
+                  const SizedBox(height: 16),
+                  _FieldLabel('صور الطلب'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      ...existingImageUrls.map((url) => _ImageThumb(
+                            image: Image.network(url, fit: BoxFit.cover),
+                            onRemove: () => setDialogState(() {
+                              existingImageUrls.remove(url);
+                              removedImageUrls.add(url);
+                            }),
+                          )),
+                      ...newImages.map((f) => _ImageThumb(
+                            image: Image.memory(f.bytes!, fit: BoxFit.cover),
+                            onRemove: () => setDialogState(() => newImages.remove(f)),
+                          )),
+                      _AddImageTile(
+                        onTap: () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.image,
+                            allowMultiple: true,
+                            withData: true,
+                          );
+                          if (result != null) {
+                            setDialogState(() => newImages.addAll(result.files.where((f) => f.bytes != null)));
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _DatePickerRow(
+                    label: 'تاريخ التسليم',
+                    date: deliveryDate,
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: deliveryDate,
+                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) setDialogState(() => deliveryDate = picked);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: totalController,
+                    keyboardType: TextInputType.number,
+                    decoration: _fieldDecoration('إجمالي الاتفاق (ج.م)', Icons.request_quote_outlined),
+                    validator: (v) => (v == null || double.tryParse(v) == null) ? 'أدخل مبلغ صحيح' : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: isSaving ? null : () => Navigator.pop(context), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: isSaving
+                ? null
+                : () async {
+                    if (!formKey.currentState!.validate()) return;
+                    if (itemType.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اكتب نوع الصنف')));
+                      return;
+                    }
+                    setDialogState(() => isSaving = true);
+                    try {
+                      final repo = ref.read(repositoryProvider);
+                      final newTotal = double.parse(totalController.text.trim());
+                      await repo.updateOrder(
+                        order,
+                        itemType: itemType,
+                        details: detailsController.text.trim(),
+                        totalAmount: newTotal,
+                        deliveryDate: deliveryDate,
+                      );
+                      for (final url in removedImageUrls) {
+                        await repo.removeImageFromOrder(order, url);
+                      }
+                      if (newImages.isNotEmpty) {
+                        final uploadedUrls = await CloudinaryService.instance.uploadMultiple(
+                          newImages.map((f) => f.bytes!.toList()).toList(),
+                          folder: 'orders',
+                        );
+                        await repo.addImagesToOrder(order, uploadedUrls);
+                      }
+                      await NotificationService.instance.scheduleOrderDeliveryReminders(
+                        orderId: order.id,
+                        customerName: order.customerName,
+                        itemType: itemType,
+                        deliveryDate: deliveryDate,
+                      );
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      setDialogState(() => isSaving = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل حفظ التعديلات: $e')));
+                      }
+                    }
+                  },
+            child: isSaving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('حفظ'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 Color _statusColor(String status) {
   switch (status) {
     case 'جاري التجهيز':
@@ -515,7 +677,12 @@ class _StatusChip extends ConsumerWidget {
     final color = _statusColor(order.status);
     return PopupMenuButton<String>(
       tooltip: 'تغيير حالة الطلب',
-      onSelected: (v) => ref.read(repositoryProvider).updateOrderStatus(order.id, v),
+      onSelected: (v) {
+        ref.read(repositoryProvider).updateOrderStatus(order.id, v);
+        if (v == 'تم التسليم') {
+          NotificationService.instance.cancelOrderReminders(order.id);
+        }
+      },
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       itemBuilder: (context) => orderStatuses.map((s) => PopupMenuItem(value: s, child: Text(s))).toList(),
       child: Container(
@@ -719,6 +886,11 @@ class OrderDetailDialog extends ConsumerWidget {
             icon: const Icon(Icons.share_rounded, color: AppColors.success),
             onPressed: () => showShareToWorkerDialog(context, ref, currentOrder),
           ),
+          IconButton(
+            tooltip: 'تعديل الطلب',
+            icon: const Icon(Icons.edit_outlined, color: AppColors.wood),
+            onPressed: () => showEditOrderDialog(context, ref, currentOrder),
+          ),
         ],
       ),
       content: SizedBox(
@@ -736,7 +908,12 @@ class OrderDetailDialog extends ConsumerWidget {
                 decoration: _fieldDecoration('حالة الطلب', Icons.flag_outlined),
                 items: orderStatuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (v) {
-                  if (v != null) ref.read(repositoryProvider).updateOrderStatus(currentOrder.id, v);
+                  if (v != null) {
+                    ref.read(repositoryProvider).updateOrderStatus(currentOrder.id, v);
+                    if (v == 'تم التسليم') {
+                      NotificationService.instance.cancelOrderReminders(currentOrder.id);
+                    }
+                  }
                 },
               ),
               if (currentOrder.discountAmount > 0)
@@ -900,6 +1077,7 @@ class OrderDetailDialog extends ConsumerWidget {
             );
             if (confirm == true) {
               await ref.read(repositoryProvider).deleteOrder(currentOrder.id);
+              await NotificationService.instance.cancelOrderReminders(currentOrder.id);
               if (context.mounted) Navigator.pop(context);
             }
           },

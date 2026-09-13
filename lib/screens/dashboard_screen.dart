@@ -10,6 +10,8 @@ import '../data/database.dart';
 import '../providers/data_providers.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/sync_provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/notification_service.dart';
 import 'customers_screen.dart' show CustomerOrdersDialog;
 import 'orders_screen.dart';
 import 'revenues_detail_screen.dart';
@@ -149,11 +151,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // لو الأدمن قفل صلاحية "الرئيسية" عن الحساب ده، نوريله رسالة بسيطة
+    // بدل الإحصائيات - نفس فكرة نسخة الموبايل بالظبط
+    final session = ref.watch(sessionProvider).value;
+    if (!(session?.can('dashboard') ?? true)) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'مفيش صلاحية لعرض الرئيسية على الحساب ده.\nتواصل مع الأدمن لو محتاج الوصول.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey, fontSize: 15),
+          ),
+        ),
+      );
+    }
+
     final stats = ref.watch(dashboardStatsProvider);
     final dueWorkers = ref.watch(workersDueTodayProvider);
     final upcomingDeliveries = ref.watch(upcomingDeliveriesProvider);
     final debtorOrders = ref.watch(debtorOrdersProvider);
     final outstandingWorkshopDebts = ref.watch(outstandingWorkshopDebtsProvider);
+
+    // تجديد تنبيه المديونيات كل ما بيانات المديونيات تتغيّر - نفس فكرة
+    // نسخة الموبايل بالظبط
+    ref.listen<List<Order>>(debtorOrdersProvider, (previous, next) {
+      final total = next.fold<double>(0, (sum, o) => sum + o.remaining);
+      NotificationService.instance.scheduleDebtReminder(total, next.length);
+    });
     final orders = ref.watch(ordersProvider).value ?? [];
     final customers = ref.watch(customersProvider).value ?? [];
     final expenses = ref.watch(expensesProvider).value ?? [];
