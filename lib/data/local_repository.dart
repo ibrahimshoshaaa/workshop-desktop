@@ -219,6 +219,55 @@ class LocalRepository {
     return _db.updatePaymentStatus(transactionId, status);
   }
 
+  /// تعديل مبلغ دفعة (وطريقة الدفع لو اتبعتت) بعد ما اتسجلت غلط - بيعتمد
+  /// على [recomputeOrderTotalPaid] (SUM من سجل الدفعات نفسه) عشان المتبقي
+  /// يتظبط تلقائيًا من غير ما نحسب الفرق يدويًا، وبيعيد فحص مديونية الورشة
+  /// (الفائض) بعد التعديل بالظبط زي addPayment
+  Future<void> updatePayment(
+    String orderId,
+    String transactionId, {
+    required double newAmount,
+    String? paymentMethod,
+  }) async {
+    await _db.updateTransactionFields(PaymentTransactionsCompanion(
+      id: Value(transactionId),
+      amountPaid: Value(newAmount),
+      paymentMethod: paymentMethod != null ? Value(paymentMethod) : const Value.absent(),
+      updatedAt: Value(_now),
+      dirty: const Value(true),
+    ));
+    await _db.recomputeOrderTotalPaid(orderId);
+    final freshOrder = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
+    if (freshOrder != null) {
+      await _reconcileOrderOverpaymentDebt(
+        orderId: freshOrder.id,
+        customerName: freshOrder.customerName,
+        itemType: freshOrder.itemType,
+        totalAmount: freshOrder.totalAmount,
+        discountAmount: freshOrder.discountAmount,
+        totalPaid: freshOrder.totalPaid,
+      );
+    }
+  }
+
+  /// حذف دفعة بالكامل (اتسجلت غلط) - بيرجّع المبلغ من المدفوع تلقائيًا عبر
+  /// [recomputeOrderTotalPaid]، وبيعيد فحص مديونية الورشة (الفائض) بعد الحذف
+  Future<void> deletePayment(String orderId, String transactionId) async {
+    await _db.softDeleteTransaction(transactionId);
+    await _db.recomputeOrderTotalPaid(orderId);
+    final freshOrder = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
+    if (freshOrder != null) {
+      await _reconcileOrderOverpaymentDebt(
+        orderId: freshOrder.id,
+        customerName: freshOrder.customerName,
+        itemType: freshOrder.itemType,
+        totalAmount: freshOrder.totalAmount,
+        discountAmount: freshOrder.discountAmount,
+        totalPaid: freshOrder.totalPaid,
+      );
+    }
+  }
+
   // ---------------- Expenses ----------------
 
   Future<void> addExpense({
