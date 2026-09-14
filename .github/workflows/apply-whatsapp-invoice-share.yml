@@ -28,6 +28,8 @@ jobs:
               text = text.replace("import 'dart:typed_data';", "import 'dart:typed_data';\nimport 'dart:io';")
           if "package:path_provider/path_provider.dart" not in text:
               text = text.replace("import 'package:intl/intl.dart';", "import 'package:intl/intl.dart';\nimport 'package:path_provider/path_provider.dart';\nimport 'package:path/path.dart' as p;")
+          if "package:url_launcher/url_launcher.dart" not in text:
+              text = text.replace("import 'package:intl/intl.dart';", "import 'package:intl/intl.dart';\nimport 'package:url_launcher/url_launcher.dart';")
           if "../core/whatsapp.dart" not in text:
               text = text.replace("import '../core/theme.dart';", "import '../core/theme.dart';\nimport '../core/whatsapp.dart';")
 
