@@ -98,16 +98,25 @@ class AppShell extends ConsumerWidget {
       ),
       body: Row(
         children: [
-          NavigationRail(
-            selectedIndex: index,
-            onDestinationSelected: (i) => ref.read(selectedTabProvider.notifier).state = i,
-            labelType: NavigationRailLabelType.all,
-            backgroundColor: AppColors.woodDark,
-            selectedIconTheme: const IconThemeData(color: AppColors.amber),
-            unselectedIconTheme: IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
-            selectedLabelTextStyle: const TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold),
-            unselectedLabelTextStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-            destinations: destinations.map((d) => NavigationRailDestination(icon: Icon(d.$1), label: Text(d.$2))).toList(),
+          SizedBox(
+            width: 120,
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: NavigationRail(
+                  selectedIndex: index,
+                  onDestinationSelected: (i) => ref.read(selectedTabProvider.notifier).state = i,
+                  labelType: NavigationRailLabelType.all,
+                  backgroundColor: AppColors.woodDark,
+                  selectedIconTheme: const IconThemeData(color: AppColors.amber),
+                  unselectedIconTheme: IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
+                  selectedLabelTextStyle: const TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold),
+                  unselectedLabelTextStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                  destinations: destinations.map((d) => NavigationRailDestination(icon: Icon(d.$1), label: Text(d.$2))).toList(),
+                ),
+              ),
+            ),
           ),
           const VerticalDivider(width: 1),
           Expanded(child: screens.isEmpty ? const SizedBox.shrink() : screens[index]),
