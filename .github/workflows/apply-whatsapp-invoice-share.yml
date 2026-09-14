@@ -1,0 +1,115 @@
+name: Apply WhatsApp invoice sharing
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, 'chore: customize invoice PDF WhatsApp sharing')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch PDF preview
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('lib/services/pdf_export_service.dart')
+          text = path.read_text(encoding='utf-8')
+
+          if "import 'dart:io';" not in text:
+              text = text.replace("import 'dart:typed_data';", "import 'dart:typed_data';\nimport 'dart:io';")
+          if "package:path_provider/path_provider.dart" not in text:
+              text = text.replace("import 'package:intl/intl.dart';", "import 'package:intl/intl.dart';\nimport 'package:path_provider/path_provider.dart';\nimport 'package:path/path.dart' as p;")
+          if "../core/whatsapp.dart" not in text:
+              text = text.replace("import '../core/theme.dart';", "import '../core/theme.dart';\nimport '../core/whatsapp.dart';")
+
+          new_block = r'''  Future<String?> _savePdfForWhatsApp(Uint8List bytes, String fileName) async {
+    try {
+      final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      final safeName = fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final file = File(p.join(dir.path, safeName));
+      await file.writeAsBytes(bytes, flush: true);
+      return file.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// بيفتح شاشة معاينة الفاتورة، مع زر واتساب مخصص بدل زر المشاركة العام.
+  /// الفاتورة بتتحفظ تلقائياً في Downloads، وواتساب بيتفتح لاختيار المحادثة.
+  Future<void> preview(BuildContext context, Uint8List bytes, String fileName) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: const Text('معاينة قبل التصدير'),
+            backgroundColor: AppColors.wood,
+            foregroundColor: Colors.white,
+          ),
+          body: PdfPreview(
+            build: (format) async => bytes,
+            pdfFileName: fileName,
+            allowPrinting: true,
+            allowSharing: false,
+            actions: [
+              IconButton(
+                tooltip: 'مشاركة عبر واتساب',
+                icon: const Icon(Icons.chat_rounded),
+                onPressed: () async {
+                  final savedPath = await _savePdfForWhatsApp(bytes, fileName);
+                  final message = Uri.encodeComponent('فاتورة جاهزة: $fileName');
+                  final appUri = Uri.parse('whatsapp://send?text=$message');
+                  var opened = await launchUrl(appUri, mode: LaunchMode.externalApplication);
+                  if (!opened) {
+                    final webUri = Uri.parse('https://wa.me/?text=$message');
+                    opened = await launchUrl(webUri, mode: LaunchMode.externalApplication);
+                  }
+
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        savedPath != null
+                            ? (opened
+                                ? 'تم فتح واتساب، والفاتورة محفوظة في Downloads. اختار الرقم وأرفق ملف الـPDF وأرسله.'
+                                : 'الفاتورة محفوظة في Downloads، لكن لم يتم فتح واتساب تلقائياً.')
+                            : 'لم يتم حفظ الفاتورة تلقائياً. أرفق ملف الـPDF يدوياً بعد فتح واتساب.',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+            canChangePageFormat: false,
+            canChangeOrientation: false,
+            canDebug: false,
+          ),
+        ),
+      ),
+    );
+  }
+'''
+
+          pattern = re.compile(r"  Future<void> preview\(BuildContext context, Uint8List bytes, String fileName\) async \{.*?\n  \}\n\n  /// نسخة قديمة", re.S)
+          match = pattern.search(text)
+          if not match:
+              raise SystemExit('preview method not found')
+          text = text[:match.start()] + new_block + "\n  /// نسخة قديمة" + text[match.end():]
+          path.write_text(text, encoding='utf-8')
+
+      - name: Commit patch and remove temporary workflow
+        run: |
+          rm -f .github/workflows/apply-whatsapp-invoice-share.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/services/pdf_export_service.dart .github/workflows/apply-whatsapp-invoice-share.yml
+          git commit -m "feat: open WhatsApp from customer invoice preview"
+          git push
