@@ -29,10 +29,10 @@ jobs:
                   raise SystemExit(f'{path}: expected exactly one match, got {count}')
               p.write_text(new, encoding='utf-8')
 
-          # 1) Sync must distinguish a real Firebase/network failure from an empty node.
+          # Sync: never interpret an HTTP/auth failure as an empty Firebase node.
           replace_once(
               'lib/services/sync_service.dart',
-              r"Future<Map<String, dynamic>\\?> _fetchNode\\(String path\\) async \\{.*?\\n  \\}",
+              r"Future<Map<String, dynamic>\?> _fetchNode\(String path\) async \{.*?\n  \}",
               '''Future<Map<String, dynamic>> _fetchNode(String path) async {
               final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
               final response = await http.get(uri).timeout(_timeout);
@@ -77,7 +77,7 @@ jobs:
               flags=re.S,
           )
 
-          # 2) Payment/expense conflict resolution must use their real updatedAt.
+          # Payments/expenses: conflict timestamps must use updatedAt.
           replace_once(
               'lib/services/sync_service.dart',
               r"final remoteUpdatedAt = \(map\['paymentDate'\] as num\?\)\?\.toInt\(\) \?\? 0;",
@@ -99,7 +99,7 @@ jobs:
               "'orderAllocationsJson': row.orderAllocationsJson,\n          'date': row.date,\n          'updatedAt': row.updatedAt,",
           )
 
-          # 3) Safer permission defaults: missing keys are denied, not granted.
+          # Missing permission keys are denied rather than implicitly granted.
           replace_once(
               'lib/providers/auth_provider.dart',
               r"bool can\(String screenKey\) => isAdmin \|\| \(permissions\[screenKey\] \?\? true\);",
@@ -111,18 +111,12 @@ jobs:
               "bool canAccess(String screenKey) => permissions[screenKey] ?? false;",
           )
 
-          # 4) Do not mistake a failed app_users request for an empty user list.
+          # Do not turn an app_users request failure into an empty account list.
           replace_once(
               'lib/services/user_account_service.dart',
               r"if \(response\.statusCode != 200\) return \[\];\n    final decoded = jsonDecode\(response\.body\);\n    if \(decoded is! Map\) return \[\];",
               "if (response.statusCode != 200) {\n      throw StateError('Firebase GET failed (app_users): HTTP ${response.statusCode}');\n    }\n    final decoded = jsonDecode(response.body);\n    if (decoded == null) return [];\n    if (decoded is! Map) {\n      throw StateError('Firebase returned invalid app_users data');\n    }",
           )
-          replace_once(
-              'lib/services/user_account_service.dart',
-              r"\n    return result;\n  \}",
-              "\n    return result;\n  }",
-          )
-          # Check write responses instead of silently accepting failed mutations.
           replace_once(
               'lib/services/user_account_service.dart',
               r"final decoded = jsonDecode\(response\.body\) as Map<String, dynamic>;\n    return decoded\['name'\] as String;",
@@ -139,23 +133,22 @@ jobs:
               "final response = await http.delete(uri).timeout(_timeout);\n    if (response.statusCode < 200 || response.statusCode >= 300) {\n      throw StateError('فشل حذف الحساب: HTTP ${response.statusCode}');\n    }",
           )
 
-          # 5) If a successfully fetched user list no longer contains the logged-in worker,
-          # invalidate the local session. Network failures are still caught and keep the session.
+          # A deleted worker account loses its local session after a successful refresh.
           replace_once(
               'lib/providers/auth_provider.dart',
               r"if \(match != null\) \{\n        await _persistSession\(username: match\.username, isAdmin: false, permissions: match\.permissions\);\n      \}",
               "if (match != null) {\n        await _persistSession(username: match.username, isAdmin: false, permissions: match.permissions);\n      } else {\n        await logout();\n      }",
           )
 
-          # 6) Customer archive button is admin-only and archive labels use isArchived.
+          # Archive is admin-only; archived labels use isArchived, not isDeleted.
           customers = Path('lib/screens/customers_screen.dart')
           text = customers.read_text(encoding='utf-8')
           if "../providers/auth_provider.dart" not in text:
               text = text.replace("import '../providers/data_providers.dart';", "import '../providers/data_providers.dart';\nimport '../providers/auth_provider.dart';")
-          text = text.replace(
-              "    final customersAsync = ref.watch(customersProvider);",
-              "    final customersAsync = ref.watch(customersProvider);\n    final session = ref.watch(sessionProvider).value;",
-          )
+          marker = "    final customersAsync = ref.watch(customersProvider);"
+          if marker not in text:
+              raise SystemExit('customers_screen.dart: customers provider marker not found')
+          text = text.replace(marker, marker + "\n    final session = ref.watch(sessionProvider).value;", 1)
           old_button = "IconButton(tooltip: 'أرشفة', icon: const Icon(Icons.archive_outlined, color: AppColors.danger), onPressed: () => _archive(c)),"
           new_button = "if (session?.isAdmin == true) IconButton(tooltip: 'أرشفة', icon: const Icon(Icons.archive_outlined, color: AppColors.danger), onPressed: () => _archive(c)),"
           if old_button not in text:
