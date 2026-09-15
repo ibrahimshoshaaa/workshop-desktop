@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:drift/drift.dart';
 import '../data/database.dart';
 import '../data/local_repository.dart';
 import '../core/order_calculations.dart';
@@ -13,12 +14,20 @@ final customersProvider = StreamProvider<List<Customer>>((ref) {
 });
 
 /// العملاء المؤرشفون (الـ soft deleted) - منفصلين عن قائمة العملاء الحالية.
-/// بنعرضهم في صفحة الأرشيف مع إمكانية البحث واسترجاع العميل.
 final archivedCustomersProvider = StreamProvider<List<Customer>>((ref) {
   final db = ref.watch(databaseProvider);
   return (db.select(db.customers)
         ..where((c) => c.isDeleted.equals(true))
         ..orderBy([(c) => OrderingTerm.desc(c.updatedAt)]))
+      .watch();
+});
+
+/// كل الطلبات المؤرشفة، لاستخدامها داخل أرشيف العميل.
+final archivedOrdersProvider = StreamProvider<List<Order>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return (db.select(db.orders)
+        ..where((o) => o.isDeleted.equals(true))
+        ..orderBy([(o) => OrderingTerm.desc(o.createdAt)]))
       .watch();
 });
 
