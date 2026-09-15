@@ -15,11 +15,11 @@ import 'inventory_screen.dart';
 import 'reports_screen.dart';
 import 'activity_log_screen.dart';
 import 'settings_screen.dart';
+import 'customer_archive_screen.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
-  // null = متاح للكل. 'admin_only' = الأدمن بس. أي قيمة تانية = صلاحية عادية.
   static final _allDestinations = [
     (Icons.dashboard_rounded, 'الرئيسية', null),
     (Icons.people_alt_rounded, 'العملاء', 'customers'),
@@ -30,6 +30,7 @@ class AppShell extends ConsumerWidget {
     (Icons.receipt_long_rounded, 'المصروفات', 'expenses'),
     (Icons.inventory_2_rounded, 'المخزون', 'inventory'),
     (Icons.summarize_rounded, 'التقارير', 'reports'),
+    (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),
     (Icons.history_rounded, 'سجل النشاط', null),
     (Icons.settings_rounded, 'الإعدادات', 'admin_only'),
   ];
@@ -44,6 +45,7 @@ class AppShell extends ConsumerWidget {
     const ExpensesScreen(),
     const InventoryScreen(),
     const ReportsScreen(),
+    const CustomerArchiveScreen(),
     const ActivityLogScreen(),
     const SettingsScreen(),
   ];
@@ -51,7 +53,6 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider).value;
-
     final visibleIndexes = <int>[];
     for (var i = 0; i < _allDestinations.length; i++) {
       final permKey = _allDestinations[i].$3;
@@ -66,7 +67,6 @@ class AppShell extends ConsumerWidget {
 
     final destinations = visibleIndexes.map((i) => _allDestinations[i]).toList();
     final screens = visibleIndexes.map((i) => _allScreens[i]).toList();
-
     final rawIndex = ref.watch(selectedTabProvider);
     final index = screens.isEmpty ? 0 : rawIndex.clamp(0, screens.length - 1);
 
@@ -80,10 +80,7 @@ class AppShell extends ConsumerWidget {
           children: [
             Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
             SizedBox(width: 12),
-            Text(
-              'Tahoun Royal Home',
-              style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold, fontSize: 20),
-            ),
+            Text('Tahoun Royal Home', style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold, fontSize: 20)),
           ],
         ),
         actions: [
@@ -128,32 +125,23 @@ class AppShell extends ConsumerWidget {
 
 class _SyncButton extends ConsumerStatefulWidget {
   const _SyncButton();
-
   @override
   ConsumerState<_SyncButton> createState() => _SyncButtonState();
 }
 
 class _SyncButtonState extends ConsumerState<_SyncButton> {
   bool _isSyncing = false;
-
   Future<void> _sync() async {
     setState(() => _isSyncing = true);
     await ref.read(syncServiceProvider).syncAll();
     if (mounted) setState(() => _isSyncing = false);
   }
-
   @override
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: 'مزامنة الآن',
       onPressed: _isSyncing ? null : _sync,
-      icon: _isSyncing
-          ? const SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.amber),
-            )
-          : const Icon(Icons.sync_rounded, color: AppColors.amber),
+      icon: _isSyncing ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.amber)) : const Icon(Icons.sync_rounded, color: AppColors.amber),
     );
   }
 }
