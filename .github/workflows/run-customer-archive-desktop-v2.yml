@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/run-customer-archive-desktop-v2.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,50 +17,74 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
-
-      - name: Execute implementation script from workflow source
+      - name: Apply archive implementation
         shell: python
         run: |
           from pathlib import Path
-          import textwrap
-          src = Path('.github/workflows/apply-customer-archive-desktop-v2.yml').read_text(encoding='utf-8').splitlines()
-          start = next(i for i, line in enumerate(src) if line.strip() == 'from pathlib import Path')
-          end = next(i for i, line in enumerate(src[start:], start) if line.startswith('      - name: Fetch dependencies'))
-          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in src[start:end])
-          exec(compile(code, 'customer_archive_impl.py', 'exec'), {'__name__': '__main__'})
 
-      - name: Fix archive search helper
-        shell: python
-        run: |
-          from pathlib import Path
-          p = Path('lib/screens/customer_archive_screen.dart')
-          s = p.read_text(encoding='utf-8')
-          if 'String normalizeForSearch(String value)' not in s:
-              imports_end = s.rfind('\n', 0, s.find('\n\n', 0))
-              s = s[:imports_end + 1] + "\nString normalizeForSearch(String value) => value.trim().toLowerCase();\n" + s[imports_end + 1:]
-              p.write_text(s, encoding='utf-8')
+          def edit(path, fn):
+              p=Path(path); s=p.read_text(encoding='utf-8'); n=fn(s); p.write_text(n,encoding='utf-8')
 
-      - name: Fetch dependencies and regenerate Drift code
+          def add_once(s, marker, addition):
+              return s if addition.strip() in s else s.replace(marker, marker + addition, 1)
+
+          def db(s):
+              if 'BoolColumn get isArchived' not in s:
+                  s=s.replace("  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الطلبات", "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();\n  IntColumn get archivedAt => integer().nullable()();\n  IntColumn get archiveYear => integer().nullable()();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الطلبات",1)
+                  s=s.replace("  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الدفعات", "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();\n  IntColumn get archivedAt => integer().nullable()();\n  IntColumn get archiveYear => integer().nullable()();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الدفعات",1)
+              s=s.replace('int get schemaVersion => 10;','int get schemaVersion => 11;',1)
+              if 'if (from < 11)' not in s:
+                  marker='        if (from < 10) {'; pos=s.find(marker); end=s.find('\n        }',pos)+len('\n        }')
+                  s=s[:end]+"\n        if (from < 11) {\n          await m.addColumn(customers, customers.isArchived);\n          await m.addColumn(customers, customers.archivedAt);\n          await m.addColumn(customers, customers.archiveYear);\n          await m.addColumn(orders, orders.isArchived);\n          await m.addColumn(orders, orders.archivedAt);\n          await m.addColumn(orders, orders.archiveYear);\n        }"+s[end:]
+              if 'watchArchivedCustomers' not in s:
+                  s=s.replace("  Stream<List<Customer>> watchCustomers() {\n    return (select(customers)..where((t) => t.isDeleted.equals(false))).watch();\n  }", "  Stream<List<Customer>> watchCustomers() {\n    return (select(customers)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();\n  }\n\n  Stream<List<Customer>> watchArchivedCustomers() {\n    return (select(customers)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true))).watch();\n  }\n\n  Future<Customer?> getCustomer(String id) async {\n    return (select(customers)..where((t) => t.id.equals(id) & t.isDeleted.equals(false))).getSingleOrNull();\n  }",1)
+              if 'watchArchivedOrders' not in s:
+                  s=s.replace("  Stream<List<Order>> watchOrders() {\n    return (select(orders)..where((t) => t.isDeleted.equals(false))).watch();\n  }", "  Stream<List<Order>> watchOrders() {\n    return (select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();\n  }\n\n  Stream<List<Order>> watchArchivedOrders({String? customerId, int? year}) {\n    final q = select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true));\n    if (customerId != null) q.where((t) => t.customerId.equals(customerId));\n    if (year != null) q.where((t) => t.archiveYear.equals(year));\n    return q.watch();\n  }",1)
+              return s
+          edit('lib/data/database.dart',db)
+
+          def repo(s):
+              if 'Future<String?> archiveCustomer' in s: return s
+              marker='  Future<void> deleteCustomer(String id) => _db.softDeleteCustomer(id);'
+              methods='''\n\n  Future<String?> archiveCustomer(String customerId) async {\n    final customer = await _db.getCustomer(customerId);\n    if (customer == null) return 'العميل غير موجود';\n    if (customer.isArchived) return null;\n    final orders = await (_db.select(_db.orders)..where((t) => t.customerId.equals(customerId) & t.isDeleted.equals(false))).get();\n    if (orders.any((o) => o.remaining > 0.01 || o.status != 'تم التسليم')) return 'لا يمكن الأرشفة: يوجد طلب غير مُسلّم أو عليه مبلغ متبقي';\n    final now=_now; final year=DateTime.fromMillisecondsSinceEpoch(now).year;\n    await _db.transaction(() async {\n      await _db.updateCustomerFields(CustomersCompanion(id: Value(customerId),isArchived:const Value(true),archivedAt:Value(now),archiveYear:Value(year),updatedAt:Value(now),dirty:const Value(true)));\n      for(final o in orders){await _db.updateOrderFields(OrdersCompanion(id:Value(o.id),isArchived:const Value(true),archivedAt:Value(now),archiveYear:Value(year),updatedAt:Value(now),dirty:const Value(true)));}\n    });\n    return null;\n  }\n\n  Future<String?> reactivateCustomer(String customerId) async {\n    final c=await _db.getCustomer(customerId); if(c==null)return 'العميل غير موجود'; if(!c.isArchived)return null;\n    await _db.updateCustomerFields(CustomersCompanion(id:Value(customerId),isArchived:const Value(false),archivedAt:const Value(null),archiveYear:const Value(null),updatedAt:Value(_now),dirty:const Value(true))); return null;\n  }'''
+              return s.replace(marker,marker+methods,1)
+          edit('lib/data/local_repository.dart',repo)
+
+          def providers(s):
+              if 'archivedCustomersProvider' in s:return s
+              marker="final customersProvider = StreamProvider<List<Customer>>((ref) {\n  return ref.watch(databaseProvider).watchCustomers();\n});"
+              return s.replace(marker,marker+"\n\nfinal archivedCustomersProvider = StreamProvider<List<Customer>>((ref) => ref.watch(databaseProvider).watchArchivedCustomers());\nfinal archivedOrdersProvider = StreamProvider.family<List<Order>, String>((ref,id) => ref.watch(databaseProvider).watchArchivedOrders(customerId:id));",1)
+          edit('lib/providers/data_providers.dart',providers)
+
+          def sync(s):
+              s=s.replace("            isDeleted: const Value(false),\n            dirty: const Value(false),", "            isDeleted: const Value(false),\n            isArchived: Value(map['isArchived'] == true),\n            archivedAt: Value((map['archivedAt'] as num?)?.toInt()),\n            archiveYear: Value((map['archiveYear'] as num?)?.toInt()),\n            dirty: const Value(false),",2)
+              s=s.replace("          'updatedAt': row.updatedAt,", "          'updatedAt': row.updatedAt,\n          'isArchived': row.isArchived,\n          'archivedAt': row.archivedAt,\n          'archiveYear': row.archiveYear,",2)
+              return s
+          edit('lib/services/sync_service.dart',sync)
+
+          def shell(s):
+              if "import 'customer_archive_screen.dart';" not in s:s=s.replace("import 'customers_screen.dart';","import 'customers_screen.dart';\nimport 'customer_archive_screen.dart';",1)
+              if "'admin_only'" not in s:s=s.replace("    (Icons.people_alt_rounded, 'العملاء', 'customers'),","    (Icons.people_alt_rounded, 'العملاء', 'customers'),\n    (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),",1)
+              if 'const CustomerArchiveScreen()' not in s:s=s.replace('    const CustomersScreen(),','    const CustomersScreen(),\n    const CustomerArchiveScreen(),',1)
+              return s
+          edit('lib/screens/app_shell.dart',shell)
+
+          Path('lib/screens/customer_archive_screen.dart').write_text('''import 'package:flutter/material.dart';\nimport 'package:flutter_riverpod/flutter_riverpod.dart';\nimport 'package:google_fonts/google_fonts.dart';\nimport 'package:intl/intl.dart';\nimport '../core/theme.dart';\nimport '../data/database.dart';\nimport '../providers/data_providers.dart';\nimport '../providers/auth_provider.dart';\n\nString normalizeForSearch(String value) => value.trim().toLowerCase();\n\nclass CustomerArchiveScreen extends ConsumerStatefulWidget { const CustomerArchiveScreen({super.key}); @override ConsumerState<CustomerArchiveScreen> createState()=>_CustomerArchiveScreenState(); }\nclass _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen>{ final search=TextEditingController(); String query=''; int? year; @override void dispose(){search.dispose();super.dispose();}\n@override Widget build(BuildContext context){final data=ref.watch(archivedCustomersProvider);final admin=ref.watch(sessionProvider).value?.isAdmin??false;return Container(color:const Color(0xFFFAF6F0),child:Column(children:[Padding(padding:const EdgeInsets.all(28),child:Row(children:[const Icon(Icons.archive_rounded,color:AppColors.wood,size:30),const SizedBox(width:12),Text('أرشيف العملاء',style:GoogleFonts.cairo(fontSize:22,fontWeight:FontWeight.w800))])),Padding(padding:const EdgeInsets.symmetric(horizontal:28),child:TextField(controller:search,onChanged:(v)=>setState(()=>query=v),decoration:InputDecoration(prefixIcon:const Icon(Icons.search),hintText:'ابحث بالاسم أو الهاتف أو الرقم التسلسلي...',filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide.none)))),Expanded(child:data.when(loading:()=>const Center(child:CircularProgressIndicator()),error:(e,_ )=>Center(child:Text('خطأ: $e')),data:(customers){final q=normalizeForSearch(query);final list=customers.where((c)=>(q.isEmpty||normalizeForSearch('${c.name} ${c.phone} ${c.serialNumber}').contains(q))&&(year==null||c.archiveYear==year)).toList();return Column(children:[Expanded(child:list.isEmpty?const Center(child:Text('لا توجد نتائج في الأرشيف')):ListView.builder(padding:const EdgeInsets.all(28),itemCount:list.length,itemBuilder:(context,i)=>_ArchiveCard(customer:list[i],admin:admin))) ]);}))]));}}\nclass _ArchiveCard extends ConsumerWidget{final Customer customer;final bool admin;const _ArchiveCard({required this.customer,required this.admin});@override Widget build(BuildContext context,WidgetRef ref){final orders=ref.watch(archivedOrdersProvider(customer.id)).value??[];return Card(child:ExpansionTile(title:Text(customer.name,style:GoogleFonts.cairo(fontWeight:FontWeight.bold)),subtitle:Text('${customer.phone} • #${customer.serialNumber} • ${orders.length} طلب'),children:[...orders.map((o)=>ListTile(title:Text(o.itemType),subtitle:Text('التسليم ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))} • ${o.status}'),trailing:Text(o.totalAmount.toStringAsFixed(0)))),if(admin)Padding(padding:const EdgeInsets.all(12),child:FilledButton.icon(onPressed:()async{final e=await ref.read(repositoryProvider).reactivateCustomer(customer.id);if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e??'تم إعادة تنشيط العميل')));},icon:const Icon(Icons.unarchive_outlined),label:const Text('إعادة تنشيط العميل')))]));}}\n''',encoding='utf-8')
+      - name: Build and analyze
         run: |
           flutter pub get
           dart run build_runner build --delete-conflicting-outputs
-
-      - name: Analyze
-        run: flutter analyze
-
+          flutter analyze
       - name: Commit implementation
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib
-          git diff --cached --quiet || git commit -m "Implement professional customer archive on desktop"
+          git diff --cached --quiet || git commit -m "Implement customer archive desktop"
           git push
-
-      # Triggered intentionally to apply and validate the current archive implementation.
