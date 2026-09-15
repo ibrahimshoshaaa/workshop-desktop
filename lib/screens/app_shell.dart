@@ -15,7 +15,6 @@ import 'inventory_screen.dart';
 import 'reports_screen.dart';
 import 'activity_log_screen.dart';
 import 'settings_screen.dart';
-import 'customer_archive_screen.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
@@ -30,7 +29,6 @@ class AppShell extends ConsumerWidget {
     (Icons.receipt_long_rounded, 'المصروفات', 'expenses'),
     (Icons.inventory_2_rounded, 'المخزون', 'inventory'),
     (Icons.summarize_rounded, 'التقارير', 'reports'),
-    (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),
     (Icons.history_rounded, 'سجل النشاط', null),
     (Icons.settings_rounded, 'الإعدادات', 'admin_only'),
   ];
@@ -45,7 +43,6 @@ class AppShell extends ConsumerWidget {
     const ExpensesScreen(),
     const InventoryScreen(),
     const ReportsScreen(),
-    const CustomerArchiveScreen(),
     const ActivityLogScreen(),
     const SettingsScreen(),
   ];
