@@ -9,21 +9,228 @@ permissions:
 
 jobs:
   apply:
-    if: contains(github.event.head_commit.message, 'chore: customize invoice PDF WhatsApp sharing')
+    if: contains(github.event.head_commit.message, 'Implement Customer Archive') || contains(github.event.head_commit.message, 'chore: customize invoice PDF WhatsApp sharing')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Patch customer archive
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def must_replace(path, old, new, count=1):
+              p=Path(path); s=p.read_text(encoding='utf-8')
+              if old not in s: raise SystemExit(f'Pattern not found: {path}: {old[:100]}')
+              p.write_text(s.replace(old,new,count),encoding='utf-8')
+
+          p=Path('lib/data/database.dart'); s=p.read_text(encoding='utf-8')
+          s=s.replace("  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الطلبات", "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();\n  IntColumn get archivedAt => integer().nullable()();\n  IntColumn get archiveYear => integer().nullable()();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الطلبات", 1)
+          s=s.replace("  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الدفعات", "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();\n  IntColumn get archivedAt => integer().nullable()();\n  IntColumn get archiveYear => integer().nullable()();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الدفعات", 1)
+          s=s.replace("  int get schemaVersion => 10;", "  int get schemaVersion => 11;")
+          old="""        if (from < 10) {
+          // ربط مديونية الورشة بالطلب اللي ولّدها (نسخة 10) - لحالة العميل
+          // اللي دفع أكتر من السعر النهائي بعد تعديله
+          await m.addColumn(workshopDebts, workshopDebts.orderId);
+        }"""
+          new=old+"""
+        if (from < 11) {
+          // أرشيف العملاء والطلبات: السجلات لا تُحذف، فقط تُعلّم كمؤرشفة
+          await m.addColumn(customers, customers.isArchived);
+          await m.addColumn(customers, customers.archivedAt);
+          await m.addColumn(customers, customers.archiveYear);
+          await m.addColumn(orders, orders.isArchived);
+          await m.addColumn(orders, orders.archivedAt);
+          await m.addColumn(orders, orders.archiveYear);
+        }"""
+          must_replace('lib/data/database.dart',old,new)
+          old="""  Stream<List<Customer>> watchCustomers() {
+    return (select(customers)..where((t) => t.isDeleted.equals(false))).watch();
+  }"""
+          new="""  Stream<List<Customer>> watchCustomers() {
+    return (select(customers)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();
+  }
+
+  Stream<List<Customer>> watchArchivedCustomers({int? year}) {
+    final query = select(customers)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true));
+    if (year != null) query.where((t) => t.archiveYear.equals(year));
+    return (query..orderBy([(t) => OrderingTerm.desc(t.archivedAt)])).watch();
+  }
+
+  Stream<List<Order>> watchArchivedOrders({int? year}) {
+    final query = select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true));
+    if (year != null) query.where((t) => t.archiveYear.equals(year));
+    return (query..orderBy([(t) => OrderingTerm.desc(t.archivedAt)])).watch();
+  }
+
+  Stream<List<Order>> watchArchivedOrdersForCustomer(String customerId) {
+    return (select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true) & t.customerId.equals(customerId))
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+        .watch();
+  }
+
+  Future<String?> getCustomerArchiveBlockReason(String customerId) async {
+    final rows = await (select(orders)..where((t) => t.customerId.equals(customerId) & t.isDeleted.equals(false))).get();
+    if (rows.isEmpty) return null;
+    if (rows.any((o) => o.remaining > 0)) return 'العميل عليه مبلغ متبقي';
+    if (rows.any((o) => o.status != 'تم التسليم')) return 'يوجد طلب لم يتم تسليمه بعد';
+    return null;
+  }
+
+  Future<bool> archiveCustomer(String customerId) async {
+    final reason = await getCustomerArchiveBlockReason(customerId);
+    if (reason != null) return false;
+    final customer = await (select(customers)..where((t) => t.id.equals(customerId) & t.isDeleted.equals(false))).getSingleOrNull();
+    if (customer == null || customer.isArchived) return false;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final year = DateTime.now().year;
+    await transaction(() async {
+      await (update(customers)..where((t) => t.id.equals(customerId))).write(CustomersCompanion(
+        isArchived: const Value(true), archivedAt: Value(now), archiveYear: Value(year), updatedAt: Value(now), dirty: const Value(true),
+      ));
+      await (update(orders)..where((t) => t.customerId.equals(customerId) & t.isDeleted.equals(false))).write(OrdersCompanion(
+        isArchived: const Value(true), archivedAt: Value(now), archiveYear: Value(year), updatedAt: Value(now), dirty: const Value(true),
+      ));
+    });
+    return true;
+  }"""
+          must_replace('lib/data/database.dart',old,new)
+          old="""  Stream<List<Order>> watchOrders() {
+    return (select(orders)..where((t) => t.isDeleted.equals(false))).watch();
+  }"""
+          new="""  Stream<List<Order>> watchOrders() {
+    return (select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();
+  }"""
+          must_replace('lib/data/database.dart',old,new)
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('lib/services/sync_service.dart'); s=p.read_text(encoding='utf-8')
+          marker="""            updatedAt: Value(remoteUpdatedAt),
+            isDeleted: const Value(false),
+            dirty: const Value(false),
+          ));"""
+          replacement="""            updatedAt: Value(remoteUpdatedAt),
+            isDeleted: const Value(false),
+            isArchived: Value(map['isArchived'] == true),
+            archivedAt: Value((map['archivedAt'] as num?)?.toInt()),
+            archiveYear: Value((map['archiveYear'] as num?)?.toInt()),
+            dirty: const Value(false),
+          ));"""
+          if s.count(marker)<2: raise SystemExit('sync markers not found')
+          s=s.replace(marker,replacement,2)
+          upload="""          'createdAt': row.createdAt,
+          'updatedAt': row.updatedAt,
+        });"""
+          upload2="""          'createdAt': row.createdAt,
+          'updatedAt': row.updatedAt,
+          'isArchived': row.isArchived,
+          'archivedAt': row.archivedAt,
+          'archiveYear': row.archiveYear,
+        });"""
+          if s.count(upload)<2: raise SystemExit('upload markers not found')
+          s=s.replace(upload,upload2,2)
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('lib/screens/app_shell.dart'); s=p.read_text(encoding='utf-8')
+          s=s.replace("import 'customers_screen.dart';","import 'customers_screen.dart';\nimport 'customer_archive_screen.dart';")
+          s=s.replace("    (Icons.people_alt_rounded, 'العملاء', 'customers'),\n    (Icons.checkroom_rounded, 'الطلبات', 'orders'),","    (Icons.people_alt_rounded, 'العملاء', 'customers'),\n    (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),\n    (Icons.checkroom_rounded, 'الطلبات', 'orders'),")
+          s=s.replace("    const CustomersScreen(),\n    const OrdersScreen(),","    const CustomersScreen(),\n    const CustomerArchiveScreen(),\n    const OrdersScreen(),")
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('lib/screens/customers_screen.dart'); s=p.read_text(encoding='utf-8')
+          s=s.replace("import '../providers/data_providers.dart';","import '../providers/data_providers.dart';\nimport '../providers/database_provider.dart';\nimport '../providers/auth_provider.dart';")
+          s=s.replace("    final customersAsync = ref.watch(customersProvider);","    final customersAsync = ref.watch(customersProvider);\n    final session = ref.watch(sessionProvider).value;")
+          s=s.replace("                        onDelete: () async {","                        onArchive: session?.isAdmin == true ? () => _archiveCustomer(context, ref, c) : null,\n                        onDelete: () async {")
+          anchor="""  @override
+  Widget build(BuildContext context) {
+    final customersAsync = ref.watch(customersProvider);"""
+          method="""  Future<void> _archiveCustomer(BuildContext context, WidgetRef ref, Customer customer) async {
+    final db = ref.read(databaseProvider);
+    final reason = await db.getCustomerArchiveBlockReason(customer.id);
+    if (!context.mounted) return;
+    if (reason != null) {
+      await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('لا يمكن أرشفة العميل'),
+        content: Text(reason),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('حسنًا'))],
+      ));
+      return;
+    }
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('أرشفة العميل'),
+      content: Text('سيتم نقل العميل "${customer.name}" وكل طلباته المكتملة إلى الأرشيف مع الاحتفاظ بكل التفاصيل والدفعات. هل تريد المتابعة؟'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+        ElevatedButton.icon(icon: const Icon(Icons.archive_rounded), label: const Text('أرشفة'), onPressed: () => Navigator.pop(ctx, true)),
+      ],
+    ));
+    if (ok == true) {
+      await db.archiveCustomer(customer.id);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت أرشفة العميل بنجاح')));
+    }
+  }
+
+"""
+          if anchor not in s: raise SystemExit('customer build anchor not found')
+          s=s.replace(anchor,method+anchor,1)
+          s=s.replace("  final VoidCallback onDelete;\n  const _CustomerRow({required this.customer, required this.onTap, required this.onEdit, required this.onDelete});","  final VoidCallback? onArchive;\n  final VoidCallback onDelete;\n  const _CustomerRow({required this.customer, required this.onTap, required this.onEdit, required this.onDelete, this.onArchive});")
+          s=s.replace("            IconButton(\n              tooltip: 'حذف',","            if (onArchive != null)\n              IconButton(tooltip: 'أرشفة العميل', icon: const Icon(Icons.archive_outlined, size: 20, color: AppColors.wood), onPressed: onArchive),\n            IconButton(\n              tooltip: 'حذف',",1)
+          p.write_text(s,encoding='utf-8')
+
+          Path('lib/screens/customer_archive_screen.dart').write_text(r'''import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart' hide TextDirection;
+import '../data/database.dart';
+import '../providers/database_provider.dart';
+import '../core/search_bar.dart';
+import '../core/theme.dart';
+
+class CustomerArchiveScreen extends ConsumerStatefulWidget {
+  const CustomerArchiveScreen({super.key});
+  @override ConsumerState<CustomerArchiveScreen> createState() => _CustomerArchiveScreenState();
+}
+class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
+  final _searchController=TextEditingController(); String _query=''; int? _year;
+  @override void dispose(){_searchController.dispose();super.dispose();}
+  @override Widget build(BuildContext context){
+    final db=ref.watch(databaseProvider);
+    return StreamBuilder<List<Customer>>(stream:db.watchArchivedCustomers(year:_year),builder:(context,cs){
+      final customers=cs.data??const <Customer>[];
+      return StreamBuilder<List<Order>>(stream:db.watchArchivedOrders(year:_year),builder:(context,os){
+        final orders=os.data??const <Order>[]; final q=normalizeForSearch(_query);
+        final filtered=q.isEmpty?customers:customers.where((c)=>normalizeForSearch(c.name).contains(q)||normalizeForSearch(c.phone).contains(q)||c.serialNumber.toString().contains(q)).toList();
+        final totalValue=orders.fold<double>(0,(s,o)=>s+o.totalAmount-o.discountAmount); final totalPaid=orders.fold<double>(0,(s,o)=>s+o.totalPaid);
+        final years=customers.map((c)=>c.archiveYear).whereType<int>().toSet().toList()..sort((a,b)=>b.compareTo(a));
+        return Container(color:const Color(0xFFFAF6F0),child:Column(children:[
+          Padding(padding:const EdgeInsets.fromLTRB(28,28,28,0),child:Row(children:[
+            Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:AppColors.wood.withValues(alpha:.1),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.archive_rounded,color:AppColors.wood)),const SizedBox(width:14),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('أرشيف العملاء',style:GoogleFonts.cairo(fontSize:21,fontWeight:FontWeight.w900,color:const Color(0xFF2A2320))),Text('السجلات محفوظة بالكامل للرجوع إليها في أي وقت',style:GoogleFonts.cairo(fontSize:12,color:Colors.grey.shade600))])),
+            if(years.isNotEmpty)DropdownButton<int?>(value:years.contains(_year)?_year:null,hint:const Text('كل السنوات'),items:[const DropdownMenuItem<int?>(value:null,child:Text('كل السنوات')),...years.map((y)=>DropdownMenuItem(value:y,child:Text('أرشيف $y')))],onChanged:(v)=>setState(()=>_year=v))])),
+          Padding(padding:const EdgeInsets.fromLTRB(28,18,28,0),child:AppSearchBar(controller:_searchController,hintText:'ابحث بالاسم أو الهاتف أو الرقم التسلسلي...',onChanged:(v)=>setState(()=>_query=v),onClear:()=>setState(()=>_query=''))),
+          Padding(padding:const EdgeInsets.fromLTRB(28,18,28,0),child:Row(children:[_Stat('العملاء','${filtered.length}',Icons.people_alt_rounded),const SizedBox(width:10),_Stat('الطلبات','${orders.length}',Icons.checkroom_rounded),const SizedBox(width:10),_Stat('إجمالي الطلبات','${totalValue.toStringAsFixed(0)} ج',Icons.payments_rounded),const SizedBox(width:10),_Stat('إجمالي المدفوع','${totalPaid.toStringAsFixed(0)} ج',Icons.account_balance_wallet_rounded)])),
+          Expanded(child:filtered.isEmpty?const Center(child:Text('لا يوجد عملاء مؤرشفون')):ListView.builder(padding:const EdgeInsets.fromLTRB(28,18,28,24),itemCount:filtered.length,itemBuilder:(context,index)=>_ArchiveCustomerCard(customer:filtered[index],db:db)))
+        ]));
+      });
+    });
+  }
+}
+class _ArchiveCustomerCard extends StatelessWidget{
+  final Customer customer; final AppDatabase db; const _ArchiveCustomerCard({required this.customer,required this.db});
+  @override Widget build(BuildContext context)=>StreamBuilder<List<Order>>(stream:db.watchArchivedOrdersForCustomer(customer.id),builder:(context,s){final orders=s.data??const <Order>[];final value=orders.fold<double>(0,(x,o)=>x+o.totalAmount-o.discountAmount);final paid=orders.fold<double>(0,(x,o)=>x+o.totalPaid);return Card(margin:const EdgeInsets.only(bottom:12),elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:BorderSide(color:Colors.black.withValues(alpha:.06))),child:ExpansionTile(leading:CircleAvatar(backgroundColor:AppColors.wood.withValues(alpha:.1),child:Text(customer.name.isNotEmpty?customer.name[0]:'?',style:const TextStyle(color:AppColors.wood,fontWeight:FontWeight.bold))),title:Text('${customer.name}  #${customer.serialNumber}',style:GoogleFonts.cairo(fontWeight:FontWeight.w800)),subtitle:Text('${customer.phone} • أرشيف ${customer.archiveYear??'-'}',style:GoogleFonts.cairo(fontSize:11,color:Colors.grey)),trailing:Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.end,children:[Text('${value.toStringAsFixed(0)} ج',style:const TextStyle(fontWeight:FontWeight.bold)),Text('مدفوع ${paid.toStringAsFixed(0)} ج',style:TextStyle(fontSize:10,color:AppColors.success))]),children:[Padding(padding:const EdgeInsets.fromLTRB(16,0,16,14),child:Column(children:orders.map((o)=>ListTile(contentPadding:EdgeInsets.zero,title:Text(o.itemType,style:GoogleFonts.cairo(fontWeight:FontWeight.w700)),subtitle:Text('${o.status} • ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),trailing:Text('${(o.totalAmount-o.discountAmount).toStringAsFixed(0)} ج'),onTap:()=>showDialog(context:context,builder:(_)=>_ArchiveOrderDialog(order:o))).toList()))]));}
+}
+class _ArchiveOrderDialog extends StatelessWidget{final Order order;const _ArchiveOrderDialog({required this.order});@override Widget build(BuildContext context)=>AlertDialog(title:Text(order.itemType,style:GoogleFonts.cairo(fontWeight:FontWeight.w800)),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[_line('العميل',order.customerName),_line('الحالة',order.status),_line('التسليم',DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(order.deliveryDate))),_line('الإجمالي','${order.totalAmount.toStringAsFixed(0)} ج'),_line('الخصم','${order.discountAmount.toStringAsFixed(0)} ج${order.discountReason.isNotEmpty?' • ${order.discountReason}':''}'),_line('المدفوع','${order.totalPaid.toStringAsFixed(0)} ج'),_line('المتبقي','${order.remaining.toStringAsFixed(0)} ج'),const Divider(),Text('تفاصيل الطلب',style:GoogleFonts.cairo(fontWeight:FontWeight.bold)),const SizedBox(height:6),Text(order.details.isEmpty?'لا توجد تفاصيل':order.details,style:GoogleFonts.cairo())]))),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إغلاق'))]);static Widget _line(String a,String b)=>Padding(padding:const EdgeInsets.only(bottom:7),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[SizedBox(width:90,child:Text(a,style:const TextStyle(fontWeight:FontWeight.bold))),Expanded(child:Text(b))]));}
+class _Stat extends StatelessWidget{final String title,value;final IconData icon;const _Stat(this.title,this.value,this.icon);@override Widget build(BuildContext context)=>Expanded(child:Container(padding:const EdgeInsets.symmetric(horizontal:14,vertical:12),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(14)),child:Row(children:[Icon(icon,color:AppColors.wood,size:22),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:GoogleFonts.cairo(fontSize:10,color:Colors.grey.shade600)),Text(value,style:GoogleFonts.cairo(fontSize:14,fontWeight:FontWeight.w800))]))])));}
+''',encoding='utf-8')
 
       - name: Patch PDF preview
         shell: python
         run: |
           from pathlib import Path
           import re
-
           path = Path('lib/services/pdf_export_service.dart')
           text = path.read_text(encoding='utf-8')
-
           if "import 'dart:io';" not in text:
               text = text.replace("import 'dart:typed_data';", "import 'dart:typed_data';\nimport 'dart:io';")
           if "package:path_provider/path_provider.dart" not in text:
@@ -32,7 +239,6 @@ jobs:
               text = text.replace("import 'package:intl/intl.dart';", "import 'package:intl/intl.dart';\nimport 'package:url_launcher/url_launcher.dart';")
           if "../core/whatsapp.dart" not in text:
               text = text.replace("import '../core/theme.dart';", "import '../core/theme.dart';\nimport '../core/whatsapp.dart';")
-
           new_block = r'''  Future<String?> _savePdfForWhatsApp(Uint8List bytes, String fileName) async {
     try {
       final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
@@ -40,78 +246,41 @@ jobs:
       final file = File(p.join(dir.path, safeName));
       await file.writeAsBytes(bytes, flush: true);
       return file.path;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   }
 
-  /// بيفتح شاشة معاينة الفاتورة، مع زر واتساب مخصص بدل زر المشاركة العام.
-  /// الفاتورة بتتحفظ تلقائياً في Downloads، وواتساب بيتفتح لاختيار المحادثة.
   Future<void> preview(BuildContext context, Uint8List bytes, String fileName) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(
-            title: const Text('معاينة قبل التصدير'),
-            backgroundColor: AppColors.wood,
-            foregroundColor: Colors.white,
-          ),
-          body: PdfPreview(
-            build: (format) async => bytes,
-            pdfFileName: fileName,
-            allowPrinting: true,
-            allowSharing: false,
-            actions: [
-              IconButton(
-                tooltip: 'مشاركة عبر واتساب',
-                icon: const Icon(Icons.chat_rounded),
-                onPressed: () async {
-                  final savedPath = await _savePdfForWhatsApp(bytes, fileName);
-                  final message = Uri.encodeComponent('فاتورة جاهزة: $fileName');
-                  final appUri = Uri.parse('whatsapp://send?text=$message');
-                  var opened = await launchUrl(appUri, mode: LaunchMode.externalApplication);
-                  if (!opened) {
-                    final webUri = Uri.parse('https://wa.me/?text=$message');
-                    opened = await launchUrl(webUri, mode: LaunchMode.externalApplication);
-                  }
-
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        savedPath != null
-                            ? (opened
-                                ? 'تم فتح واتساب، والفاتورة محفوظة في Downloads. اختار الرقم وأرفق ملف الـPDF وأرسله.'
-                                : 'الفاتورة محفوظة في Downloads، لكن لم يتم فتح واتساب تلقائياً.')
-                            : 'لم يتم حفظ الفاتورة تلقائياً. أرفق ملف الـPDF يدوياً بعد فتح واتساب.',
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-            canChangePageFormat: false,
-            canChangeOrientation: false,
-            canDebug: false,
-          ),
-        ),
-      ),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(
+      appBar: AppBar(title: const Text('معاينة قبل التصدير'), backgroundColor: AppColors.wood, foregroundColor: Colors.white),
+      body: PdfPreview(build: (format) async => bytes, pdfFileName: fileName, allowPrinting: true, allowSharing: false,
+        actions: [IconButton(tooltip: 'مشاركة عبر واتساب', icon: const Icon(Icons.chat_rounded), onPressed: () async {
+          final savedPath = await _savePdfForWhatsApp(bytes, fileName);
+          final message = Uri.encodeComponent('فاتورة جاهزة: $fileName');
+          var opened = await launchUrl(Uri.parse('whatsapp://send?text=$message'), mode: LaunchMode.externalApplication);
+          if (!opened) opened = await launchUrl(Uri.parse('https://wa.me/?text=$message'), mode: LaunchMode.externalApplication);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(savedPath != null ? (opened ? 'تم فتح واتساب، والفاتورة محفوظة في Downloads. أرفق ملف الـPDF وأرسله.' : 'الفاتورة محفوظة في Downloads، لكن لم يتم فتح واتساب تلقائياً.') : 'لم يتم حفظ الفاتورة تلقائياً.')));
+        })], canChangePageFormat: false, canChangeOrientation: false, canDebug: false),
+    )));
   }
 '''
+          pattern=re.compile(r"  Future<void> preview\(BuildContext context, Uint8List bytes, String fileName\) async \{.*?\n  \}\n\n  /// نسخة قديمة",re.S)
+          m=pattern.search(text)
+          if not m: raise SystemExit('preview method not found')
+          text=text[:m.start()]+new_block+"\n  /// نسخة قديمة"+text[m.end():]
+          path.write_text(text,encoding='utf-8')
 
-          pattern = re.compile(r"  Future<void> preview\(BuildContext context, Uint8List bytes, String fileName\) async \{.*?\n  \}\n\n  /// نسخة قديمة", re.S)
-          match = pattern.search(text)
-          if not match:
-              raise SystemExit('preview method not found')
-          text = text[:match.start()] + new_block + "\n  /// نسخة قديمة" + text[match.end():]
-          path.write_text(text, encoding='utf-8')
-
-      - name: Commit patch and remove temporary workflow
+      - name: Generate Drift and verify
         run: |
-          rm -f .github/workflows/apply-whatsapp-invoice-share.yml
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Commit patches and remove temporary workflows
+        run: |
+          rm -f .github/workflows/apply-whatsapp-invoice-share.yml .github/workflows/implement-customer-archive.yml .archive-trigger
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/services/pdf_export_service.dart .github/workflows/apply-whatsapp-invoice-share.yml
-          git commit -m "feat: open WhatsApp from customer invoice preview"
+          git add -A
+          git commit -m "Implement customer archive system [archive-applied]"
           git push
