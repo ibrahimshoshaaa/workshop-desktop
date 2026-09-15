@@ -32,54 +32,74 @@ class CustomerArchiveService {
     final reason = await getArchiveBlockReason(customerId);
     if (reason != null) throw StateError(reason);
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final orders = await (_db.select(_db.orders)
-          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(false)))
-        .get();
+    return _db.transaction(() async {
+      final customer = await (_db.select(_db.customers)
+            ..where((c) => c.id.equals(customerId) & c.isDeleted.equals(false) & c.isArchived.equals(false)))
+          .getSingleOrNull();
+      if (customer == null) throw StateError('العميل غير موجود أو مؤرشف بالفعل.');
 
-    await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
-      CustomersCompanion(
-        isArchived: const Value(true),
-        dirty: const Value(true),
-        updatedAt: Value(now),
-      ),
-    );
+      final orders = await (_db.select(_db.orders)
+            ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(false)))
+          .get();
 
-    for (final order in orders) {
-      await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
-        OrdersCompanion(
+      for (final order in orders) {
+        if (order.remaining > 0.01 || order.status != 'تم التسليم') {
+          throw StateError('لا يمكن أرشفة العميل لأن لديه طلبًا غير مكتمل أو عليه مبلغ متبقٍ.');
+        }
+      }
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
+        CustomersCompanion(
           isArchived: const Value(true),
           dirty: const Value(true),
           updatedAt: Value(now),
         ),
       );
-    }
-    return orders.length;
+
+      for (final order in orders) {
+        await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
+          OrdersCompanion(
+            isArchived: const Value(true),
+            dirty: const Value(true),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+      return orders.length;
+    });
   }
 
   Future<int> reactivateCustomer(String customerId) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final orders = await (_db.select(_db.orders)
-          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(true)))
-        .get();
+    return _db.transaction(() async {
+      final customer = await (_db.select(_db.customers)
+            ..where((c) => c.id.equals(customerId) & c.isDeleted.equals(false) & c.isArchived.equals(true)))
+          .getSingleOrNull();
+      if (customer == null) throw StateError('العميل غير موجود في الأرشيف.');
 
-    await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
-      CustomersCompanion(
-        isArchived: const Value(false),
-        dirty: const Value(true),
-        updatedAt: Value(now),
-      ),
-    );
+      final orders = await (_db.select(_db.orders)
+            ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(true)))
+          .get();
 
-    for (final order in orders) {
-      await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
-        OrdersCompanion(
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
+        CustomersCompanion(
           isArchived: const Value(false),
           dirty: const Value(true),
           updatedAt: Value(now),
         ),
       );
-    }
-    return orders.length;
+
+      for (final order in orders) {
+        await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
+          OrdersCompanion(
+            isArchived: const Value(false),
+            dirty: const Value(true),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+      return orders.length;
+    });
   }
 }
