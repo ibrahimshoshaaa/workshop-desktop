@@ -12,6 +12,16 @@ final customersProvider = StreamProvider<List<Customer>>((ref) {
   return ref.watch(databaseProvider).watchCustomers();
 });
 
+/// العملاء المؤرشفون (الـ soft deleted) - منفصلين عن قائمة العملاء الحالية.
+/// بنعرضهم في صفحة الأرشيف مع إمكانية البحث واسترجاع العميل.
+final archivedCustomersProvider = StreamProvider<List<Customer>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return (db.select(db.customers)
+        ..where((c) => c.isDeleted.equals(true))
+        ..orderBy([(c) => OrderingTerm.desc(c.updatedAt)]))
+      .watch();
+});
+
 final ordersProvider = StreamProvider<List<Order>>((ref) {
   return ref.watch(databaseProvider).watchOrders();
 });
@@ -24,8 +34,6 @@ final expensesProvider = StreamProvider<List<Expense>>((ref) {
   return ref.watch(databaseProvider).watchExpenses();
 });
 
-/// حصة طلب معيّن من مصروف (ممكن يكون المصروف مقسّم على أكتر من طلب،
-/// فـ [shareAmount] هنا هو نصيب الطلب ده بس، مش إجمالي المصروف كامل)
 class OrderExpenseShare {
   final Expense expense;
   final double shareAmount;
@@ -33,8 +41,6 @@ class OrderExpenseShare {
   const OrderExpenseShare({required this.expense, required this.shareAmount, required this.totalOrdersCount});
 }
 
-/// مصروفات مرتبطة بطلب معيّن فقط - بتاخد في الاعتبار المصروفات المقسّمة
-/// على أكتر من طلب (كل طلب بياخد نصيبه بس، مش المصروف كامل)
 final orderExpensesProvider = Provider.family<List<OrderExpenseShare>, String>((ref, orderId) {
   final expenses = ref.watch(expensesProvider).value ?? [];
   final result = <OrderExpenseShare>[];
@@ -60,14 +66,10 @@ final workerPaymentsProvider = StreamProvider<List<WorkerPayment>>((ref) {
   return ref.watch(databaseProvider).watchWorkerPayments();
 });
 
-/// سجل قبض عامل معيّن بس - بنستخدمه في ديالوج تفاصيل العامل
 final workerPaymentsForWorkerProvider = StreamProvider.family<List<WorkerPayment>, String>((ref, workerId) {
   return ref.watch(databaseProvider).watchPaymentsForWorker(workerId);
 });
 
-/// بيحسب بداية دورة الاستحقاق الحالية (منتصف الليل) لعامل معيّن حسب
-/// نوع مرتبه: يومي = النهاردة، أسبوعي = آخر (أو نفس) يوم القبض المحدد،
-/// شهري = أول يوم في الشهر الحالي
 DateTime workerPeriodAnchor(Worker worker, DateTime now) {
   final today = DateTime(now.year, now.month, now.day);
   switch (worker.salaryType) {
@@ -76,7 +78,7 @@ DateTime workerPeriodAnchor(Worker worker, DateTime now) {
       return today.subtract(Duration(days: diff));
     case 'monthly':
       return DateTime(now.year, now.month, 1);
-    default: // daily
+    default:
       return today;
   }
 }
@@ -86,18 +88,11 @@ bool isWorkerPaidForCurrentPeriod(Worker worker, List<WorkerPayment> payments, D
   return payments.any((p) => p.workerId == worker.id && DateTime.fromMillisecondsSinceEpoch(p.periodStart).isAtSameMomentAs(anchor));
 }
 
-/// كل العمال (يومي/أسبوعي/شهري) اللي معاد قبضهم وصل (أو فات) ولسه ما
-/// اتأكدش دفعهم للفترة الحالية - ده اللي بيبني عليه بانر "موعد القبض" في
-/// صفحة العمال والرئيسية. التنبيه ده بيفضل ظاهر لحد ما يتسجل القبض
-/// فعليًا (مش بيختفي لوحده في اليوم اللي بعده حتى لو فات معاد
-/// الاستحقاق)، عشان محدش ينسى يدفع لعامل اتأخر معاده
 final workersDueTodayProvider = Provider<List<Worker>>((ref) {
   final workers = ref.watch(workersProvider).value ?? [];
   final payments = ref.watch(workerPaymentsProvider).value ?? [];
   final now = DateTime.now();
-  return workers.where((w) {
-    return !isWorkerPaidForCurrentPeriod(w, payments, now);
-  }).toList();
+  return workers.where((w) => !isWorkerPaidForCurrentPeriod(w, payments, now)).toList();
 });
 
 final debtorOrdersProvider = Provider<List<Order>>((ref) {
@@ -105,7 +100,6 @@ final debtorOrdersProvider = Provider<List<Order>>((ref) {
   return orders.where((o) => o.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
 });
 
-/// مديونيات الورشة (لصالح الموردين/الصنايعية) - عكس [debtorOrdersProvider]
 final workshopDebtsProvider = StreamProvider<List<WorkshopDebt>>((ref) {
   return ref.watch(databaseProvider).watchWorkshopDebts();
 });
@@ -115,7 +109,6 @@ final outstandingWorkshopDebtsProvider = Provider<List<WorkshopDebt>>((ref) {
   return debts.where((d) => d.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
 });
 
-/// سجل عمليات سحب إنستاباي كاش
 final cashTransfersProvider = StreamProvider<List<CashTransfer>>((ref) {
   return ref.watch(databaseProvider).watchCashTransfers();
 });
@@ -125,8 +118,6 @@ final lowStockMaterialsProvider = Provider<List<MaterialItem>>((ref) {
   return materials.where((m) => m.quantity <= m.minThreshold).toList();
 });
 
-/// الطلبات اللي معاد تسليمها خلال الأسبوع الجاي (من دلوقتي لحد بعد 7
-/// أيام) ولسه ماتسلمتش - بنستخدمها في بانر "التسليمات القادمة" بالرئيسية
 final upcomingDeliveriesProvider = Provider<List<Order>>((ref) {
   final orders = ref.watch(ordersProvider).value ?? [];
   final now = DateTime.now();
@@ -136,8 +127,7 @@ final upcomingDeliveriesProvider = Provider<List<Order>>((ref) {
     if (o.status == 'تم التسليم') return false;
     final delivery = DateTime.fromMillisecondsSinceEpoch(o.deliveryDate);
     return !delivery.isBefore(today) && delivery.isBefore(weekAhead);
-  }).toList()
-    ..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
+  }).toList()..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
 });
 
 class DashboardStats {
@@ -145,20 +135,10 @@ class DashboardStats {
   final double totalDebts;
   final double totalExpenses;
   final double netProfit;
-  /// تفنيط "المبلغ المتاح" حسب مصدره: كاش/إنستاباي - كل واحد فيهم = ما
-  /// دخل من دفعات بنفس الطريقة ناقص المصروفات اللي خرجت من نفس المصدر
   final double cashAvailable;
   final double instapayAvailable;
   final double totalWorkshopDebts;
-  DashboardStats({
-    required this.totalRevenue,
-    required this.totalDebts,
-    required this.totalExpenses,
-    required this.netProfit,
-    required this.cashAvailable,
-    required this.instapayAvailable,
-    required this.totalWorkshopDebts,
-  });
+  DashboardStats({required this.totalRevenue, required this.totalDebts, required this.totalExpenses, required this.netProfit, required this.cashAvailable, required this.instapayAvailable, required this.totalWorkshopDebts});
 }
 
 final dashboardStatsProvider = Provider<DashboardStats>((ref) {
@@ -166,45 +146,24 @@ final dashboardStatsProvider = Provider<DashboardStats>((ref) {
   final expenses = ref.watch(expensesProvider).value ?? [];
   final transactions = ref.watch(allTransactionsProvider).value ?? [];
   final workshopDebts = ref.watch(workshopDebtsProvider).value ?? [];
-
   final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-  // بنجمع بس الطلبات اللي لسه عليها متبقٍ فعلي (زي debtorOrdersProvider
-  // بالظبط) - لو جمعنا كل الطلبات من غير فلترة، طلب "مدفوع زيادة" (متبقي
-  // سالب) كان هيقلل الإجمالي هنا من غير ما يفرق مع صفحة المديونيات اللي
-  // بتستبعده أصلاً، وده اللي كان بيسبب فرق بين رقم الداش بورد والصفحة
   final totalDebts = orders.where((o) => o.remaining > 0).fold<double>(0, (s, o) => s + o.remaining);
   final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
   final totalWorkshopDebts = workshopDebts.fold<double>(0, (s, d) => s + d.remaining);
-
   double revenueByMethod(String method) {
-    // بنستبعد أي دفعة مرتبطة بطلب اتحذف - الطلب لما بيتحذف بيفضل تاريخ
-    // الدفعات بتاعته موجود في جدول الدفعات (مش بيتمسح تلقائي معاه)، فلو
-    // حسبناها كلها هيبان "المتاح" أعلى من الإيرادات نفسها وده رقم غلط
     final liveOrderIds = orders.map((o) => o.id).toSet();
-    return transactions
-        .where((t) => t.paymentMethod == method && liveOrderIds.contains(t.orderId))
-        .fold<double>(0, (s, t) => s + t.amountPaid);
+    return transactions.where((t) => t.paymentMethod == method && liveOrderIds.contains(t.orderId)).fold<double>(0, (s, t) => s + t.amountPaid);
   }
-
-  double expensesByMethod(String method) =>
-      expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
-
+  double expensesByMethod(String method) => expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
   final cashTransfers = ref.watch(cashTransfersProvider).value ?? [];
   final totalTransferred = cashTransfers.fold<double>(0, (s, t) => s + t.amount);
-
-  // سحب إنستاباي كاش: بينقل رصيد من "المتاح إنستاباي" لـ "المتاح نقدي"
-  // بس - مش مصروف ولا إيراد جديد، فمعادلة الأرباح فوق (totalRevenue/
-  // totalExpenses) متأثرتش خالص
-  final cashAvailable = revenueByMethod('cash') - expensesByMethod('cash') + totalTransferred;
-  final instapayAvailable = revenueByMethod('instapay') - expensesByMethod('instapay') - totalTransferred;
-
   return DashboardStats(
     totalRevenue: totalRevenue,
     totalDebts: totalDebts,
     totalExpenses: totalExpenses,
     netProfit: totalRevenue - totalExpenses,
-    cashAvailable: cashAvailable,
-    instapayAvailable: instapayAvailable,
+    cashAvailable: revenueByMethod('cash') - expensesByMethod('cash') + totalTransferred,
+    instapayAvailable: revenueByMethod('instapay') - expensesByMethod('instapay') - totalTransferred,
     totalWorkshopDebts: totalWorkshopDebts,
   );
 });
