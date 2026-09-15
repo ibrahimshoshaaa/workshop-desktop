@@ -1,0 +1,62 @@
+name: Finalize customer archive desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/finalize-customer-archive-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+
+      - name: Apply archive implementation
+        shell: python
+        run: |
+          from pathlib import Path
+          src = Path('.github/workflows/apply-customer-archive-desktop-v2.yml').read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(src) if line.strip() == 'from pathlib import Path')
+          end = next(i for i, line in enumerate(src[start:], start) if line.startswith('      - name: Fetch dependencies'))
+          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in src[start:end])
+          exec(compile(code, 'customer_archive_impl.py', 'exec'), {'__name__': '__main__'})
+
+      - name: Repair archive screen imports
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('lib/screens/customer_archive_screen.dart')
+          s = p.read_text(encoding='utf-8')
+          helper = 'String normalizeForSearch(String value) => value.trim().toLowerCase();'
+          lines = s.splitlines()
+          lines = [x for x in lines if x.strip() != helper]
+          first_class = next((i for i, x in enumerate(lines) if x.startswith('class ')), len(lines))
+          lines.insert(first_class, helper)
+          p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+      - name: Generate and analyze
+        run: |
+          flutter pub get
+          dart run build_runner build
+          flutter analyze
+
+      - name: Commit archive implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib
+          git diff --cached --quiet || git commit -m "Finalize desktop customer archive implementation"
+          git push
