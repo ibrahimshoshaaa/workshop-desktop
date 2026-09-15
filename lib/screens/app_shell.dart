@@ -23,7 +23,7 @@ class AppShell extends ConsumerWidget {
   static final _allDestinations = [
     (Icons.dashboard_rounded, 'الرئيسية', null),
     (Icons.people_alt_rounded, 'العملاء', 'customers'),
-    (Icons.archive_rounded, 'أرشيف العملاء', 'customers'),
+    (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),
     (Icons.checkroom_rounded, 'الطلبات', 'orders'),
     (Icons.account_balance_wallet_rounded, 'المديونيات', 'debts'),
     (Icons.store_rounded, 'مديونيات الورشة', 'debts'),
@@ -64,7 +64,6 @@ class AppShell extends ConsumerWidget {
         visibleIndexes.add(i);
       }
     }
-
     final destinations = visibleIndexes.map((i) => _allDestinations[i]).toList();
     final screens = visibleIndexes.map((i) => _allScreens[i]).toList();
     final rawIndex = ref.watch(selectedTabProvider);
@@ -76,49 +75,37 @@ class AppShell extends ConsumerWidget {
         elevation: 2,
         automaticallyImplyLeading: false,
         titleSpacing: 20,
-        title: const Row(
-          children: [
-            Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
-            SizedBox(width: 12),
-            Text('Tahoun Royal Home', style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold, fontSize: 20)),
-          ],
-        ),
+        title: const Row(children: [Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28), SizedBox(width: 12), Text('Tahoun Royal Home', style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold, fontSize: 20))]),
         actions: [
           const _SyncButton(),
-          IconButton(
-            tooltip: 'تسجيل الخروج',
-            onPressed: () => ref.read(authRepositoryProvider).logout(),
-            icon: const Icon(Icons.logout_rounded, color: AppColors.amber),
-          ),
+          IconButton(tooltip: 'تسجيل الخروج', onPressed: () => ref.read(authRepositoryProvider).logout(), icon: const Icon(Icons.logout_rounded, color: AppColors.amber)),
           const SizedBox(width: 12),
         ],
       ),
-      body: Row(
-        children: [
-          SizedBox(
-            width: 120,
-            child: Scrollbar(
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: NavigationRail(
-                  selectedIndex: index,
-                  onDestinationSelected: (i) => ref.read(selectedTabProvider.notifier).state = i,
-                  labelType: NavigationRailLabelType.all,
-                  backgroundColor: AppColors.woodDark,
-                  selectedIconTheme: const IconThemeData(color: AppColors.amber),
-                  unselectedIconTheme: IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
-                  selectedLabelTextStyle: const TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold),
-                  unselectedLabelTextStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-                  destinations: destinations.map((d) => NavigationRailDestination(icon: Icon(d.$1), label: Text(d.$2))).toList(),
-                ),
+      body: Row(children: [
+        SizedBox(
+          width: 120,
+          child: Scrollbar(
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: NavigationRail(
+                selectedIndex: index,
+                onDestinationSelected: (i) => ref.read(selectedTabProvider.notifier).state = i,
+                labelType: NavigationRailLabelType.all,
+                backgroundColor: AppColors.woodDark,
+                selectedIconTheme: const IconThemeData(color: AppColors.amber),
+                unselectedIconTheme: IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
+                selectedLabelTextStyle: const TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold),
+                unselectedLabelTextStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                destinations: destinations.map((d) => NavigationRailDestination(icon: Icon(d.$1), label: Text(d.$2))).toList(),
               ),
             ),
           ),
-          const VerticalDivider(width: 1),
-          Expanded(child: screens.isEmpty ? const SizedBox.shrink() : screens[index]),
-        ],
-      ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(child: screens.isEmpty ? const SizedBox.shrink() : screens[index]),
+      ]),
     );
   }
 }
@@ -137,11 +124,5 @@ class _SyncButtonState extends ConsumerState<_SyncButton> {
     if (mounted) setState(() => _isSyncing = false);
   }
   @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: 'مزامنة الآن',
-      onPressed: _isSyncing ? null : _sync,
-      icon: _isSyncing ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.amber)) : const Icon(Icons.sync_rounded, color: AppColors.amber),
-    );
-  }
+  Widget build(BuildContext context) => IconButton(tooltip: 'مزامنة الآن', onPressed: _isSyncing ? null : _sync, icon: _isSyncing ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.amber)) : const Icon(Icons.sync_rounded, color: AppColors.amber));
 }
