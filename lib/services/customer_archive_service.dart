@@ -48,7 +48,7 @@ class CustomerArchiveService {
     for (final order in orders) {
       await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
         OrdersCompanion(
-          isDeleted: const Value(true),
+          isArchived: const Value(true),
           dirty: const Value(true),
           updatedAt: Value(now),
         ),
@@ -74,7 +74,7 @@ class CustomerArchiveService {
     for (final order in orders) {
       await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
         OrdersCompanion(
-          isDeleted: const Value(false),
+          isArchived: const Value(false),
           dirty: const Value(true),
           updatedAt: Value(now),
         ),
