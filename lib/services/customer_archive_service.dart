@@ -4,18 +4,17 @@ import '../core/order_calculations.dart';
 
 /// منطق أرشفة العميل واسترجاعه بالكامل.
 ///
-/// في نسخة الديسكتوب الـ soft-delete هو علامة الأرشفة الحالية:
-/// - العميل يتأرشف.
-/// - كل طلباته غير المؤرشفة تتأرشف معه.
-/// - الطلبات المؤرشفة لا تدخل في الطلبات الحالية أو إجماليات الداشبورد.
-/// - عند الاسترجاع يرجع العميل وكل طلباته معًا.
+/// الأرشيف حالة مستقلة عن الحذف الحقيقي:
+/// - isDeleted = حذف حقيقي للمزامنة.
+/// - isArchived = إخفاء مؤقت من القوائم والإجماليات.
+/// - العميل وطلباته بيتأرشفوا ويرجعوا معًا.
 class CustomerArchiveService {
   CustomerArchiveService(this._db);
   final AppDatabase _db;
 
   Future<String?> getArchiveBlockReason(String customerId) async {
     final orders = await (_db.select(_db.orders)
-          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false)))
+          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(false)))
         .get();
 
     for (final order in orders) {
@@ -35,12 +34,12 @@ class CustomerArchiveService {
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final orders = await (_db.select(_db.orders)
-          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false)))
+          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(false)))
         .get();
 
     await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
       CustomersCompanion(
-        isDeleted: const Value(true),
+        isArchived: const Value(true),
         dirty: const Value(true),
         updatedAt: Value(now),
       ),
@@ -61,12 +60,12 @@ class CustomerArchiveService {
   Future<int> reactivateCustomer(String customerId) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final orders = await (_db.select(_db.orders)
-          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(true)))
+          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(true)))
         .get();
 
     await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
       CustomersCompanion(
-        isDeleted: const Value(false),
+        isArchived: const Value(false),
         dirty: const Value(true),
         updatedAt: Value(now),
       ),

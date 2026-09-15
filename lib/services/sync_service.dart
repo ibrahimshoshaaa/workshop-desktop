@@ -89,7 +89,7 @@ class SyncService {
   Future<void> _repairMissingOverpaymentDebtsOnce() async {
     final done = await _db.getMeta('overpaymentDebtRepairDone');
     if (done == '1') return;
-    final orders = await (_db.select(_db.orders)..where((t) => t.isDeleted.equals(false))).get();
+    final orders = await (_db.select(_db.orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).get();
     for (final order in orders) {
       final overpaid = order.totalPaid - (order.totalAmount - order.discountAmount);
       final existing = await (_db.select(_db.workshopDebts)
@@ -152,6 +152,7 @@ class SyncService {
             createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
+            isArchived: Value(map['isArchived'] == true),
             dirty: const Value(false),
           ));
         }
@@ -178,6 +179,7 @@ class SyncService {
           'serialNumber': row.serialNumber,
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
+          'isArchived': row.isArchived,
         });
         await _db.updateCustomerFields(CustomersCompanion(id: Value(row.id), dirty: const Value(false)));
       }
@@ -221,6 +223,7 @@ class SyncService {
             createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
+            isArchived: Value(map['isArchived'] == true),
             dirty: const Value(false),
           ));
         }
@@ -255,6 +258,7 @@ class SyncService {
           'deliveryDate': row.deliveryDate,
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
+          'isArchived': row.isArchived,
         });
         await _db.updateOrderFields(OrdersCompanion(id: Value(row.id), dirty: const Value(false)));
       }

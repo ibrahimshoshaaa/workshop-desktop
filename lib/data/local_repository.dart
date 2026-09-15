@@ -27,6 +27,7 @@ class LocalRepository {
       createdAt: Value(now),
       updatedAt: Value(now),
       isDeleted: const Value(false),
+      isArchived: const Value(false),
       dirty: const Value(true),
     ));
   }
@@ -40,6 +41,7 @@ class LocalRepository {
       createdAt: Value(customer.createdAt),
       updatedAt: Value(_now),
       isDeleted: const Value(false),
+      isArchived: const Value(false),
       dirty: const Value(true),
     ));
   }
@@ -73,6 +75,7 @@ class LocalRepository {
       createdAt: Value(now),
       updatedAt: Value(now),
       isDeleted: const Value(false),
+      isArchived: const Value(false),
       dirty: const Value(true),
     ));
     return id;

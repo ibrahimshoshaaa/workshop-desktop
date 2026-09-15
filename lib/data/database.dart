@@ -18,6 +18,7 @@ class Customers extends Table {
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   BoolColumn get dirty => boolean().withDefault(const Constant(true))();
 
   @override
@@ -46,6 +47,7 @@ class Orders extends Table {
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   BoolColumn get dirty => boolean().withDefault(const Constant(true))();
 
   @override
@@ -234,7 +236,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration {
@@ -294,6 +296,19 @@ class AppDatabase extends _$AppDatabase {
           // اللي دفع أكتر من السعر النهائي بعد تعديله
           await m.addColumn(workshopDebts, workshopDebts.orderId);
         }
+        if (from < 11) {
+          // archive state is independent from real soft deletion.
+          await m.addColumn(customers, customers.isArchived);
+          await m.addColumn(orders, orders.isArchived);
+
+          // The previous desktop archive implementation used isDeleted as
+          // its archive marker. Convert those local records to the new
+          // non-destructive archive state before sync runs again.
+          await (update(customers)..where((c) => c.isDeleted.equals(true)))
+              .write(const CustomersCompanion(isDeleted: Value(false), isArchived: Value(true)));
+          await (update(orders)..where((o) => o.isDeleted.equals(true)))
+              .write(const OrdersCompanion(isDeleted: Value(false), isArchived: Value(true)));
+        }
       },
     );
   }
@@ -301,7 +316,7 @@ class AppDatabase extends _$AppDatabase {
   // ---------------- Customers ----------------
 
   Stream<List<Customer>> watchCustomers() {
-    return (select(customers)..where((t) => t.isDeleted.equals(false))).watch();
+    return (select(customers)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();
   }
 
   Future<void> upsertCustomer(CustomersCompanion entry) => into(customers).insertOnConflictUpdate(entry);
@@ -335,7 +350,7 @@ class AppDatabase extends _$AppDatabase {
   // ---------------- Orders ----------------
 
   Stream<List<Order>> watchOrders() {
-    return (select(orders)..where((t) => t.isDeleted.equals(false))).watch();
+    return (select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();
   }
 
   Future<void> upsertOrder(OrdersCompanion entry) => into(orders).insertOnConflictUpdate(entry);

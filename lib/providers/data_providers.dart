@@ -13,11 +13,11 @@ final customersProvider = StreamProvider<List<Customer>>((ref) {
   return ref.watch(databaseProvider).watchCustomers();
 });
 
-/// العملاء المؤرشفون (الـ soft deleted) - منفصلين عن قائمة العملاء الحالية.
+/// العملاء المؤرشفون - منفصلين عن قائمة العملاء الحالية.
 final archivedCustomersProvider = StreamProvider<List<Customer>>((ref) {
   final db = ref.watch(databaseProvider);
   return (db.select(db.customers)
-        ..where((c) => c.isDeleted.equals(true))
+        ..where((c) => c.isArchived.equals(true) & c.isDeleted.equals(false))
         ..orderBy([(c) => OrderingTerm.desc(c.updatedAt)]))
       .watch();
 });
@@ -26,7 +26,7 @@ final archivedCustomersProvider = StreamProvider<List<Customer>>((ref) {
 final archivedOrdersProvider = StreamProvider<List<Order>>((ref) {
   final db = ref.watch(databaseProvider);
   return (db.select(db.orders)
-        ..where((o) => o.isDeleted.equals(true))
+        ..where((o) => o.isArchived.equals(true) & o.isDeleted.equals(false))
         ..orderBy([(o) => OrderingTerm.desc(o.createdAt)]))
       .watch();
 });
