@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/search_bar.dart';
 import '../core/theme.dart';
 import '../providers/data_providers.dart';
+import '../providers/database_provider.dart';
 import '../data/database.dart';
 import '../services/customer_archive_service.dart';
 import 'customers_screen.dart' show CustomerOrdersDialog;
