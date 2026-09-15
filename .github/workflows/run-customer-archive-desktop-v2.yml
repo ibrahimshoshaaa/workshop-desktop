@@ -35,6 +35,17 @@ jobs:
           code = '\n'.join(line[10:] if line.startswith('          ') else line for line in src[start:end])
           exec(compile(code, 'customer_archive_impl.py', 'exec'), {'__name__': '__main__'})
 
+      - name: Fix archive search helper
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('lib/screens/customer_archive_screen.dart')
+          s = p.read_text(encoding='utf-8')
+          if 'String normalizeForSearch(String value)' not in s:
+              imports_end = s.rfind('\n', 0, s.find('\n\n', 0))
+              s = s[:imports_end + 1] + "\nString normalizeForSearch(String value) => value.trim().toLowerCase();\n" + s[imports_end + 1:]
+              p.write_text(s, encoding='utf-8')
+
       - name: Fetch dependencies and regenerate Drift code
         run: |
           flutter pub get
