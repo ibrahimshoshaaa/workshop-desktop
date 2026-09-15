@@ -5,6 +5,7 @@ import '../core/search_bar.dart';
 import '../core/theme.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
+import '../services/customer_archive_service.dart';
 import 'customers_screen.dart' show CustomerOrdersDialog;
 
 class CustomerArchiveScreen extends ConsumerStatefulWidget {
@@ -25,27 +26,34 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
   }
 
   Future<void> _restore(Customer customer) async {
+    final archivedOrders = ref.read(archivedOrdersProvider).value ?? [];
+    final orderCount = archivedOrders.where((o) => o.customerId == customer.id).length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('استرجاع العميل'),
-        content: Text('هل تريد استرجاع "${customer.name}" من الأرشيف؟'),
+        content: Text(
+          orderCount == 0
+              ? 'هل تريد استرجاع "${customer.name}" من الأرشيف؟'
+              : 'سيتم استرجاع "${customer.name}" ومعه كل طلباته القديمة ($orderCount طلب). هل تريد المتابعة؟',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
           ElevatedButton.icon(
             icon: const Icon(Icons.restore_rounded),
-            label: const Text('استرجاع'),
+            label: const Text('استرجاع الكل'),
             onPressed: () => Navigator.pop(context, true),
           ),
         ],
       ),
     );
     if (ok != true || !mounted) return;
-    await ref.read(repositoryProvider).updateCustomer(
-      customer,
-      name: customer.name,
-      phone: customer.phone,
-      address: customer.address,
+
+    final db = ref.read(databaseProvider);
+    final count = await CustomerArchiveService(db).reactivateCustomer(customer.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم استرجاع العميل وكل طلباته القديمة ($count طلب).')),
     );
   }
 
@@ -76,7 +84,7 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                     children: [
                       Text('أرشيف العملاء', style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
                       const SizedBox(height: 4),
-                      Text('العملاء الذين تم أرشفتهم ويمكن استرجاعهم في أي وقت', style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600)),
+                      Text('العملاء وطلباتهم القديمة — يمكن استرجاع العميل بكل طلباته', style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600)),
                     ],
                   ),
                 ),
@@ -92,7 +100,7 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
             padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
             child: AppSearchBar(
               controller: _searchController,
-              hintText: 'ابحث باسم العميل أو رقم الهاتف...',
+              hintText: 'ابحث باسم العميل أو رقم الهاتف أو الرقم التسلسلي...',
               onChanged: (v) => setState(() => _query = v),
               onClear: () => setState(() => _query = ''),
             ),
@@ -105,7 +113,11 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                 final q = normalizeForSearch(_query);
                 final filtered = q.isEmpty
                     ? customers
-                    : customers.where((c) => normalizeForSearch(c.name).contains(q) || normalizeForSearch(c.phone).contains(q) || normalizeForSearch(c.address).contains(q)).toList();
+                    : customers.where((c) =>
+                        normalizeForSearch(c.name).contains(q) ||
+                        normalizeForSearch(c.phone).contains(q) ||
+                        normalizeForSearch(c.address).contains(q) ||
+                        c.serialNumber.toString().contains(q)).toList();
 
                 if (filtered.isEmpty) {
                   return Center(
@@ -125,6 +137,8 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final c = filtered[index];
+                    final archivedOrders = ref.watch(archivedOrdersProvider).value ?? [];
+                    final orderCount = archivedOrders.where((o) => o.customerId == c.id).length;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Material(
@@ -132,7 +146,7 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                         borderRadius: BorderRadius.circular(16),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
-                          onTap: () => showDialog(context: context, builder: (_) => CustomerOrdersDialog(customer: c)),
+                          onTap: () => showDialog(context: context, builder: (_) => CustomerOrdersDialog(customer: c, includeArchived: true)),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                             child: Row(
@@ -155,12 +169,17 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                                         ],
                                       ),
                                       const SizedBox(height: 4),
-                                      Text('${c.phone}${c.address.isNotEmpty ? ' • ${c.address}' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.cairo(fontSize: 12, color: Colors.grey.shade500)),
+                                      Text(
+                                        '${c.phone}${c.address.isNotEmpty ? ' • ${c.address}' : ''}${orderCount > 0 ? ' • $orderCount طلب قديم' : ''}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.cairo(fontSize: 12, color: Colors.grey.shade500),
+                                      ),
                                     ],
                                   ),
                                 ),
                                 IconButton(
-                                  tooltip: 'استرجاع العميل',
+                                  tooltip: 'استرجاع العميل بكل طلباته',
                                   onPressed: () => _restore(c),
                                   icon: const Icon(Icons.restore_rounded, color: AppColors.success),
                                 ),
