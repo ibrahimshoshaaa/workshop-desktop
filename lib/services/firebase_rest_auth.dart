@@ -33,30 +33,33 @@ class FirebaseRestAuth {
     await _ensureFreshToken();
     final token = _idToken;
     if (token == null) return uri;
-    final params = Map<String, String>.from(uri.queryParameters)..['auth'] = token;
+    final params = Map<String, String>.from(uri.queryParameters)
+      ..['auth'] = token;
     return uri.replace(queryParameters: params);
   }
 
   static Future<void> _ensureFreshToken() async {
-    if (_idToken != null && _expiresAt != null && DateTime.now().isBefore(_expiresAt!.subtract(const Duration(minutes: 2)))) {
+    if (_idToken != null &&
+        _expiresAt != null &&
+        DateTime.now()
+            .isBefore(_expiresAt!.subtract(const Duration(minutes: 2)))) {
       return; // لسه صالح لدقيقتين على الأقل، مفيش داعي نجدده
     }
     if (_refreshToken == null) return; // مفيش جلسة أصلًا
     try {
-      final response = await http
-          .post(
-            Uri.parse('https://securetoken.googleapis.com/v1/token?key=$webApiKey'),
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: {'grant_type': 'refresh_token', 'refresh_token': _refreshToken!},
-          )
-          .timeout(_timeout);
+      final response = await http.post(
+        Uri.parse('https://securetoken.googleapis.com/v1/token?key=$webApiKey'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {'grant_type': 'refresh_token', 'refresh_token': _refreshToken!},
+      ).timeout(_timeout);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         // ملحوظة: استجابة endpoint التجديد ده بالذات بتستخدم snake_case
         // (id_token) مش camelCase زي باقي endpoints بتاعة Identity Toolkit
         _idToken = data['id_token'] as String?;
         _refreshToken = data['refresh_token'] as String? ?? _refreshToken;
-        final expiresIn = int.tryParse(data['expires_in']?.toString() ?? '3600') ?? 3600;
+        final expiresIn =
+            int.tryParse(data['expires_in']?.toString() ?? '3600') ?? 3600;
         _expiresAt = DateTime.now().add(Duration(seconds: expiresIn));
       }
     } catch (_) {
@@ -70,16 +73,23 @@ class FirebaseRestAuth {
     try {
       final response = await http
           .post(
-            Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$webApiKey'),
+            Uri.parse(
+                'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$webApiKey'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': email, 'password': password, 'returnSecureToken': true}),
+            body: jsonEncode({
+              'email': email,
+              'password': password,
+              'returnSecureToken': true
+            }),
           )
           .timeout(_timeout);
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (response.statusCode != 200) {
         final message = (data['error']?['message'] ?? '').toString();
-        if (message.contains('EMAIL_NOT_FOUND') || message.contains('INVALID_PASSWORD') || message.contains('INVALID_LOGIN_CREDENTIALS')) {
+        if (message.contains('EMAIL_NOT_FOUND') ||
+            message.contains('INVALID_PASSWORD') ||
+            message.contains('INVALID_LOGIN_CREDENTIALS')) {
           return 'اليوزر أو الباسورد غلط';
         }
         return 'حصل خطأ في تسجيل الدخول: $message';
@@ -88,7 +98,8 @@ class FirebaseRestAuth {
       _idToken = data['idToken'] as String?;
       _refreshToken = data['refreshToken'] as String?;
       _uid = data['localId'] as String?;
-      final expiresIn = int.tryParse(data['expiresIn']?.toString() ?? '3600') ?? 3600;
+      final expiresIn =
+          int.tryParse(data['expiresIn']?.toString() ?? '3600') ?? 3600;
       _expiresAt = DateTime.now().add(Duration(seconds: expiresIn));
       return null;
     } catch (_) {
@@ -104,16 +115,22 @@ class FirebaseRestAuth {
     try {
       final response = await http
           .post(
-            Uri.parse('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$webApiKey'),
+            Uri.parse(
+                'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$webApiKey'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': email, 'password': password, 'returnSecureToken': true}),
+            body: jsonEncode({
+              'email': email,
+              'password': password,
+              'returnSecureToken': true
+            }),
           )
           .timeout(_timeout);
 
       if (response.statusCode == 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final message = (data['error']?['message'] ?? '').toString();
-      if (message.contains('EMAIL_EXISTS')) return 'في يوزر بنفس الاسم موجود بالفعل';
+      if (message.contains('EMAIL_EXISTS'))
+        return 'في يوزر بنفس الاسم موجود بالفعل';
       return 'حصل خطأ في إنشاء الحساب: $message';
     } catch (_) {
       return 'مفيش اتصال بالإنترنت';

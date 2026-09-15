@@ -17,7 +17,8 @@ class CloudinaryService {
   Future<String> uploadImageBytes(List<int> bytes, {String? folder}) async {
     final request = http.MultipartRequest('POST', _uploadUrl)
       ..fields['upload_preset'] = CloudinaryConfig.uploadPreset
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: '${DateTime.now().millisecondsSinceEpoch}.jpg'));
+      ..files.add(http.MultipartFile.fromBytes('file', bytes,
+          filename: '${DateTime.now().millisecondsSinceEpoch}.jpg'));
 
     if (folder != null) {
       request.fields['folder'] = folder;
@@ -27,7 +28,8 @@ class CloudinaryService {
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode != 200) {
-      throw Exception('فشل رفع الصورة (كود ${response.statusCode}): ${response.body}');
+      throw Exception(
+          'فشل رفع الصورة (كود ${response.statusCode}): ${response.body}');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -39,7 +41,8 @@ class CloudinaryService {
   }
 
   /// يرفع أكتر من صورة مرة واحدة، ويرجع قائمة الروابط بنفس الترتيب
-  Future<List<String>> uploadMultiple(List<List<int>> imagesBytes, {String? folder}) async {
+  Future<List<String>> uploadMultiple(List<List<int>> imagesBytes,
+      {String? folder}) async {
     final urls = <String>[];
     for (final bytes in imagesBytes) {
       urls.add(await uploadImageBytes(bytes, folder: folder));

@@ -19,11 +19,16 @@ class UserAccountService {
   static const _path = 'app_users';
 
   Future<List<AppUserModel>> fetchUsers() async {
-    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path.json'));
+    final uri =
+        await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path.json'));
     final response = await http.get(uri).timeout(_timeout);
-    if (response.statusCode != 200) return [];
+    if (response.statusCode != 200)
+      throw StateError(
+          'Firebase GET failed (app_users): HTTP ${response.statusCode}');
     final decoded = jsonDecode(response.body);
-    if (decoded is! Map) return [];
+    if (decoded == null) return [];
+    if (decoded is! Map)
+      throw StateError('Firebase returned invalid app_users data');
     final result = <AppUserModel>[];
     decoded.forEach((key, value) {
       if (value is Map) {
@@ -42,7 +47,8 @@ class UserAccountService {
   /// يدويًا من Firebase Console). بيرجع false افتراضيًا لو مش متأكدين
   Future<bool> isAdminUid(String uid) async {
     try {
-      final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/config/adminUid.json'));
+      final uri = await FirebaseRestAuth.withAuth(
+          Uri.parse('$_baseUrl/config/adminUid.json'));
       final response = await http.get(uri).timeout(_timeout);
       if (response.statusCode != 200) return false;
       final decoded = jsonDecode(response.body);
@@ -56,35 +62,57 @@ class UserAccountService {
   /// (باسورد مهشّر عند Firebase، مش متخزّن عندنا خالص)، وبعدين سجل بياناته
   /// (بدون الباسورد) في app_users. بما إن ده REST بلا جلسة محلية، النداء
   /// ده مبيأثرش على جلسة الأدمن الحالية المسجّل بيها فعليًا.
-  Future<String> addUser(String username, String password, {Map<String, bool>? permissions}) async {
+  Future<String> addUser(String username, String password,
+      {Map<String, bool>? permissions}) async {
     final trimmedUsername = username.trim();
     final email = usernameToAuthEmail(trimmedUsername);
 
     final error = await FirebaseRestAuth.createAccount(email, password);
     if (error != null) throw Exception(error);
 
-    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path.json'));
+    final uri =
+        await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path.json'));
     final response = await http
         .post(
           uri,
           body: jsonEncode({
             'username': trimmedUsername,
             'createdAt': DateTime.now().millisecondsSinceEpoch,
-            'permissions': permissions ?? {for (final s in AppUserModel.permissionScreens) s.key: true},
+            'permissions': permissions ??
+                {for (final s in AppUserModel.permissionScreens) s.key: true},
           }),
         )
         .timeout(_timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final decodedError = jsonDecode(response.body);
+      final message = decodedError is Map
+          ? (decodedError['error'] ??
+                  decodedError['message'] ??
+                  'فشل حفظ الحساب')
+              .toString()
+          : 'فشل حفظ الحساب';
+      throw StateError(message);
+    }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     return decoded['name'] as String;
   }
 
-  Future<void> updateUserPermissions(String id, Map<String, bool> permissions) async {
-    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path/$id.json'));
-    await http.patch(uri, body: jsonEncode({'permissions': permissions})).timeout(_timeout);
+  Future<void> updateUserPermissions(
+      String id, Map<String, bool> permissions) async {
+    final uri =
+        await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path/$id.json'));
+    final response = await http
+        .patch(uri, body: jsonEncode({'permissions': permissions}))
+        .timeout(_timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300)
+      throw StateError('فشل تحديث صلاحيات الحساب: HTTP ${response.statusCode}');
   }
 
   Future<void> deleteUser(String id) async {
-    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path/$id.json'));
-    await http.delete(uri).timeout(_timeout);
+    final uri =
+        await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$_path/$id.json'));
+    final response = await http.delete(uri).timeout(_timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300)
+      throw StateError('فشل حذف الحساب: HTTP ${response.statusCode}');
   }
 }

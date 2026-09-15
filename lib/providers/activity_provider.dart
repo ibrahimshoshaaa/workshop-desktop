@@ -62,7 +62,8 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
         time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
         kind: ActivityKind.customerRefund,
         title: 'تم استرجاع فلوس لعميل',
-        subtitle: '${order?.customerName ?? 'عميل'} - ${t.amountPaid.abs().toStringAsFixed(0)} ج.م',
+        subtitle:
+            '${order?.customerName ?? 'عميل'} - ${t.amountPaid.abs().toStringAsFixed(0)} ج.م',
         icon: Icons.undo_rounded,
         color: AppColors.wood,
       ));

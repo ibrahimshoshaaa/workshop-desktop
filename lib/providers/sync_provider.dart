@@ -11,7 +11,8 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     databaseUrl: firebaseDatabaseUrl,
     // بعد كل مزامنة ناجحة، نحدّث صلاحيات المستخدم الحالي (لو مش أدمن) من
     // Firebase - عشان أي تغيير في صلاحياته يوصله من غير ما يسجّل خروج ودخول
-    onSynced: () => ref.read(authRepositoryProvider).refreshCurrentUserPermissions(),
+    onSynced: () =>
+        ref.read(authRepositoryProvider).refreshCurrentUserPermissions(),
   );
   ref.onDispose(service.dispose);
   return service;

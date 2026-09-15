@@ -37,7 +37,7 @@ class AppUserModel {
   /// أي شاشة مش موجودة صراحةً في permissions بتتحسب "مسموحة" افتراضيًا -
   /// عشان الحسابات القديمة (اتعملت قبل ميزة الصلاحيات، أو من الموبايل)
   /// تفضل شغالة بكامل صلاحياتها زي ما كانت من غير ما حد يتفاجئ إنه اتقفل فجأة
-  bool canAccess(String screenKey) => permissions[screenKey] ?? true;
+  bool canAccess(String screenKey) => permissions[screenKey] ?? false;
 
   factory AppUserModel.fromMap(String id, Map<dynamic, dynamic> map) {
     final permsRaw = map['permissions'];
@@ -50,7 +50,8 @@ class AppUserModel {
       username: map['username']?.toString() ?? '',
       password: map['password']?.toString() ?? '',
       createdAt: DateTime.fromMillisecondsSinceEpoch(
-        (map['createdAt'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+        (map['createdAt'] as num?)?.toInt() ??
+            DateTime.now().millisecondsSinceEpoch,
       ),
       permissions: perms,
     );

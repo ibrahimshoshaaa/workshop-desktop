@@ -50,10 +50,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       suffixIcon: suffix,
       filled: true,
       fillColor: const Color(0xFFFAF6F0),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.wood, width: 1.6)),
-      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.danger, width: 1.2)),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.wood, width: 1.6)),
+      errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.danger, width: 1.2)),
     );
   }
 
@@ -81,7 +87,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(26),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 40, offset: const Offset(0, 20)),
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.22),
+                      blurRadius: 40,
+                      offset: const Offset(0, 20)),
                 ],
               ),
               child: Form(
@@ -93,8 +102,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(colors: [AppColors.amber, AppColors.wood]),
-                        boxShadow: [BoxShadow(color: AppColors.wood.withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 8))],
+                        gradient: const LinearGradient(
+                            colors: [AppColors.amber, AppColors.wood]),
+                        boxShadow: [
+                          BoxShadow(
+                              color: AppColors.wood.withValues(alpha: 0.35),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8))
+                        ],
                       ),
                       child: ClipOval(
                         child: Image.asset(
@@ -106,9 +121,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text('Tahoun Royal Home', style: GoogleFonts.cairo(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.woodDark)),
+                    Text('Tahoun Royal Home',
+                        style: GoogleFonts.cairo(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.woodDark)),
                     const SizedBox(height: 6),
-                    Text('سجّل الدخول لإدارة المتجر', style: GoogleFonts.cairo(color: Colors.grey.shade600, fontSize: 13)),
+                    Text('سجّل الدخول لإدارة المتجر',
+                        style: GoogleFonts.cairo(
+                            color: Colors.grey.shade600, fontSize: 13)),
                     const SizedBox(height: 28),
                     if (_error != null) ...[
                       Container(
@@ -118,14 +139,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.danger.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
+                          border: Border.all(
+                              color: AppColors.danger.withValues(alpha: 0.2)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 18),
+                            const Icon(Icons.error_outline_rounded,
+                                color: AppColors.danger, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(_error!, style: GoogleFonts.cairo(color: AppColors.danger, fontSize: 12.5)),
+                              child: Text(_error!,
+                                  style: GoogleFonts.cairo(
+                                      color: AppColors.danger, fontSize: 12.5)),
                             ),
                           ],
                         ),
@@ -137,8 +162,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       textDirection: TextDirection.ltr,
                       textAlign: TextAlign.center,
                       style: GoogleFonts.cairo(fontSize: 14),
-                      decoration: _decoration('اليوزر', Icons.person_outline_rounded),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'اكتب اليوزر' : null,
+                      decoration:
+                          _decoration('اليوزر', Icons.person_outline_rounded),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'اكتب اليوزر'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -152,11 +180,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         'كلمة المرور',
                         Icons.lock_outline_rounded,
                         suffix: IconButton(
-                          icon: Icon(_obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 20, color: Colors.grey.shade500),
+                          icon: Icon(
+                              _obscure
+                                  ? Icons.visibility_off_rounded
+                                  : Icons.visibility_rounded,
+                              size: 20,
+                              color: Colors.grey.shade500),
                           onPressed: () => setState(() => _obscure = !_obscure),
                         ),
                       ),
-                      validator: (v) => (v == null || v.isEmpty) ? 'اكتب كلمة المرور' : null,
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? 'اكتب كلمة المرور' : null,
                     ),
                     const SizedBox(height: 24),
                     SizedBox(
@@ -166,13 +200,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _isLoading ? null : _submit,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.wood,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                           elevation: 0,
                         ),
                         child: _isLoading
                             ? const SizedBox(
-                                height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : Text('دخول', style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : Text('دخول',
+                                style: GoogleFonts.cairo(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white)),
                       ),
                     ),
                   ],

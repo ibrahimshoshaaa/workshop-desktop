@@ -20,15 +20,18 @@ class SessionUser {
   final bool isAdmin;
   final Map<String, bool> permissions;
 
-  const SessionUser({required this.username, required this.isAdmin, required this.permissions});
+  const SessionUser(
+      {required this.username,
+      required this.isAdmin,
+      required this.permissions});
 
   /// الأدمن عنده كل الصلاحيات دايمًا. العامل بيتحدد حسب permissions
   /// (وأي شاشة مش موجودة فيها بتتحسب "مسموحة" افتراضيًا)
-  bool can(String screenKey) => isAdmin || (permissions[screenKey] ?? true);
+  bool can(String screenKey) => isAdmin || (permissions[screenKey] ?? false);
 }
 
-final userAccountServiceProvider =
-    Provider<UserAccountService>((ref) => UserAccountService(databaseUrl: firebaseDatabaseUrl));
+final userAccountServiceProvider = Provider<UserAccountService>(
+    (ref) => UserAccountService(databaseUrl: firebaseDatabaseUrl));
 
 final appUsersProvider = FutureProvider<List<AppUserModel>>((ref) {
   return ref.watch(userAccountServiceProvider).fetchUsers();
@@ -47,7 +50,8 @@ final sessionProvider = FutureProvider<SessionUser?>((ref) async {
   if (refreshToken == null || refreshToken.isEmpty) return null;
 
   final restored = await FirebaseRestAuth.restoreSession(refreshToken);
-  if (!restored) return null; // الـ refresh token بقى غير صالح - يدخل تاني يدويًا
+  if (!restored)
+    return null; // الـ refresh token بقى غير صالح - يدخل تاني يدويًا
 
   final isAdmin = (await db.getMeta(_keyIsAdmin)) == 'true';
   final permsRaw = await db.getMeta(_keyPermsJson);
@@ -79,7 +83,8 @@ class AuthRepository {
     bool foundValidAccount = false;
 
     try {
-      if (uid != null && await _ref.read(userAccountServiceProvider).isAdminUid(uid)) {
+      if (uid != null &&
+          await _ref.read(userAccountServiceProvider).isAdminUid(uid)) {
         admin = true;
         foundValidAccount = true;
       } else {
@@ -99,7 +104,8 @@ class AuthRepository {
       return 'الحساب ده متشالة صلاحياته أو مش موجود في التطبيق';
     }
 
-    await _persistSession(username: trimmedUser, isAdmin: admin, permissions: permissions);
+    await _persistSession(
+        username: trimmedUser, isAdmin: admin, permissions: permissions);
     return null;
   }
 
@@ -112,7 +118,8 @@ class AuthRepository {
     await db.setMeta(_keyUsername, username);
     await db.setMeta(_keyIsAdmin, isAdmin.toString());
     await db.setMeta(_keyPermsJson, jsonEncode(permissions));
-    await db.setMeta(_keyRefreshToken, FirebaseRestAuth.refreshTokenForPersistence ?? '');
+    await db.setMeta(
+        _keyRefreshToken, FirebaseRestAuth.refreshTokenForPersistence ?? '');
     _ref.invalidate(sessionProvider);
   }
 
@@ -134,9 +141,15 @@ class AuthRepository {
     if (session == null || session.isAdmin) return;
     try {
       final users = await _ref.read(userAccountServiceProvider).fetchUsers();
-      final match = users.firstWhereOrNull((u) => u.username == session.username);
+      final match =
+          users.firstWhereOrNull((u) => u.username == session.username);
       if (match != null) {
-        await _persistSession(username: match.username, isAdmin: false, permissions: match.permissions);
+        await _persistSession(
+            username: match.username,
+            isAdmin: false,
+            permissions: match.permissions);
+      } else {
+        await logout();
       }
     } catch (_) {
       // مفيش نت - نسيب الصلاحيات المحفوظة محليًا زي ما هي
@@ -144,4 +157,5 @@ class AuthRepository {
   }
 }
 
-final authRepositoryProvider = Provider<AuthRepository>((ref) => AuthRepository(ref));
+final authRepositoryProvider =
+    Provider<AuthRepository>((ref) => AuthRepository(ref));

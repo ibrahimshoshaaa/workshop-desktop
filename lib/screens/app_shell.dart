@@ -64,7 +64,8 @@ class AppShell extends ConsumerWidget {
         visibleIndexes.add(i);
       }
     }
-    final destinations = visibleIndexes.map((i) => _allDestinations[i]).toList();
+    final destinations =
+        visibleIndexes.map((i) => _allDestinations[i]).toList();
     final screens = visibleIndexes.map((i) => _allScreens[i]).toList();
     final rawIndex = ref.watch(selectedTabProvider);
     final index = screens.isEmpty ? 0 : rawIndex.clamp(0, screens.length - 1);
@@ -75,10 +76,21 @@ class AppShell extends ConsumerWidget {
         elevation: 2,
         automaticallyImplyLeading: false,
         titleSpacing: 20,
-        title: const Row(children: [Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28), SizedBox(width: 12), Text('Tahoun Royal Home', style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold, fontSize: 20))]),
+        title: const Row(children: [
+          Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
+          SizedBox(width: 12),
+          Text('Tahoun Royal Home',
+              style: TextStyle(
+                  color: AppColors.amber,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20))
+        ]),
         actions: [
           const _SyncButton(),
-          IconButton(tooltip: 'تسجيل الخروج', onPressed: () => ref.read(authRepositoryProvider).logout(), icon: const Icon(Icons.logout_rounded, color: AppColors.amber)),
+          IconButton(
+              tooltip: 'تسجيل الخروج',
+              onPressed: () => ref.read(authRepositoryProvider).logout(),
+              icon: const Icon(Icons.logout_rounded, color: AppColors.amber)),
           const SizedBox(width: 12),
         ],
       ),
@@ -91,20 +103,28 @@ class AppShell extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: NavigationRail(
                 selectedIndex: index,
-                onDestinationSelected: (i) => ref.read(selectedTabProvider.notifier).state = i,
+                onDestinationSelected: (i) =>
+                    ref.read(selectedTabProvider.notifier).state = i,
                 labelType: NavigationRailLabelType.all,
                 backgroundColor: AppColors.woodDark,
                 selectedIconTheme: const IconThemeData(color: AppColors.amber),
-                unselectedIconTheme: IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
-                selectedLabelTextStyle: const TextStyle(color: AppColors.amber, fontWeight: FontWeight.bold),
-                unselectedLabelTextStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-                destinations: destinations.map((d) => NavigationRailDestination(icon: Icon(d.$1), label: Text(d.$2))).toList(),
+                unselectedIconTheme:
+                    IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
+                selectedLabelTextStyle: const TextStyle(
+                    color: AppColors.amber, fontWeight: FontWeight.bold),
+                unselectedLabelTextStyle:
+                    TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                destinations: destinations
+                    .map((d) => NavigationRailDestination(
+                        icon: Icon(d.$1), label: Text(d.$2)))
+                    .toList(),
               ),
             ),
           ),
         ),
         const VerticalDivider(width: 1),
-        Expanded(child: screens.isEmpty ? const SizedBox.shrink() : screens[index]),
+        Expanded(
+            child: screens.isEmpty ? const SizedBox.shrink() : screens[index]),
       ]),
     );
   }
@@ -123,6 +143,16 @@ class _SyncButtonState extends ConsumerState<_SyncButton> {
     await ref.read(syncServiceProvider).syncAll();
     if (mounted) setState(() => _isSyncing = false);
   }
+
   @override
-  Widget build(BuildContext context) => IconButton(tooltip: 'مزامنة الآن', onPressed: _isSyncing ? null : _sync, icon: _isSyncing ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.amber)) : const Icon(Icons.sync_rounded, color: AppColors.amber));
+  Widget build(BuildContext context) => IconButton(
+      tooltip: 'مزامنة الآن',
+      onPressed: _isSyncing ? null : _sync,
+      icon: _isSyncing
+          ? const SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.amber))
+          : const Icon(Icons.sync_rounded, color: AppColors.amber));
 }

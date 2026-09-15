@@ -36,7 +36,8 @@ class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
       title: 'Tahoun Royal Home - سطح المكتب',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
+      builder: (context, child) =>
+          Directionality(textDirection: TextDirection.rtl, child: child!),
       home: const _AuthGate(),
     );
   }
@@ -52,8 +53,10 @@ class _AuthGate extends ConsumerWidget {
     final sessionAsync = ref.watch(sessionProvider);
 
     return sessionAsync.when(
-      data: (session) => session == null ? const LoginScreen() : const AppShell(),
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      data: (session) =>
+          session == null ? const LoginScreen() : const AppShell(),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => const LoginScreen(),
     );
   }

@@ -50,7 +50,9 @@ class _OtherCapableDropdownState extends State<OtherCapableDropdown> {
         DropdownButtonFormField<String>(
           value: items.contains(dropdownValue) ? dropdownValue : items.first,
           decoration: InputDecoration(labelText: widget.label),
-          items: items.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+          items: items
+              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+              .toList(),
           onChanged: (v) {
             if (v == null) return;
             setState(() => _isOther = v == kOtherOptionValue);

@@ -40,7 +40,8 @@ class NotificationService {
     }
   }
 
-  int _reminderIdFor(String orderId, int offset) => (orderId.hashCode & 0x7FFFFFFF) + offset;
+  int _reminderIdFor(String orderId, int offset) =>
+      (orderId.hashCode & 0x7FFFFFFF) + offset;
 
   Future<void> scheduleOrderDeliveryReminders({
     required String orderId,
@@ -52,7 +53,8 @@ class NotificationService {
       await cancelOrderReminders(orderId);
 
       final dayBefore = tz.TZDateTime.from(
-        DateTime(deliveryDate.year, deliveryDate.month, deliveryDate.day - 1, 9, 0),
+        DateTime(
+            deliveryDate.year, deliveryDate.month, deliveryDate.day - 1, 9, 0),
         tz.local,
       );
       final onDay = tz.TZDateTime.from(

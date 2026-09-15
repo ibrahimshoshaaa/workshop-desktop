@@ -47,10 +47,14 @@ class OrderExpenseShare {
   final Expense expense;
   final double shareAmount;
   final int totalOrdersCount;
-  const OrderExpenseShare({required this.expense, required this.shareAmount, required this.totalOrdersCount});
+  const OrderExpenseShare(
+      {required this.expense,
+      required this.shareAmount,
+      required this.totalOrdersCount});
 }
 
-final orderExpensesProvider = Provider.family<List<OrderExpenseShare>, String>((ref, orderId) {
+final orderExpensesProvider =
+    Provider.family<List<OrderExpenseShare>, String>((ref, orderId) {
   final expenses = ref.watch(expensesProvider).value ?? [];
   final result = <OrderExpenseShare>[];
   for (final e in expenses) {
@@ -58,7 +62,8 @@ final orderExpensesProvider = Provider.family<List<OrderExpenseShare>, String>((
     final match = allocs.where((a) => a.orderId == orderId).toList();
     if (match.isEmpty) continue;
     final shareAmount = match.fold<double>(0, (s, a) => s + a.amount);
-    result.add(OrderExpenseShare(expense: e, shareAmount: shareAmount, totalOrdersCount: allocs.length));
+    result.add(OrderExpenseShare(
+        expense: e, shareAmount: shareAmount, totalOrdersCount: allocs.length));
   }
   return result;
 });
@@ -75,7 +80,8 @@ final workerPaymentsProvider = StreamProvider<List<WorkerPayment>>((ref) {
   return ref.watch(databaseProvider).watchWorkerPayments();
 });
 
-final workerPaymentsForWorkerProvider = StreamProvider.family<List<WorkerPayment>, String>((ref, workerId) {
+final workerPaymentsForWorkerProvider =
+    StreamProvider.family<List<WorkerPayment>, String>((ref, workerId) {
   return ref.watch(databaseProvider).watchPaymentsForWorker(workerId);
 });
 
@@ -92,21 +98,28 @@ DateTime workerPeriodAnchor(Worker worker, DateTime now) {
   }
 }
 
-bool isWorkerPaidForCurrentPeriod(Worker worker, List<WorkerPayment> payments, DateTime now) {
+bool isWorkerPaidForCurrentPeriod(
+    Worker worker, List<WorkerPayment> payments, DateTime now) {
   final anchor = workerPeriodAnchor(worker, now);
-  return payments.any((p) => p.workerId == worker.id && DateTime.fromMillisecondsSinceEpoch(p.periodStart).isAtSameMomentAs(anchor));
+  return payments.any((p) =>
+      p.workerId == worker.id &&
+      DateTime.fromMillisecondsSinceEpoch(p.periodStart)
+          .isAtSameMomentAs(anchor));
 }
 
 final workersDueTodayProvider = Provider<List<Worker>>((ref) {
   final workers = ref.watch(workersProvider).value ?? [];
   final payments = ref.watch(workerPaymentsProvider).value ?? [];
   final now = DateTime.now();
-  return workers.where((w) => !isWorkerPaidForCurrentPeriod(w, payments, now)).toList();
+  return workers
+      .where((w) => !isWorkerPaidForCurrentPeriod(w, payments, now))
+      .toList();
 });
 
 final debtorOrdersProvider = Provider<List<Order>>((ref) {
   final orders = ref.watch(ordersProvider).value ?? [];
-  return orders.where((o) => o.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
+  return orders.where((o) => o.remaining > 0).toList()
+    ..sort((a, b) => b.remaining.compareTo(a.remaining));
 });
 
 final workshopDebtsProvider = StreamProvider<List<WorkshopDebt>>((ref) {
@@ -115,7 +128,8 @@ final workshopDebtsProvider = StreamProvider<List<WorkshopDebt>>((ref) {
 
 final outstandingWorkshopDebtsProvider = Provider<List<WorkshopDebt>>((ref) {
   final debts = ref.watch(workshopDebtsProvider).value ?? [];
-  return debts.where((d) => d.remaining > 0).toList()..sort((a, b) => b.remaining.compareTo(a.remaining));
+  return debts.where((d) => d.remaining > 0).toList()
+    ..sort((a, b) => b.remaining.compareTo(a.remaining));
 });
 
 final cashTransfersProvider = StreamProvider<List<CashTransfer>>((ref) {
@@ -136,7 +150,8 @@ final upcomingDeliveriesProvider = Provider<List<Order>>((ref) {
     if (o.status == 'تم التسليم') return false;
     final delivery = DateTime.fromMillisecondsSinceEpoch(o.deliveryDate);
     return !delivery.isBefore(today) && delivery.isBefore(weekAhead);
-  }).toList()..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
+  }).toList()
+    ..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
 });
 
 class DashboardStats {
@@ -147,7 +162,14 @@ class DashboardStats {
   final double cashAvailable;
   final double instapayAvailable;
   final double totalWorkshopDebts;
-  DashboardStats({required this.totalRevenue, required this.totalDebts, required this.totalExpenses, required this.netProfit, required this.cashAvailable, required this.instapayAvailable, required this.totalWorkshopDebts});
+  DashboardStats(
+      {required this.totalRevenue,
+      required this.totalDebts,
+      required this.totalExpenses,
+      required this.netProfit,
+      required this.cashAvailable,
+      required this.instapayAvailable,
+      required this.totalWorkshopDebts});
 }
 
 final dashboardStatsProvider = Provider<DashboardStats>((ref) {
@@ -156,23 +178,36 @@ final dashboardStatsProvider = Provider<DashboardStats>((ref) {
   final transactions = ref.watch(allTransactionsProvider).value ?? [];
   final workshopDebts = ref.watch(workshopDebtsProvider).value ?? [];
   final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-  final totalDebts = orders.where((o) => o.remaining > 0).fold<double>(0, (s, o) => s + o.remaining);
+  final totalDebts = orders
+      .where((o) => o.remaining > 0)
+      .fold<double>(0, (s, o) => s + o.remaining);
   final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
-  final totalWorkshopDebts = workshopDebts.fold<double>(0, (s, d) => s + d.remaining);
+  final totalWorkshopDebts =
+      workshopDebts.fold<double>(0, (s, d) => s + d.remaining);
   double revenueByMethod(String method) {
     final liveOrderIds = orders.map((o) => o.id).toSet();
-    return transactions.where((t) => t.paymentMethod == method && liveOrderIds.contains(t.orderId)).fold<double>(0, (s, t) => s + t.amountPaid);
+    return transactions
+        .where((t) =>
+            t.paymentMethod == method && liveOrderIds.contains(t.orderId))
+        .fold<double>(0, (s, t) => s + t.amountPaid);
   }
-  double expensesByMethod(String method) => expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
+
+  double expensesByMethod(String method) => expenses
+      .where((e) => e.paymentMethod == method)
+      .fold<double>(0, (s, e) => s + e.amount);
   final cashTransfers = ref.watch(cashTransfersProvider).value ?? [];
-  final totalTransferred = cashTransfers.fold<double>(0, (s, t) => s + t.amount);
+  final totalTransferred =
+      cashTransfers.fold<double>(0, (s, t) => s + t.amount);
   return DashboardStats(
     totalRevenue: totalRevenue,
     totalDebts: totalDebts,
     totalExpenses: totalExpenses,
     netProfit: totalRevenue - totalExpenses,
-    cashAvailable: revenueByMethod('cash') - expensesByMethod('cash') + totalTransferred,
-    instapayAvailable: revenueByMethod('instapay') - expensesByMethod('instapay') - totalTransferred,
+    cashAvailable:
+        revenueByMethod('cash') - expensesByMethod('cash') + totalTransferred,
+    instapayAvailable: revenueByMethod('instapay') -
+        expensesByMethod('instapay') -
+        totalTransferred,
     totalWorkshopDebts: totalWorkshopDebts,
   );
 });

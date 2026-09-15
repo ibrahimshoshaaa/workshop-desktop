@@ -11,7 +11,8 @@ class RevenuesDetailScreen extends ConsumerStatefulWidget {
   const RevenuesDetailScreen({super.key});
 
   @override
-  ConsumerState<RevenuesDetailScreen> createState() => _RevenuesDetailScreenState();
+  ConsumerState<RevenuesDetailScreen> createState() =>
+      _RevenuesDetailScreenState();
 }
 
 class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
@@ -47,24 +48,28 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final orders = ref.watch(ordersProvider).value ?? [];
-    final formatter = NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
+    final formatter =
+        NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
     final dateFormatter = DateFormat('d/M/yyyy', 'ar_EG');
 
     // تصفية الطلبات حسب التاريخ
     var filteredOrders = orders.where((order) {
       final orderDate = DateTime.fromMillisecondsSinceEpoch(order.createdAt);
       return orderDate.isAfter(_selectedDateRange.start) &&
-          orderDate.isBefore(_selectedDateRange.end.add(const Duration(days: 1)));
+          orderDate
+              .isBefore(_selectedDateRange.end.add(const Duration(days: 1)));
     }).toList();
 
     // تصفية حسب الحالة
-    filteredOrders = filteredOrders.where((o) => _matchesStatusFilter(o.status)).toList();
+    filteredOrders =
+        filteredOrders.where((o) => _matchesStatusFilter(o.status)).toList();
 
     // تصفية حسب نص البحث (اسم العميل أو نوع الصنف)
     final q = normalizeForSearch(_query);
     if (q.isNotEmpty) {
       filteredOrders = filteredOrders.where((order) {
-        return normalizeForSearch(order.customerName).contains(q) || normalizeForSearch(order.itemType).contains(q);
+        return normalizeForSearch(order.customerName).contains(q) ||
+            normalizeForSearch(order.itemType).contains(q);
       }).toList();
     }
 
@@ -81,8 +86,10 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
       });
     }
 
-    final totalRevenue = filteredOrders.fold<double>(0, (sum, order) => sum + order.totalPaid);
-    final averageRevenue = filteredOrders.isEmpty ? 0.0 : totalRevenue / filteredOrders.length;
+    final totalRevenue =
+        filteredOrders.fold<double>(0, (sum, order) => sum + order.totalPaid);
+    final averageRevenue =
+        filteredOrders.isEmpty ? 0.0 : totalRevenue / filteredOrders.length;
     final completedRevenue = filteredOrders
         .where((o) => o.status == 'تم التسليم')
         .fold<double>(0, (sum, o) => sum + o.totalPaid);
@@ -144,7 +151,10 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                 }
                 return Row(
                   children: cards
-                      .map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(left: 12), child: c)))
+                      .map((c) => Expanded(
+                          child: Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: c)))
                       .toList(),
                 );
               },
@@ -160,7 +170,8 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                 side: BorderSide(color: Colors.grey.shade200),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Wrap(
                   spacing: 12,
                   runSpacing: 12,
@@ -177,7 +188,8 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                     ),
                     _FilterChipButton(
                       icon: Icons.date_range_rounded,
-                      label: '${dateFormatter.format(_selectedDateRange.start)} - ${dateFormatter.format(_selectedDateRange.end)}',
+                      label:
+                          '${dateFormatter.format(_selectedDateRange.start)} - ${dateFormatter.format(_selectedDateRange.end)}',
                       onTap: () async {
                         final picked = await showDateRangePicker(
                           context: context,
@@ -185,7 +197,9 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                           lastDate: DateTime.now(),
                           initialDateRange: _selectedDateRange,
                           builder: (context, child) {
-                            return Directionality(textDirection: TextDirection.ltr, child: child!);
+                            return Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: child!);
                           },
                         );
                         if (picked != null) {
@@ -207,7 +221,10 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                 alignment: Alignment.centerRight,
                 child: Text(
                   '${filteredOrders.length} عملية',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
                 ),
               ),
             ),
@@ -217,9 +234,12 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inbox_rounded, size: 64, color: Colors.grey.shade300),
+                        Icon(Icons.inbox_rounded,
+                            size: 64, color: Colors.grey.shade300),
                         const SizedBox(height: 16),
-                        Text('لا توجد إيرادات مطابقة', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                        Text('لا توجد إيرادات مطابقة',
+                            style: TextStyle(
+                                color: Colors.grey.shade600, fontSize: 14)),
                       ],
                     ),
                   )
@@ -237,11 +257,16 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: ConstrainedBox(
-                            constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 40),
+                            constraints: BoxConstraints(
+                                minWidth:
+                                    MediaQuery.of(context).size.width - 40),
                             child: DataTable(
-                              sortColumnIndex: _sortBy == 'date' ? 1 : (_sortBy == 'amount' ? 4 : null),
+                              sortColumnIndex: _sortBy == 'date'
+                                  ? 1
+                                  : (_sortBy == 'amount' ? 4 : null),
                               sortAscending: _sortAscending,
-                              headingRowColor: WidgetStateProperty.all(AppColors.wood.withValues(alpha: 0.06)),
+                              headingRowColor: WidgetStateProperty.all(
+                                  AppColors.wood.withValues(alpha: 0.06)),
                               dataRowMinHeight: 56,
                               dataRowMaxHeight: 64,
                               columns: [
@@ -254,7 +279,8 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                   }),
                                 ),
                                 const DataColumn(label: Text('الحالة')),
-                                const DataColumn(label: Text('الإجمالي'), numeric: true),
+                                const DataColumn(
+                                    label: Text('الإجمالي'), numeric: true),
                                 DataColumn(
                                   label: const Text('المدفوع'),
                                   numeric: true,
@@ -263,37 +289,62 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
                                     _sortAscending = asc;
                                   }),
                                 ),
-                                const DataColumn(label: Text('المتبقي'), numeric: true),
+                                const DataColumn(
+                                    label: Text('المتبقي'), numeric: true),
                               ],
                               rows: filteredOrders.map((order) {
-                                final orderDate = DateTime.fromMillisecondsSinceEpoch(order.createdAt);
+                                final orderDate =
+                                    DateTime.fromMillisecondsSinceEpoch(
+                                        order.createdAt);
                                 final outstanding = order.remaining;
                                 return DataRow(
                                   cells: [
                                     DataCell(
                                       Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(order.customerName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                          Text(order.customerName,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13)),
                                           const SizedBox(height: 2),
-                                          Text(order.itemType, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                                          Text(order.itemType,
+                                              style: TextStyle(
+                                                  color: Colors.grey.shade600,
+                                                  fontSize: 11)),
                                         ],
                                       ),
                                     ),
-                                    DataCell(Text(dateFormatter.format(orderDate), style: const TextStyle(fontSize: 12))),
-                                    DataCell(_StatusBadge(status: order.status, color: _getStatusColor(order.status))),
-                                    DataCell(Text(formatter.format(order.effectiveTotal), style: const TextStyle(fontSize: 12))),
+                                    DataCell(Text(
+                                        dateFormatter.format(orderDate),
+                                        style: const TextStyle(fontSize: 12))),
+                                    DataCell(_StatusBadge(
+                                        status: order.status,
+                                        color: _getStatusColor(order.status))),
+                                    DataCell(Text(
+                                        formatter.format(order.effectiveTotal),
+                                        style: const TextStyle(fontSize: 12))),
                                     DataCell(Text(
                                       formatter.format(order.totalPaid),
-                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success),
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.success),
                                     )),
                                     DataCell(Text(
-                                      outstanding > 0 ? formatter.format(outstanding) : '—',
+                                      outstanding > 0
+                                          ? formatter.format(outstanding)
+                                          : '—',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        fontWeight: outstanding > 0 ? FontWeight.w600 : FontWeight.normal,
-                                        color: outstanding > 0 ? AppColors.danger : Colors.grey.shade400,
+                                        fontWeight: outstanding > 0
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                        color: outstanding > 0
+                                            ? AppColors.danger
+                                            : Colors.grey.shade400,
                                       ),
                                     )),
                                   ],
@@ -322,10 +373,12 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
         child: DropdownButton<String?>(
           value: _statusFilter,
           icon: const Icon(Icons.expand_more_rounded, size: 18),
-          style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w500),
+          style: const TextStyle(
+              fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w500),
           items: [
             const DropdownMenuItem(value: null, child: Text('كل الحالات')),
-            ...orderStatuses.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+            ...orderStatuses
+                .map((s) => DropdownMenuItem(value: s, child: Text(s))),
           ],
           onChanged: (value) => setState(() => _statusFilter = value),
         ),
@@ -348,7 +401,10 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
             child: DropdownButton<String>(
               value: _sortBy,
               icon: const Icon(Icons.expand_more_rounded, size: 18),
-              style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500),
               items: const [
                 DropdownMenuItem(value: 'date', child: Text('ترتيب بالتاريخ')),
                 DropdownMenuItem(value: 'amount', child: Text('ترتيب بالمبلغ')),
@@ -359,7 +415,11 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
             ),
           ),
           IconButton(
-            icon: Icon(_sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 18),
+            icon: Icon(
+                _sortAscending
+                    ? Icons.arrow_upward_rounded
+                    : Icons.arrow_downward_rounded,
+                size: 18),
             tooltip: _sortAscending ? 'تصاعدي' : 'تنازلي',
             onPressed: () => setState(() => _sortAscending = !_sortAscending),
           ),
@@ -406,14 +466,18 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border(right: BorderSide(color: color, width: 4)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 12),
@@ -422,11 +486,16 @@ class _StatCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w500)),
+                Text(label,
+                    style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
                 Text(
                   value,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -443,7 +512,8 @@ class _FilterChipButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _FilterChipButton({required this.icon, required this.label, required this.onTap});
+  const _FilterChipButton(
+      {required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +531,9 @@ class _FilterChipButton extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: AppColors.wood),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(label,
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -485,7 +557,8 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(
         status,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 11),
+        style:
+            TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 11),
       ),
     );
   }

@@ -11,10 +11,12 @@ import 'firebase_rest_auth.dart';
 /// لـ Firebase، وأي سجل جديد/أحدث من Firebase بينزل محليًا، على أساس
 /// "آخر تعديل بيكسب" (Last-Write-Wins) بمقارنة updatedAt.
 class SyncService {
-  SyncService(this._db, {required String databaseUrl, this.onSynced}) : _baseUrl = databaseUrl;
+  SyncService(this._db, {required String databaseUrl, this.onSynced})
+      : _baseUrl = databaseUrl;
 
   final AppDatabase _db;
-  final String _baseUrl; // مثال: https://workshopmanage-e7555-default-rtdb.firebaseio.com
+  final String
+      _baseUrl; // مثال: https://workshopmanage-e7555-default-rtdb.firebaseio.com
   /// بيتنادى (لو موجود) بعد كل دورة مزامنة ناجحة - بنستخدمه لتحديث صلاحيات
   /// المستخدم الحالي من غير ما نربط SyncService مباشرة بمنطق الصلاحيات
   final Future<void> Function()? onSynced;
@@ -48,7 +50,8 @@ class SyncService {
       await _syncWorkerPayments();
       await _syncCashTransfers();
       await _repairMissingOverpaymentDebtsOnce();
-      await _db.setMeta('lastSyncAt', DateTime.now().millisecondsSinceEpoch.toString());
+      await _db.setMeta(
+          'lastSyncAt', DateTime.now().millisecondsSinceEpoch.toString());
       if (onSynced != null) await onSynced!();
     } catch (_) {
       // غالبًا مفيش نت - هنحاول تاني في الدورة الجاية من غير ما نوقف التطبيق
@@ -68,7 +71,8 @@ class SyncService {
     final done = await _db.getMeta('discountSyncRepairDone');
     if (done == '1') return;
     final allOrders = await _db.select(_db.orders).get();
-    final discounted = allOrders.where((row) => row.discountAmount > 0).toList();
+    final discounted =
+        allOrders.where((row) => row.discountAmount > 0).toList();
     for (final row in discounted) {
       await _db.updateOrderFields(OrdersCompanion(
         id: Value(row.id),
@@ -89,11 +93,16 @@ class SyncService {
   Future<void> _repairMissingOverpaymentDebtsOnce() async {
     final done = await _db.getMeta('overpaymentDebtRepairDone');
     if (done == '1') return;
-    final orders = await (_db.select(_db.orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).get();
+    final orders = await (_db.select(_db.orders)
+          ..where(
+              (t) => t.isDeleted.equals(false) & t.isArchived.equals(false)))
+        .get();
     for (final order in orders) {
-      final overpaid = order.totalPaid - (order.totalAmount - order.discountAmount);
+      final overpaid =
+          order.totalPaid - (order.totalAmount - order.discountAmount);
       final existing = await (_db.select(_db.workshopDebts)
-            ..where((t) => t.orderId.equals(order.id) & t.isDeleted.equals(false)))
+            ..where(
+                (t) => t.orderId.equals(order.id) & t.isDeleted.equals(false)))
           .getSingleOrNull();
 
       if (overpaid <= 0) {
@@ -110,7 +119,8 @@ class SyncService {
           creditorName: Value(order.customerName),
           totalAmount: Value(overpaid),
           paidAmount: const Value(0),
-          notes: Value('دفع أكتر من الاتفاق النهائي على طلب "${order.itemType}" (تصليح تلقائي لطلب قديم)'),
+          notes: Value(
+              'دفع أكتر من الاتفاق النهائي على طلب "${order.itemType}" (تصليح تلقائي لطلب قديم)'),
           orderId: Value(order.id),
           createdAt: Value(now),
           updatedAt: Value(now),
@@ -140,16 +150,22 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['createdAt'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['createdAt'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           await _db.upsertCustomer(CustomersCompanion(
             id: Value(id),
             name: Value(map['name']?.toString() ?? ''),
             phone: Value(map['phone']?.toString() ?? ''),
             address: Value(map['address']?.toString() ?? ''),
-            serialNumber: Value((map['serialNumber'] as num?)?.toInt() ?? local?.serialNumber ?? 0),
-            createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
+            serialNumber: Value((map['serialNumber'] as num?)?.toInt() ??
+                local?.serialNumber ??
+                0),
+            createdAt:
+                Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
             isArchived: Value(map['isArchived'] == true),
@@ -162,15 +178,19 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.customers)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.customers)..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.customers)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.customers)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('customers/${row.id}');
-        await (_db.delete(_db.customers)..where((t) => t.id.equals(row.id))).go();
+        await (_db.delete(_db.customers)..where((t) => t.id.equals(row.id)))
+            .go();
       } else {
         await _putNode('customers/${row.id}', {
           'name': row.name,
@@ -181,7 +201,8 @@ class SyncService {
           'updatedAt': row.updatedAt,
           'isArchived': row.isArchived,
         });
-        await _db.updateCustomerFields(CustomersCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateCustomerFields(
+            CustomersCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -197,9 +218,12 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['createdAt'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['createdAt'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           final imagesRaw = map['images'];
           final images = <String>[];
           if (imagesRaw is Map) {
@@ -217,10 +241,13 @@ class SyncService {
             status: Value(map['status']?.toString() ?? 'جاري التجهيز'),
             totalAmount: Value((map['totalAmount'] as num?)?.toDouble() ?? 0),
             totalPaid: Value((map['totalPaid'] as num?)?.toDouble() ?? 0),
-            discountAmount: Value((map['discountAmount'] as num?)?.toDouble() ?? 0),
+            discountAmount:
+                Value((map['discountAmount'] as num?)?.toDouble() ?? 0),
             discountReason: Value(map['discountReason']?.toString() ?? ''),
-            deliveryDate: Value((map['deliveryDate'] as num?)?.toInt() ?? remoteUpdatedAt),
-            createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
+            deliveryDate: Value(
+                (map['deliveryDate'] as num?)?.toInt() ?? remoteUpdatedAt),
+            createdAt:
+                Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
             isArchived: Value(map['isArchived'] == true),
@@ -233,17 +260,22 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.orders)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.orders)..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.orders)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.orders)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('orders/${row.id}');
         await (_db.delete(_db.orders)..where((t) => t.id.equals(row.id))).go();
       } else {
-        final images = (jsonDecode(row.imagesJson) as List).map((e) => e.toString()).toList();
+        final images = (jsonDecode(row.imagesJson) as List)
+            .map((e) => e.toString())
+            .toList();
         await _putNode('orders/${row.id}', {
           'customerId': row.customerId,
           'customerName': row.customerName,
@@ -260,7 +292,8 @@ class SyncService {
           'updatedAt': row.updatedAt,
           'isArchived': row.isArchived,
         });
-        await _db.updateOrderFields(OrdersCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateOrderFields(
+            OrdersCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -278,16 +311,20 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['paymentDate'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['paymentDate'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           final orderId = map['orderId']?.toString() ?? '';
           await _db.upsertTransaction(PaymentTransactionsCompanion(
             id: Value(id),
             orderId: Value(orderId),
             customerId: Value(map['customerId']?.toString() ?? ''),
             amountPaid: Value((map['amountPaid'] as num?)?.toDouble() ?? 0),
-            paymentDate: Value((map['paymentDate'] as num?)?.toInt() ?? remoteUpdatedAt),
+            paymentDate:
+                Value((map['paymentDate'] as num?)?.toInt() ?? remoteUpdatedAt),
             paymentType: Value(map['paymentType']?.toString() ?? 'installment'),
             paymentMethod: Value(map['paymentMethod']?.toString() ?? 'cash'),
             status: Value(map['status']?.toString() ?? 'completed'),
@@ -304,27 +341,35 @@ class SyncService {
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
         touchedOrderIds.add(local.orderId);
-        await (_db.delete(_db.paymentTransactions)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.paymentTransactions)
+              ..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.paymentTransactions)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.paymentTransactions)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       touchedOrderIds.add(row.orderId);
       if (row.isDeleted) {
         await _deleteNode('transactions/${row.id}');
-        await (_db.delete(_db.paymentTransactions)..where((t) => t.id.equals(row.id))).go();
+        await (_db.delete(_db.paymentTransactions)
+              ..where((t) => t.id.equals(row.id)))
+            .go();
       } else {
         await _putNode('transactions/${row.id}', {
           'orderId': row.orderId,
           'customerId': row.customerId,
           'amountPaid': row.amountPaid,
           'paymentDate': row.paymentDate,
+          'updatedAt': row.updatedAt,
           'paymentType': row.paymentType,
           'paymentMethod': row.paymentMethod,
           'status': row.status,
         });
-        await _db.updateTransactionFields(PaymentTransactionsCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateTransactionFields(PaymentTransactionsCompanion(
+            id: Value(row.id), dirty: const Value(false)));
       }
     }
 
@@ -345,9 +390,12 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['date'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['date'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           await _db.upsertExpense(ExpensesCompanion(
             id: Value(id),
             amount: Value((map['amount'] as num?)?.toDouble() ?? 0),
@@ -359,7 +407,8 @@ class SyncService {
             customerName: Value(map['customerName']?.toString()),
             paymentMethod: Value(map['paymentMethod']?.toString() ?? 'cash'),
             workshopDebtId: Value(map['workshopDebtId']?.toString()),
-            orderAllocationsJson: Value(map['orderAllocationsJson']?.toString() ?? '[]'),
+            orderAllocationsJson:
+                Value(map['orderAllocationsJson']?.toString() ?? '[]'),
             date: Value((map['date'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
@@ -372,15 +421,19 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.expenses)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.expenses)..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.expenses)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.expenses)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('expenses/${row.id}');
-        await (_db.delete(_db.expenses)..where((t) => t.id.equals(row.id))).go();
+        await (_db.delete(_db.expenses)..where((t) => t.id.equals(row.id)))
+            .go();
       } else {
         await _putNode('expenses/${row.id}', {
           'amount': row.amount,
@@ -394,8 +447,10 @@ class SyncService {
           if (row.workshopDebtId != null) 'workshopDebtId': row.workshopDebtId,
           'orderAllocationsJson': row.orderAllocationsJson,
           'date': row.date,
+          'updatedAt': row.updatedAt,
         });
-        await _db.updateExpenseFields(ExpensesCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateExpenseFields(
+            ExpensesCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -411,9 +466,12 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['createdAt'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['createdAt'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           await _db.upsertWorkshopDebt(WorkshopDebtsCompanion(
             id: Value(id),
             creditorName: Value(map['creditorName']?.toString() ?? ''),
@@ -421,7 +479,8 @@ class SyncService {
             paidAmount: Value((map['paidAmount'] as num?)?.toDouble() ?? 0),
             notes: Value(map['notes']?.toString() ?? ''),
             orderId: Value(map['orderId']?.toString() ?? ''),
-            createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
+            createdAt:
+                Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
             dirty: const Value(false),
@@ -433,15 +492,20 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.workshopDebts)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.workshopDebts)
+              ..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.workshopDebts)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.workshopDebts)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('workshopDebts/${row.id}');
-        await (_db.delete(_db.workshopDebts)..where((t) => t.id.equals(row.id))).go();
+        await (_db.delete(_db.workshopDebts)..where((t) => t.id.equals(row.id)))
+            .go();
       } else {
         await _putNode('workshopDebts/${row.id}', {
           'creditorName': row.creditorName,
@@ -452,7 +516,8 @@ class SyncService {
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
         });
-        await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
+            id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -468,9 +533,12 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['date'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['date'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           await _db.upsertCashTransfer(CashTransfersCompanion(
             id: Value(id),
             amount: Value((map['amount'] as num?)?.toDouble() ?? 0),
@@ -487,15 +555,20 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.cashTransfers)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.cashTransfers)
+              ..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.cashTransfers)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.cashTransfers)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('cashTransfers/${row.id}');
-        await (_db.delete(_db.cashTransfers)..where((t) => t.id.equals(row.id))).go();
+        await (_db.delete(_db.cashTransfers)..where((t) => t.id.equals(row.id)))
+            .go();
       } else {
         await _putNode('cashTransfers/${row.id}', {
           'amount': row.amount,
@@ -503,7 +576,8 @@ class SyncService {
           'date': row.date,
           'updatedAt': row.updatedAt,
         });
-        await _db.updateCashTransferFields(CashTransfersCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateCashTransferFields(CashTransfersCompanion(
+            id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -521,7 +595,8 @@ class SyncService {
         final map = Map<String, dynamic>.from(entry.value as Map);
         final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? 0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           await _db.upsertMaterial(MaterialItemsCompanion(
             id: Value(id),
             name: Value(map['name']?.toString() ?? ''),
@@ -539,15 +614,20 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.materialItems)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.materialItems)
+              ..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.materialItems)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.materialItems)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('materials/${row.id}');
-        await (_db.delete(_db.materialItems)..where((t) => t.id.equals(row.id))).go();
+        await (_db.delete(_db.materialItems)..where((t) => t.id.equals(row.id)))
+            .go();
       } else {
         await _putNode('materials/${row.id}', {
           'name': row.name,
@@ -556,7 +636,8 @@ class SyncService {
           'minThreshold': row.minThreshold,
           'updatedAt': row.updatedAt,
         });
-        await _db.updateMaterialFields(MaterialItemsCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateMaterialFields(MaterialItemsCompanion(
+            id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -572,9 +653,12 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['createdAt'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['createdAt'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           await _db.upsertWorker(WorkersCompanion(
             id: Value(id),
             name: Value(map['name']?.toString() ?? ''),
@@ -584,7 +668,8 @@ class SyncService {
             payWeekday: Value((map['payWeekday'] as num?)?.toInt() ?? 4),
             phone: Value(map['phone']?.toString() ?? ''),
             notes: Value(map['notes']?.toString() ?? ''),
-            createdAt: Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
+            createdAt:
+                Value((map['createdAt'] as num?)?.toInt() ?? remoteUpdatedAt),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
             dirty: const Value(false),
@@ -596,11 +681,14 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.workers)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.workers)..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.workers)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.workers)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('workers/${row.id}');
@@ -617,7 +705,8 @@ class SyncService {
           'createdAt': row.createdAt,
           'updatedAt': row.updatedAt,
         });
-        await _db.updateWorkerFields(WorkersCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateWorkerFields(
+            WorkersCompanion(id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -633,16 +722,21 @@ class SyncService {
       for (final entry in remote.entries) {
         final id = entry.key;
         final map = Map<String, dynamic>.from(entry.value as Map);
-        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ?? (map['paymentDate'] as num?)?.toInt() ?? 0;
+        final remoteUpdatedAt = (map['updatedAt'] as num?)?.toInt() ??
+            (map['paymentDate'] as num?)?.toInt() ??
+            0;
         final local = localById[id];
-        if (local == null || (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
+        if (local == null ||
+            (!local.dirty && remoteUpdatedAt > local.updatedAt)) {
           await _db.upsertWorkerPayment(WorkerPaymentsCompanion(
             id: Value(id),
             workerId: Value(map['workerId']?.toString() ?? ''),
             workerName: Value(map['workerName']?.toString() ?? ''),
             amount: Value((map['amount'] as num?)?.toDouble() ?? 0),
-            paymentDate: Value((map['paymentDate'] as num?)?.toInt() ?? remoteUpdatedAt),
-            periodStart: Value((map['periodStart'] as num?)?.toInt() ?? remoteUpdatedAt),
+            paymentDate:
+                Value((map['paymentDate'] as num?)?.toInt() ?? remoteUpdatedAt),
+            periodStart:
+                Value((map['periodStart'] as num?)?.toInt() ?? remoteUpdatedAt),
             expenseId: Value(map['expenseId']?.toString()),
             updatedAt: Value(remoteUpdatedAt),
             isDeleted: const Value(false),
@@ -655,15 +749,21 @@ class SyncService {
     final remoteIds = remote?.keys.toSet() ?? {};
     for (final local in localById.values) {
       if (!local.dirty && !remoteIds.contains(local.id)) {
-        await (_db.delete(_db.workerPayments)..where((t) => t.id.equals(local.id))).go();
+        await (_db.delete(_db.workerPayments)
+              ..where((t) => t.id.equals(local.id)))
+            .go();
       }
     }
 
-    final dirtyRows = await (_db.select(_db.workerPayments)..where((t) => t.dirty.equals(true))).get();
+    final dirtyRows = await (_db.select(_db.workerPayments)
+          ..where((t) => t.dirty.equals(true)))
+        .get();
     for (final row in dirtyRows) {
       if (row.isDeleted) {
         await _deleteNode('workerPayments/${row.id}');
-        await (_db.delete(_db.workerPayments)..where((t) => t.id.equals(row.id))).go();
+        await (_db.delete(_db.workerPayments)
+              ..where((t) => t.id.equals(row.id)))
+            .go();
       } else {
         await _putNode('workerPayments/${row.id}', {
           'workerId': row.workerId,
@@ -674,7 +774,8 @@ class SyncService {
           if (row.expenseId != null) 'expenseId': row.expenseId,
           'updatedAt': row.updatedAt,
         });
-        await _db.updateWorkerPaymentFields(WorkerPaymentsCompanion(id: Value(row.id), dirty: const Value(false)));
+        await _db.updateWorkerPaymentFields(WorkerPaymentsCompanion(
+            id: Value(row.id), dirty: const Value(false)));
       }
     }
   }
@@ -683,22 +784,40 @@ class SyncService {
   // كل نداء هنا بيعدّي على FirebaseRestAuth.withAuth() عشان يضيف توكن
   // الدخول الحالي - من غيره قواعد الأمان (auth != null) هترفض أي طلب
 
-  Future<Map<String, dynamic>?> _fetchNode(String path) async {
-    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
+  Future<Map<String, dynamic>> _fetchNode(String path) async {
+    final uri =
+        await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
     final response = await http.get(uri).timeout(_timeout);
-    if (response.statusCode != 200) return null;
+    if (response.statusCode != 200) {
+      throw StateError(
+          'Firebase GET failed ($path): HTTP ${response.statusCode}');
+    }
     final decoded = jsonDecode(response.body);
-    if (decoded is! Map) return null;
+    if (decoded == null) return <String, dynamic>{};
+    if (decoded is! Map)
+      throw StateError('Firebase returned invalid data for $path');
     return decoded.cast<String, dynamic>();
   }
 
   Future<void> _putNode(String path, Map<String, dynamic> data) async {
-    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
-    await http.put(uri, body: jsonEncode(data)).timeout(_timeout);
+    final uri =
+        await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
+    final response = await http
+        .put(uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(data))
+        .timeout(_timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300)
+      throw StateError(
+          'Firebase PUT failed ($path): HTTP ${response.statusCode}');
   }
 
   Future<void> _deleteNode(String path) async {
-    final uri = await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
-    await http.delete(uri).timeout(_timeout);
+    final uri =
+        await FirebaseRestAuth.withAuth(Uri.parse('$_baseUrl/$path.json'));
+    final response = await http.delete(uri).timeout(_timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300)
+      throw StateError(
+          'Firebase DELETE failed ($path): HTTP ${response.statusCode}');
   }
 }

@@ -23,7 +23,8 @@ class ExpenseOrderAllocation {
         'amount': amount,
       };
 
-  factory ExpenseOrderAllocation.fromJson(Map<String, dynamic> json) => ExpenseOrderAllocation(
+  factory ExpenseOrderAllocation.fromJson(Map<String, dynamic> json) =>
+      ExpenseOrderAllocation(
         orderId: json['orderId']?.toString() ?? '',
         customerId: json['customerId']?.toString() ?? '',
         customerName: json['customerName']?.toString() ?? '',
@@ -37,7 +38,10 @@ class ExpenseOrderAllocation {
     if (json.trim().isEmpty) return [];
     try {
       final decoded = jsonDecode(json) as List;
-      return decoded.map((e) => ExpenseOrderAllocation.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      return decoded
+          .map((e) => ExpenseOrderAllocation.fromJson(
+              Map<String, dynamic>.from(e as Map)))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -53,7 +57,13 @@ extension ExpenseAllocationsExtension on Expense {
     // توافق مع مصروفات قديمة اتسجلت قبل ميزة التقسيم - كانت بتحفظ طلب
     // واحد بس في orderId/customerId/customerName مباشرة
     if (orderId != null && orderId!.isNotEmpty) {
-      return [ExpenseOrderAllocation(orderId: orderId!, customerId: customerId ?? '', customerName: customerName ?? '', amount: amount)];
+      return [
+        ExpenseOrderAllocation(
+            orderId: orderId!,
+            customerId: customerId ?? '',
+            customerName: customerName ?? '',
+            amount: amount)
+      ];
     }
     return [];
   }

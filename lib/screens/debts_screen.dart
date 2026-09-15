@@ -31,7 +31,8 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
     final filteredDebtors = q.isEmpty
         ? debtors
         : debtors.where((o) {
-            return normalizeForSearch(o.customerName).contains(q) || normalizeForSearch(o.itemType).contains(q);
+            return normalizeForSearch(o.customerName).contains(q) ||
+                normalizeForSearch(o.itemType).contains(q);
           }).toList();
     // إجمالي المديونيات دايمًا بيتحسب من كل المديونين، مش من نتيجة البحث،
     // عشان الرقم يفضل يعكس الموقف الحقيقي حتى لو المستخدم بيدور على عميل معين
@@ -49,17 +50,25 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
-                  child: const Icon(Icons.account_balance_wallet_rounded, color: AppColors.wood, size: 22),
+                  decoration: BoxDecoration(
+                      color: AppColors.wood.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14)),
+                  child: const Icon(Icons.account_balance_wallet_rounded,
+                      color: AppColors.wood, size: 22),
                 ),
                 const SizedBox(width: 14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('المديونيات', style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+                    Text('المديونيات',
+                        style: GoogleFonts.cairo(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF2A2320))),
                     const SizedBox(height: 4),
                     Text('الطلبات اللي لسه عليها متبقٍ من العملاء',
-                        style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600)),
+                        style: GoogleFonts.cairo(
+                            fontSize: 13, color: Colors.grey.shade600)),
                   ],
                 ),
               ],
@@ -67,7 +76,10 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
           ),
           const SizedBox(height: 22),
           if (debtors.isEmpty)
-            const Expanded(child: _EmptyState(icon: Icons.celebration_rounded, text: 'لا توجد مديونيات حاليًا 🎉'))
+            const Expanded(
+                child: _EmptyState(
+                    icon: Icons.celebration_rounded,
+                    text: 'لا توجد مديونيات حاليًا 🎉'))
           else ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -93,7 +105,9 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
             ),
             Expanded(
               child: filteredDebtors.isEmpty
-                  ? const _EmptyState(icon: Icons.search_off_rounded, text: 'لا توجد نتائج مطابقة')
+                  ? const _EmptyState(
+                      icon: Icons.search_off_rounded,
+                      text: 'لا توجد نتائج مطابقة')
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
                       itemCount: filteredDebtors.length,
@@ -103,35 +117,58 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 14),
                           child: _HoverCard(
-                            onTap: () => showDialog(context: context, builder: (context) => OrderDetailDialog(order: o)),
+                            onTap: () => showDialog(
+                                context: context,
+                                builder: (context) =>
+                                    OrderDetailDialog(order: o)),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 18, vertical: 15),
                               child: Row(
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.1), shape: BoxShape.circle),
-                                    child: const Icon(Icons.priority_high_rounded, color: AppColors.danger, size: 20),
+                                    decoration: BoxDecoration(
+                                        color: AppColors.danger
+                                            .withValues(alpha: 0.1),
+                                        shape: BoxShape.circle),
+                                    child: const Icon(
+                                        Icons.priority_high_rounded,
+                                        color: AppColors.danger,
+                                        size: 20),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text('${o.customerName} - ${o.itemType}',
+                                        Text(
+                                            '${o.customerName} - ${o.itemType}',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+                                            style: GoogleFonts.cairo(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w800,
+                                                color:
+                                                    const Color(0xFF2A2320))),
                                         const SizedBox(height: 4),
-                                        Text('تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}',
-                                            style: GoogleFonts.cairo(fontSize: 11.5, color: Colors.grey.shade500)),
+                                        Text(
+                                            'تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}',
+                                            style: GoogleFonts.cairo(
+                                                fontSize: 11.5,
+                                                color: Colors.grey.shade500)),
                                       ],
                                     ),
                                   ),
                                   Text('${remaining.toStringAsFixed(0)} ج.م',
-                                      style: GoogleFonts.cairo(color: AppColors.danger, fontWeight: FontWeight.w800, fontSize: 15)),
+                                      style: GoogleFonts.cairo(
+                                          color: AppColors.danger,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15)),
                                   const SizedBox(width: 4),
-                                  Icon(Icons.chevron_left_rounded, color: Colors.grey.shade300),
+                                  Icon(Icons.chevron_left_rounded,
+                                      color: Colors.grey.shade300),
                                 ],
                               ),
                             ),
@@ -153,7 +190,12 @@ class _HeroStatCard extends StatelessWidget {
   final String caption;
   final IconData icon;
   final Color color;
-  const _HeroStatCard({required this.label, required this.value, required this.caption, required this.icon, required this.color});
+  const _HeroStatCard(
+      {required this.label,
+      required this.value,
+      required this.caption,
+      required this.icon,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -163,25 +205,37 @@ class _HeroStatCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [color.withValues(alpha: 0.10), color.withValues(alpha: 0.03)]),
+          gradient: LinearGradient(colors: [
+            color.withValues(alpha: 0.10),
+            color.withValues(alpha: 0.03)
+          ]),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.14), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14), shape: BoxShape.circle),
               child: Icon(icon, color: color, size: 28),
             ),
             const SizedBox(width: 20),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600)),
+                Text(label,
+                    style: GoogleFonts.cairo(
+                        fontSize: 13, color: Colors.grey.shade600)),
                 const SizedBox(height: 6),
-                Text(value, style: GoogleFonts.cairo(fontSize: 30, fontWeight: FontWeight.w800, color: color)),
+                Text(value,
+                    style: GoogleFonts.cairo(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        color: color)),
                 const SizedBox(height: 4),
-                Text(caption, style: GoogleFonts.cairo(fontSize: 12, color: Colors.grey.shade500)),
+                Text(caption,
+                    style: GoogleFonts.cairo(
+                        fontSize: 12, color: Colors.grey.shade500)),
               ],
             ),
           ],
@@ -204,7 +258,9 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(icon, size: 48, color: Colors.grey.shade300),
           const SizedBox(height: 14),
-          Text(text, style: GoogleFonts.cairo(fontSize: 14.5, color: Colors.grey.shade500)),
+          Text(text,
+              style: GoogleFonts.cairo(
+                  fontSize: 14.5, color: Colors.grey.shade500)),
         ],
       ),
     );
@@ -218,7 +274,10 @@ class _HoverCard extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final BorderRadius borderRadius;
-  const _HoverCard({required this.child, this.onTap, this.borderRadius = const BorderRadius.all(Radius.circular(18))});
+  const _HoverCard(
+      {required this.child,
+      this.onTap,
+      this.borderRadius = const BorderRadius.all(Radius.circular(18))});
 
   @override
   State<_HoverCard> createState() => _HoverCardState();
@@ -230,7 +289,9 @@ class _HoverCardState extends State<_HoverCard> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: AnimatedContainer(
@@ -252,7 +313,10 @@ class _HoverCardState extends State<_HoverCard> {
           color: Colors.transparent,
           borderRadius: widget.borderRadius,
           clipBehavior: Clip.antiAlias,
-          child: InkWell(onTap: widget.onTap, borderRadius: widget.borderRadius, child: widget.child),
+          child: InkWell(
+              onTap: widget.onTap,
+              borderRadius: widget.borderRadius,
+              child: widget.child),
         ),
       ),
     );

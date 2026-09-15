@@ -39,7 +39,8 @@ class ExcelExportService {
         DoubleCellValue(o.effectiveTotal),
         DoubleCellValue(o.totalPaid),
         DoubleCellValue(o.remaining),
-        TextCellValue(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))),
+        TextCellValue(DateFormat('d/M/yyyy')
+            .format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))),
       ]);
     }
 
@@ -59,7 +60,8 @@ class ExcelExportService {
         TextCellValue(e.workerName ?? ''),
         TextCellValue(paymentMethods[e.paymentMethod] ?? e.paymentMethod),
         DoubleCellValue(e.amount),
-        TextCellValue(DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))),
+        TextCellValue(DateFormat('d/M/yyyy')
+            .format(DateTime.fromMillisecondsSinceEpoch(e.date))),
       ]);
     }
 
@@ -67,20 +69,34 @@ class ExcelExportService {
     // أي دفعة مرتبطة بطلب اتحذف (شايف نفس الشرح في dashboardStatsProvider)
     final liveOrderIds = orders.map((o) => o.id).toSet();
     double revenueByMethod(String method) => transactions
-        .where((t) => t.paymentMethod == method && liveOrderIds.contains(t.orderId))
+        .where((t) =>
+            t.paymentMethod == method && liveOrderIds.contains(t.orderId))
         .fold<double>(0, (s, t) => s + t.amountPaid);
-    double expensesByMethod(String method) =>
-        expenses.where((e) => e.paymentMethod == method).fold<double>(0, (s, e) => s + e.amount);
+    double expensesByMethod(String method) => expenses
+        .where((e) => e.paymentMethod == method)
+        .fold<double>(0, (s, e) => s + e.amount);
     final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
     final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
 
     final summarySheet = excel['ملخص الخزينة'];
     summarySheet.appendRow([TextCellValue('البند'), TextCellValue('القيمة')]);
-    summarySheet.appendRow([TextCellValue('إجمالي الإيرادات'), DoubleCellValue(totalRevenue)]);
-    summarySheet.appendRow([TextCellValue('إجمالي المصروفات'), DoubleCellValue(totalExpenses)]);
-    summarySheet.appendRow([TextCellValue('المبلغ المتاح'), DoubleCellValue(totalRevenue - totalExpenses)]);
-    summarySheet.appendRow([TextCellValue('المبلغ المتاح - نقدي'), DoubleCellValue(revenueByMethod('cash') - expensesByMethod('cash'))]);
-    summarySheet.appendRow([TextCellValue('المبلغ المتاح - إنستاباي'), DoubleCellValue(revenueByMethod('instapay') - expensesByMethod('instapay'))]);
+    summarySheet.appendRow(
+        [TextCellValue('إجمالي الإيرادات'), DoubleCellValue(totalRevenue)]);
+    summarySheet.appendRow(
+        [TextCellValue('إجمالي المصروفات'), DoubleCellValue(totalExpenses)]);
+    summarySheet.appendRow([
+      TextCellValue('المبلغ المتاح'),
+      DoubleCellValue(totalRevenue - totalExpenses)
+    ]);
+    summarySheet.appendRow([
+      TextCellValue('المبلغ المتاح - نقدي'),
+      DoubleCellValue(revenueByMethod('cash') - expensesByMethod('cash'))
+    ]);
+    summarySheet.appendRow([
+      TextCellValue('المبلغ المتاح - إنستاباي'),
+      DoubleCellValue(
+          revenueByMethod('instapay') - expensesByMethod('instapay'))
+    ]);
 
     excel.delete(defaultSheetName);
     final bytes = excel.save();

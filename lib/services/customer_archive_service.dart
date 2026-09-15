@@ -14,7 +14,10 @@ class CustomerArchiveService {
 
   Future<String?> getArchiveBlockReason(String customerId) async {
     final orders = await (_db.select(_db.orders)
-          ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(false)))
+          ..where((o) =>
+              o.customerId.equals(customerId) &
+              o.isDeleted.equals(false) &
+              o.isArchived.equals(false)))
         .get();
 
     for (final order in orders) {
@@ -34,22 +37,31 @@ class CustomerArchiveService {
 
     return _db.transaction(() async {
       final customer = await (_db.select(_db.customers)
-            ..where((c) => c.id.equals(customerId) & c.isDeleted.equals(false) & c.isArchived.equals(false)))
+            ..where((c) =>
+                c.id.equals(customerId) &
+                c.isDeleted.equals(false) &
+                c.isArchived.equals(false)))
           .getSingleOrNull();
-      if (customer == null) throw StateError('العميل غير موجود أو مؤرشف بالفعل.');
+      if (customer == null)
+        throw StateError('العميل غير موجود أو مؤرشف بالفعل.');
 
       final orders = await (_db.select(_db.orders)
-            ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(false)))
+            ..where((o) =>
+                o.customerId.equals(customerId) &
+                o.isDeleted.equals(false) &
+                o.isArchived.equals(false)))
           .get();
 
       for (final order in orders) {
         if (order.remaining > 0.01 || order.status != 'تم التسليم') {
-          throw StateError('لا يمكن أرشفة العميل لأن لديه طلبًا غير مكتمل أو عليه مبلغ متبقٍ.');
+          throw StateError(
+              'لا يمكن أرشفة العميل لأن لديه طلبًا غير مكتمل أو عليه مبلغ متبقٍ.');
         }
       }
 
       final now = DateTime.now().millisecondsSinceEpoch;
-      await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
+      await (_db.update(_db.customers)..where((c) => c.id.equals(customerId)))
+          .write(
         CustomersCompanion(
           isArchived: const Value(true),
           dirty: const Value(true),
@@ -58,7 +70,8 @@ class CustomerArchiveService {
       );
 
       for (final order in orders) {
-        await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
+        await (_db.update(_db.orders)..where((o) => o.id.equals(order.id)))
+            .write(
           OrdersCompanion(
             isArchived: const Value(true),
             dirty: const Value(true),
@@ -73,16 +86,23 @@ class CustomerArchiveService {
   Future<int> reactivateCustomer(String customerId) async {
     return _db.transaction(() async {
       final customer = await (_db.select(_db.customers)
-            ..where((c) => c.id.equals(customerId) & c.isDeleted.equals(false) & c.isArchived.equals(true)))
+            ..where((c) =>
+                c.id.equals(customerId) &
+                c.isDeleted.equals(false) &
+                c.isArchived.equals(true)))
           .getSingleOrNull();
       if (customer == null) throw StateError('العميل غير موجود في الأرشيف.');
 
       final orders = await (_db.select(_db.orders)
-            ..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(true)))
+            ..where((o) =>
+                o.customerId.equals(customerId) &
+                o.isDeleted.equals(false) &
+                o.isArchived.equals(true)))
           .get();
 
       final now = DateTime.now().millisecondsSinceEpoch;
-      await (_db.update(_db.customers)..where((c) => c.id.equals(customerId))).write(
+      await (_db.update(_db.customers)..where((c) => c.id.equals(customerId)))
+          .write(
         CustomersCompanion(
           isArchived: const Value(false),
           dirty: const Value(true),
@@ -91,7 +111,8 @@ class CustomerArchiveService {
       );
 
       for (final order in orders) {
-        await (_db.update(_db.orders)..where((o) => o.id.equals(order.id))).write(
+        await (_db.update(_db.orders)..where((o) => o.id.equals(order.id)))
+            .write(
           OrdersCompanion(
             isArchived: const Value(false),
             dirty: const Value(true),

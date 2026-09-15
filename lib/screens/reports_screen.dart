@@ -16,7 +16,9 @@ class ReportsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
-  DateTimeRange _range = DateTimeRange(start: DateTime.now().subtract(const Duration(days: 30)), end: DateTime.now());
+  DateTimeRange _range = DateTimeRange(
+      start: DateTime.now().subtract(const Duration(days: 30)),
+      end: DateTime.now());
   String? _selectedCustomerId;
   String? _selectedOrderId;
   bool _isExporting = false;
@@ -40,13 +42,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final orders = (ref.read(ordersProvider).value ?? [])
           .where((o) =>
               o.status != 'تم التسليم' &&
-              DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isAfter(from.subtract(const Duration(seconds: 1))) &&
+              DateTime.fromMillisecondsSinceEpoch(o.deliveryDate)
+                  .isAfter(from.subtract(const Duration(seconds: 1))) &&
               DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isBefore(to))
           .toList();
-      final bytes = await PdfExportService.instance.buildWeeklyDeliveriesReport(orders: orders, from: from, to: to);
-      if (mounted) await PdfExportService.instance.preview(context, bytes, 'تقرير_التسليمات_الأسبوعية.pdf');
+      final bytes = await PdfExportService.instance
+          .buildWeeklyDeliveriesReport(orders: orders, from: from, to: to);
+      if (mounted)
+        await PdfExportService.instance
+            .preview(context, bytes, 'تقرير_التسليمات_الأسبوعية.pdf');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
@@ -59,7 +67,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final orders = (ref.read(ordersProvider).value ?? [])
         .where((o) =>
             o.status != 'تم التسليم' &&
-            DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isAfter(from.subtract(const Duration(seconds: 1))) &&
+            DateTime.fromMillisecondsSinceEpoch(o.deliveryDate)
+                .isAfter(from.subtract(const Duration(seconds: 1))) &&
             DateTime.fromMillisecondsSinceEpoch(o.deliveryDate).isBefore(to))
         .toList()
       ..sort((a, b) => a.deliveryDate.compareTo(b.deliveryDate));
@@ -70,7 +79,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     } else {
       for (final o in orders) {
         final d = DateTime.fromMillisecondsSinceEpoch(o.deliveryDate);
-        buffer.writeln('- ${o.customerName} (${o.itemType}) بتاريخ ${d.day}/${d.month}');
+        buffer.writeln(
+            '- ${o.customerName} (${o.itemType}) بتاريخ ${d.day}/${d.month}');
       }
     }
     await shareTextOnWhatsApp(buffer.toString());
@@ -80,21 +90,39 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     setState(() => _isExporting = true);
     try {
       final orders = (ref.read(ordersProvider).value ?? [])
-          .where((o) => DateTime.fromMillisecondsSinceEpoch(o.createdAt).isAfter(_range.start) &&
-              DateTime.fromMillisecondsSinceEpoch(o.createdAt).isBefore(_range.end.add(const Duration(days: 1))))
+          .where((o) =>
+              DateTime.fromMillisecondsSinceEpoch(o.createdAt)
+                  .isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(o.createdAt)
+                  .isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
       final expenses = (ref.read(expensesProvider).value ?? [])
-          .where((e) => DateTime.fromMillisecondsSinceEpoch(e.date).isAfter(_range.start) &&
-              DateTime.fromMillisecondsSinceEpoch(e.date).isBefore(_range.end.add(const Duration(days: 1))))
+          .where((e) =>
+              DateTime.fromMillisecondsSinceEpoch(e.date)
+                  .isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(e.date)
+                  .isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
       final transactions = (ref.read(allTransactionsProvider).value ?? [])
-          .where((t) => DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isAfter(_range.start) &&
-              DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isBefore(_range.end.add(const Duration(days: 1))))
+          .where((t) =>
+              DateTime.fromMillisecondsSinceEpoch(t.paymentDate)
+                  .isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(t.paymentDate)
+                  .isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
-      final bytes = await PdfExportService.instance.buildFinancialReport(orders: orders, expenses: expenses, transactions: transactions, from: _range.start, to: _range.end);
-      if (mounted) await PdfExportService.instance.preview(context, bytes, 'تقرير_مالي.pdf');
+      final bytes = await PdfExportService.instance.buildFinancialReport(
+          orders: orders,
+          expenses: expenses,
+          transactions: transactions,
+          from: _range.start,
+          to: _range.end);
+      if (mounted)
+        await PdfExportService.instance
+            .preview(context, bytes, 'تقرير_مالي.pdf');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
@@ -104,24 +132,38 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     setState(() => _isExporting = true);
     try {
       final orders = (ref.read(ordersProvider).value ?? [])
-          .where((o) => DateTime.fromMillisecondsSinceEpoch(o.createdAt).isAfter(_range.start) &&
-              DateTime.fromMillisecondsSinceEpoch(o.createdAt).isBefore(_range.end.add(const Duration(days: 1))))
+          .where((o) =>
+              DateTime.fromMillisecondsSinceEpoch(o.createdAt)
+                  .isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(o.createdAt)
+                  .isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
       final expenses = (ref.read(expensesProvider).value ?? [])
-          .where((e) => DateTime.fromMillisecondsSinceEpoch(e.date).isAfter(_range.start) &&
-              DateTime.fromMillisecondsSinceEpoch(e.date).isBefore(_range.end.add(const Duration(days: 1))))
+          .where((e) =>
+              DateTime.fromMillisecondsSinceEpoch(e.date)
+                  .isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(e.date)
+                  .isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
       final transactions = (ref.read(allTransactionsProvider).value ?? [])
-          .where((t) => DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isAfter(_range.start) &&
-              DateTime.fromMillisecondsSinceEpoch(t.paymentDate).isBefore(_range.end.add(const Duration(days: 1))))
+          .where((t) =>
+              DateTime.fromMillisecondsSinceEpoch(t.paymentDate)
+                  .isAfter(_range.start) &&
+              DateTime.fromMillisecondsSinceEpoch(t.paymentDate)
+                  .isBefore(_range.end.add(const Duration(days: 1))))
           .toList();
-      final bytes = ExcelExportService.instance.buildFinancialWorkbook(orders: orders, expenses: expenses, transactions: transactions);
-      final saved = await ExcelExportService.instance.saveWorkbook(bytes, 'تقرير_مالي.xlsx');
+      final bytes = ExcelExportService.instance.buildFinancialWorkbook(
+          orders: orders, expenses: expenses, transactions: transactions);
+      final saved = await ExcelExportService.instance
+          .saveWorkbook(bytes, 'تقرير_مالي.xlsx');
       if (mounted && saved) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ الملف بنجاح')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('تم حفظ الملف بنجاح')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
@@ -129,22 +171,32 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   Future<void> _exportCustomerInvoice() async {
     if (_selectedCustomerId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اختر العميل أولاً')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('اختر العميل أولاً')));
       return;
     }
     setState(() => _isExporting = true);
     try {
       final customers = ref.read(customersProvider).value ?? [];
       final customer = customers.firstWhere((c) => c.id == _selectedCustomerId);
-      var orders = (ref.read(ordersProvider).value ?? []).where((o) => o.customerId == _selectedCustomerId).toList();
+      var orders = (ref.read(ordersProvider).value ?? [])
+          .where((o) => o.customerId == _selectedCustomerId)
+          .toList();
       if (_selectedOrderId != null) {
         orders = orders.where((o) => o.id == _selectedOrderId).toList();
       }
-      final bytes = await PdfExportService.instance.buildCustomerInvoice(customer: customer, orders: orders);
-      final fileSuffix = orders.length == 1 ? '${customer.name}_${orders.first.itemType}' : customer.name;
-      if (mounted) await PdfExportService.instance.preview(context, bytes, 'فاتورة_$fileSuffix.pdf');
+      final bytes = await PdfExportService.instance
+          .buildCustomerInvoice(customer: customer, orders: orders);
+      final fileSuffix = orders.length == 1
+          ? '${customer.name}_${orders.first.itemType}'
+          : customer.name;
+      if (mounted)
+        await PdfExportService.instance
+            .preview(context, bytes, 'فاتورة_$fileSuffix.pdf');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
@@ -173,17 +225,25 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
-                      child: const Icon(Icons.summarize_rounded, color: AppColors.wood, size: 22),
+                      decoration: BoxDecoration(
+                          color: AppColors.wood.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14)),
+                      child: const Icon(Icons.summarize_rounded,
+                          color: AppColors.wood, size: 22),
                     ),
                     const SizedBox(width: 14),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('التقارير والتصدير', style: GoogleFonts.cairo(fontSize: 22, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+                        Text('التقارير والتصدير',
+                            style: GoogleFonts.cairo(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF2A2320))),
                         const SizedBox(height: 4),
                         Text('تقارير جاهزة PDF/Excel وإرسال واتساب مباشر',
-                            style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600)),
+                            style: GoogleFonts.cairo(
+                                fontSize: 13, color: Colors.grey.shade600)),
                       ],
                     ),
                   ],
@@ -195,8 +255,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('كل الطلبات المقرر تسليمها خلال الأيام السبعة القادمة ولسه ما اتسلمتش',
-                          style: GoogleFonts.cairo(fontSize: 12.5, color: Colors.grey.shade600)),
+                      Text(
+                          'كل الطلبات المقرر تسليمها خلال الأيام السبعة القادمة ولسه ما اتسلمتش',
+                          style: GoogleFonts.cairo(
+                              fontSize: 12.5, color: Colors.grey.shade600)),
                       const SizedBox(height: 16),
                       Row(
                         children: [
@@ -213,7 +275,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                               onPressed: _sendWeeklyDeliveriesOnWhatsApp,
                               icon: const Icon(Icons.send_rounded),
                               label: const Text('إرسال واتساب'),
-                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.success),
                             ),
                           ),
                         ],
@@ -233,11 +296,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(onPressed: _exportFinancialPdf, icon: const Icon(Icons.picture_as_pdf_rounded), label: const Text('PDF')),
+                            child: OutlinedButton.icon(
+                                onPressed: _exportFinancialPdf,
+                                icon: const Icon(Icons.picture_as_pdf_rounded),
+                                label: const Text('PDF')),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: OutlinedButton.icon(onPressed: _exportFinancialExcel, icon: const Icon(Icons.table_chart_rounded), label: const Text('Excel')),
+                            child: OutlinedButton.icon(
+                                onPressed: _exportFinancialExcel,
+                                icon: const Icon(Icons.table_chart_rounded),
+                                label: const Text('Excel')),
                           ),
                         ],
                       ),
@@ -253,32 +322,45 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     children: [
                       DropdownButtonFormField<String>(
                         value: _selectedCustomerId,
-                        decoration: _fieldDecoration('اختر العميل', Icons.person_outline_rounded),
-                        items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                        decoration: _fieldDecoration(
+                            'اختر العميل', Icons.person_outline_rounded),
+                        items: customers
+                            .map((c) => DropdownMenuItem(
+                                value: c.id, child: Text(c.name)))
+                            .toList(),
                         onChanged: (v) => setState(() {
                           _selectedCustomerId = v;
                           _selectedOrderId = null;
                         }),
                       ),
-                      if (_selectedCustomerId != null && customerOrders.length > 1) ...[
+                      if (_selectedCustomerId != null &&
+                          customerOrders.length > 1) ...[
                         const SizedBox(height: 14),
                         DropdownButtonFormField<String?>(
                           value: _selectedOrderId,
-                          decoration: _fieldDecoration('نوع الطلب', Icons.checkroom_rounded),
+                          decoration: _fieldDecoration(
+                              'نوع الطلب', Icons.checkroom_rounded),
                           items: [
-                            const DropdownMenuItem<String?>(value: null, child: Text('كل الطلبات')),
-                            ...customerOrders.map((o) => DropdownMenuItem<String?>(
-                                  value: o.id,
-                                  child: Text('${o.itemType} - ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
-                                )),
+                            const DropdownMenuItem<String?>(
+                                value: null, child: Text('كل الطلبات')),
+                            ...customerOrders
+                                .map((o) => DropdownMenuItem<String?>(
+                                      value: o.id,
+                                      child: Text(
+                                          '${o.itemType} - ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),
+                                    )),
                           ],
-                          onChanged: (v) => setState(() => _selectedOrderId = v),
+                          onChanged: (v) =>
+                              setState(() => _selectedOrderId = v),
                         ),
                       ],
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(onPressed: _exportCustomerInvoice, icon: const Icon(Icons.receipt_long_rounded), label: const Text('تصدير فاتورة PDF')),
+                        child: ElevatedButton.icon(
+                            onPressed: _exportCustomerInvoice,
+                            icon: const Icon(Icons.receipt_long_rounded),
+                            label: const Text('تصدير فاتورة PDF')),
                       ),
                     ],
                   ),
@@ -286,7 +368,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 if (_isExporting)
                   const Padding(
                     padding: EdgeInsets.only(top: 24),
-                    child: Center(child: CircularProgressIndicator(color: AppColors.wood)),
+                    child: Center(
+                        child:
+                            CircularProgressIndicator(color: AppColors.wood)),
                   ),
               ],
             ),
@@ -300,12 +384,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 InputDecoration _fieldDecoration(String label, [IconData? icon]) {
   return InputDecoration(
     labelText: label,
-    prefixIcon: icon != null ? Icon(icon, size: 20, color: AppColors.wood) : null,
+    prefixIcon:
+        icon != null ? Icon(icon, size: 20, color: AppColors.wood) : null,
     filled: true,
     fillColor: Colors.grey.shade50,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
-    focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: AppColors.wood, width: 1.5)),
+    border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade300)),
+    enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade300)),
+    focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: AppColors.wood, width: 1.5)),
   );
 }
 
@@ -328,16 +419,20 @@ class _DateRangeRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.date_range_rounded, color: AppColors.wood, size: 20),
+            const Icon(Icons.date_range_rounded,
+                color: AppColors.wood, size: 20),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('الفترة الزمنية', style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey.shade500)),
+                  Text('الفترة الزمنية',
+                      style: GoogleFonts.cairo(
+                          fontSize: 11, color: Colors.grey.shade500)),
                   Text(
                     '${range.start.year}/${range.start.month}/${range.start.day} - ${range.end.year}/${range.end.month}/${range.end.day}',
-                    style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w700),
+                    style: GoogleFonts.cairo(
+                        fontSize: 13.5, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -354,7 +449,8 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
-  const _SectionCard({required this.title, required this.icon, required this.child});
+  const _SectionCard(
+      {required this.title, required this.icon, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -368,12 +464,18 @@ class _SectionCard extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.wood.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                      color: AppColors.wood.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10)),
                   child: Icon(icon, color: AppColors.wood, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(title, style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF2A2320))),
+                  child: Text(title,
+                      style: GoogleFonts.cairo(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF2A2320))),
                 ),
               ],
             ),
@@ -393,7 +495,10 @@ class _HoverCard extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final BorderRadius borderRadius;
-  const _HoverCard({required this.child, this.onTap, this.borderRadius = const BorderRadius.all(Radius.circular(20))});
+  const _HoverCard(
+      {required this.child,
+      this.onTap,
+      this.borderRadius = const BorderRadius.all(Radius.circular(20))});
 
   @override
   State<_HoverCard> createState() => _HoverCardState();
@@ -405,7 +510,9 @@ class _HoverCardState extends State<_HoverCard> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: AnimatedContainer(
@@ -427,7 +534,10 @@ class _HoverCardState extends State<_HoverCard> {
           color: Colors.transparent,
           borderRadius: widget.borderRadius,
           clipBehavior: Clip.antiAlias,
-          child: InkWell(onTap: widget.onTap, borderRadius: widget.borderRadius, child: widget.child),
+          child: InkWell(
+              onTap: widget.onTap,
+              borderRadius: widget.borderRadius,
+              child: widget.child),
         ),
       ),
     );

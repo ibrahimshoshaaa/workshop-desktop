@@ -38,7 +38,8 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
   @override
   Widget build(BuildContext context) {
     final all = ref.watch(activityLogProvider);
-    final items = _filter == null ? all : all.where((a) => a.kind == _filter).toList();
+    final items =
+        _filter == null ? all : all.where((a) => a.kind == _filter).toList();
 
     final grouped = <String, List<ActivityItem>>{};
     for (final item in items) {
@@ -51,7 +52,8 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFFAF6F0),
         elevation: 0,
-        title: Text('سجل الأنشطة', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+        title: Text('سجل الأنشطة',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: Column(
@@ -79,20 +81,21 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                 ),
                 const SizedBox(width: 8),
                 ..._filterLabels.entries.map((e) => Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: _FilterChip(
-                    label: e.value,
-                    selected: _filter == e.key,
-                    onTap: () => setState(() => _filter = e.key),
-                  ),
-                )),
+                      padding: const EdgeInsets.only(left: 8),
+                      child: _FilterChip(
+                        label: e.value,
+                        selected: _filter == e.key,
+                        onTap: () => setState(() => _filter = e.key),
+                      ),
+                    )),
               ],
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
             child: items.isEmpty
-                ? const _EmptyState(icon: Icons.history_rounded, text: 'لسه مفيش أي نشاط مسجّل')
+                ? const _EmptyState(
+                    icon: Icons.history_rounded, text: 'لسه مفيش أي نشاط مسجّل')
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
                     children: grouped.entries.expand((group) {
@@ -109,9 +112,9 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                           ),
                         ),
                         ...group.value.map((item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _ActivityCard(item: item),
-                        )),
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _ActivityCard(item: item),
+                            )),
                       ];
                     }).toList(),
                   ),
@@ -223,7 +226,8 @@ class _PageHeader extends StatelessWidget {
                   if (badge != null) ...[
                     const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 3),
                       decoration: BoxDecoration(
                         color: AppColors.wood.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
@@ -243,7 +247,8 @@ class _PageHeader extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade600),
+                style: GoogleFonts.cairo(
+                    fontSize: 13, color: Colors.grey.shade600),
               ),
             ],
           ),
@@ -257,7 +262,8 @@ class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _FilterChip({required this.label, required this.selected, required this.onTap});
+  const _FilterChip(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -270,7 +276,8 @@ class _FilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppColors.wood : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? AppColors.wood : Colors.grey.shade300),
+          border: Border.all(
+              color: selected ? AppColors.wood : Colors.grey.shade300),
         ),
         child: Text(
           label,
@@ -298,7 +305,9 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(icon, size: 42, color: Colors.grey.shade300),
           const SizedBox(height: 12),
-          Text(text, style: GoogleFonts.cairo(fontSize: 13.5, color: Colors.grey.shade400)),
+          Text(text,
+              style: GoogleFonts.cairo(
+                  fontSize: 13.5, color: Colors.grey.shade400)),
         ],
       ),
     );
@@ -325,7 +334,9 @@ class _HoverCardState extends State<_HoverCard> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: AnimatedContainer(

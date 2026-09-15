@@ -15,7 +15,10 @@ class LocalRepository {
 
   // ---------------- Customers ----------------
 
-  Future<void> addCustomer({required String name, required String phone, required String address}) async {
+  Future<void> addCustomer(
+      {required String name,
+      required String phone,
+      required String address}) async {
     final now = _now;
     final serialNumber = await _db.getNextCustomerSerialNumber();
     return _db.upsertCustomer(CustomersCompanion(
@@ -32,7 +35,8 @@ class LocalRepository {
     ));
   }
 
-  Future<void> updateCustomer(Customer customer, {required String name, required String phone, required String address}) {
+  Future<void> updateCustomer(Customer customer,
+      {required String name, required String phone, required String address}) {
     return _db.upsertCustomer(CustomersCompanion(
       id: Value(customer.id),
       name: Value(name),
@@ -84,7 +88,9 @@ class LocalRepository {
   /// بيضيف روابط صور جديدة (بعد رفعها على Cloudinary) لطلب موجود، من غير
   /// ما يمسح الصور القديمة اللي كانت متسجلة عليه
   Future<void> addImagesToOrder(Order order, List<String> newImageUrls) {
-    final existing = (jsonDecode(order.imagesJson) as List).map((e) => e.toString()).toList();
+    final existing = (jsonDecode(order.imagesJson) as List)
+        .map((e) => e.toString())
+        .toList();
     final merged = [...existing, ...newImageUrls];
     return _db.updateOrderFields(OrdersCompanion(
       id: Value(order.id),
@@ -96,7 +102,9 @@ class LocalRepository {
 
   /// بيمسح صورة واحدة بس من قائمة صور الطلب (بالرابط)
   Future<void> removeImageFromOrder(Order order, String imageUrl) {
-    final existing = (jsonDecode(order.imagesJson) as List).map((e) => e.toString()).toList();
+    final existing = (jsonDecode(order.imagesJson) as List)
+        .map((e) => e.toString())
+        .toList();
     existing.remove(imageUrl);
     return _db.updateOrderFields(OrdersCompanion(
       id: Value(order.id),
@@ -151,7 +159,8 @@ class LocalRepository {
   /// بتسجّل (أو تعدّل) خصم بمبلغ ثابت على طلب معيّن - المبلغ ده بيتشال
   /// نهائيًا من حساب المديونية والإيراد المستحق على الطلب، مش بس بيظهر
   /// "متبقي صفر" عن طريق تعديل يدوي في المبلغ الإجمالي
-  Future<void> setOrderDiscount(Order order, {required double discountAmount, String reason = ''}) async {
+  Future<void> setOrderDiscount(Order order,
+      {required double discountAmount, String reason = ''}) async {
     await _db.updateOrderFields(OrdersCompanion(
       id: Value(order.id),
       discountAmount: Value(discountAmount),
@@ -203,7 +212,9 @@ class LocalRepository {
 
     // لو الدفعة دي خلت العميل يدفع أكتر من الاتفاق النهائي (نادر، بس
     // ممكن يحصل غلط)، سجّلها كمديونية على الورشة تلقائيًا زي ظبط السعر
-    final freshOrder = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
+    final freshOrder = await (_db.select(_db.orders)
+          ..where((t) => t.id.equals(orderId)))
+        .getSingleOrNull();
     if (freshOrder != null) {
       await _reconcileOrderOverpaymentDebt(
         orderId: freshOrder.id,
@@ -235,12 +246,15 @@ class LocalRepository {
     await _db.updateTransactionFields(PaymentTransactionsCompanion(
       id: Value(transactionId),
       amountPaid: Value(newAmount),
-      paymentMethod: paymentMethod != null ? Value(paymentMethod) : const Value.absent(),
+      paymentMethod:
+          paymentMethod != null ? Value(paymentMethod) : const Value.absent(),
       updatedAt: Value(_now),
       dirty: const Value(true),
     ));
     await _db.recomputeOrderTotalPaid(orderId);
-    final freshOrder = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
+    final freshOrder = await (_db.select(_db.orders)
+          ..where((t) => t.id.equals(orderId)))
+        .getSingleOrNull();
     if (freshOrder != null) {
       await _reconcileOrderOverpaymentDebt(
         orderId: freshOrder.id,
@@ -258,7 +272,9 @@ class LocalRepository {
   Future<void> deletePayment(String orderId, String transactionId) async {
     await _db.softDeleteTransaction(transactionId);
     await _db.recomputeOrderTotalPaid(orderId);
-    final freshOrder = await (_db.select(_db.orders)..where((t) => t.id.equals(orderId))).getSingleOrNull();
+    final freshOrder = await (_db.select(_db.orders)
+          ..where((t) => t.id.equals(orderId)))
+        .getSingleOrNull();
     if (freshOrder != null) {
       await _reconcileOrderOverpaymentDebt(
         orderId: freshOrder.id,
@@ -298,7 +314,8 @@ class LocalRepository {
       customerName: Value(single?.customerName),
       paymentMethod: Value(paymentMethod),
       workshopDebtId: Value(workshopDebtId),
-      orderAllocationsJson: Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
+      orderAllocationsJson:
+          Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
       date: Value(date.millisecondsSinceEpoch),
       updatedAt: Value(now),
       isDeleted: const Value(false),
@@ -328,7 +345,8 @@ class LocalRepository {
       customerId: Value(single?.customerId),
       customerName: Value(single?.customerName),
       paymentMethod: Value(paymentMethod),
-      orderAllocationsJson: Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
+      orderAllocationsJson:
+          Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
       updatedAt: Value(_now),
       dirty: const Value(true),
     ));
@@ -406,7 +424,9 @@ class LocalRepository {
       id: Value(expenseId),
       amount: Value(amount),
       category: const Value('wages'),
-      description: Value(note?.trim().isNotEmpty == true ? note!.trim() : 'قبض ${worker.jobTitle} - ${worker.name}'),
+      description: Value(note?.trim().isNotEmpty == true
+          ? note!.trim()
+          : 'قبض ${worker.jobTitle} - ${worker.name}'),
       workerName: Value(worker.name),
       paymentMethod: Value(paymentMethod),
       date: Value(now),
@@ -497,7 +517,8 @@ class LocalRepository {
       await addWorkshopDebt(
         creditorName: customerName,
         totalAmount: overpaid,
-        notes: 'دفع أكتر من الاتفاق النهائي على طلب "$itemType" بعد تعديل السعر',
+        notes:
+            'دفع أكتر من الاتفاق النهائي على طلب "$itemType" بعد تعديل السعر',
         orderId: orderId,
       );
     } else if (existing.totalAmount != overpaid) {
@@ -554,7 +575,9 @@ class LocalRepository {
     final now = _now;
 
     if (debt.orderId.isNotEmpty) {
-      final order = await (_db.select(_db.orders)..where((t) => t.id.equals(debt.orderId))).getSingleOrNull();
+      final order = await (_db.select(_db.orders)
+            ..where((t) => t.id.equals(debt.orderId)))
+          .getSingleOrNull();
       if (order != null) {
         // معلش هنا مش بنسجل مصروف منفصل زي الحالة التانية تحت - الدفعة
         // السالبة دي نفسها بتقلل "الإيراد حسب طريقة الدفع" وبالتالي
@@ -575,7 +598,9 @@ class LocalRepository {
       id: Value(_uuid.v4()),
       amount: Value(amount),
       category: const Value('workshop_debt'),
-      description: Value(note?.trim().isNotEmpty == true ? note!.trim() : 'سداد مديونية - ${debt.creditorName}'),
+      description: Value(note?.trim().isNotEmpty == true
+          ? note!.trim()
+          : 'سداد مديونية - ${debt.creditorName}'),
       workshopDebtId: Value(debt.id),
       paymentMethod: Value(paymentMethod),
       date: Value(now),
@@ -631,7 +656,8 @@ class LocalRepository {
   }
 
   Future<void> adjustMaterialQuantity(MaterialItem material, double delta) {
-    final newQuantity = (material.quantity + delta) < 0 ? 0.0 : material.quantity + delta;
+    final newQuantity =
+        (material.quantity + delta) < 0 ? 0.0 : material.quantity + delta;
     return _db.updateMaterialFields(MaterialItemsCompanion(
       id: Value(material.id),
       quantity: Value(newQuantity),
