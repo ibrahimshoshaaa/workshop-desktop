@@ -3,13 +3,13 @@ name: Comprehensive Repair
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   repair:
-    if: github.event.head_commit.message != 'repair: comprehensive desktop fixes'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
