@@ -1,0 +1,91 @@
+name: Fix customer archive v3
+
+on:
+  push:
+    paths:
+      - 'lib/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'Apply safe archive v3')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply safe archive changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new, count=-1):
+              p = Path(path)
+              s = p.read_text(encoding='utf-8')
+              if old not in s:
+                  raise SystemExit(f'Missing pattern in {path}: {old!r}')
+              s2 = s.replace(old, new, count)
+              p.write_text(s2, encoding='utf-8')
+
+          # database.dart: separate archive state from real deletion.
+          p = Path('lib/data/database.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();\n  BoolColumn get dirty => boolean().withDefault(const Constant(true))();", "  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();\n  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();\n  BoolColumn get dirty => boolean().withDefault(const Constant(true))();", 2)
+          s = s.replace('  int get schemaVersion => 10;', '  int get schemaVersion => 11;')
+          marker = "        if (from < 11) {\n          // archive state is independent from real soft deletion.\n          await m.addColumn(customers, customers.isArchived);\n          await m.addColumn(orders, orders.isArchived);\n\n          // The previous desktop archive implementation used isDeleted as\n          // its archive marker. Convert those local records to the new\n          // non-destructive archive state before sync runs again.\n          await (update(customers)..where((c) => c.isDeleted.equals(true)))\n              .write(const CustomersCompanion(isDeleted: Value(false), isArchived: Value(true)));\n          await (update(orders)..where((o) => o.isDeleted.equals(true)))\n              .write(const OrdersCompanion(isDeleted: Value(false), isArchived: Value(true)));\n        }\n"
+          needle = "        if (from < 10) {\n          // ربط مديونية الورشة بالطلب اللي ولّدها (نسخة 10) - لحالة العميل\n          // اللي دفع أكتر من السعر النهائي بعد تعديله\n          await m.addColumn(workshopDebts, workshopDebts.orderId);\n        }\n"
+          if needle not in s:
+              raise SystemExit('database migration insertion point not found')
+          s = s.replace(needle, needle + marker)
+          s = s.replace("..where((t) => t.isDeleted.equals(false))).watch();", "..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();", 2)
+          p.write_text(s, encoding='utf-8')
+
+          # providers: archive queries use isArchived, never isDeleted.
+          p = Path('lib/providers/data_providers.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("/// العملاء المؤرشفون (الـ soft deleted) - منفصلين عن قائمة العملاء الحالية.", "/// العملاء المؤرشفون - منفصلين عن قائمة العملاء الحالية.")
+          s = s.replace("..where((c) => c.isDeleted.equals(true))", "..where((c) => c.isArchived.equals(true) & c.isDeleted.equals(false))")
+          s = s.replace("..where((o) => o.isDeleted.equals(true))", "..where((o) => o.isArchived.equals(true) & o.isDeleted.equals(false))")
+          p.write_text(s, encoding='utf-8')
+
+          # archive service: archive/restore only isArchived.
+          p = Path('lib/services/customer_archive_service.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("/// في نسخة الديسكتوب الـ soft-delete هو علامة الأرشفة الحالية:\n/// - العميل يتأرشف.\n/// - كل طلباته غير المؤرشفة تتأرشف معه.\n/// - الطلبات المؤرشفة لا تدخل في الطلبات الحالية أو إجماليات الداشبورد.\n/// - عند الاسترجاع يرجع العميل وكل طلباته معًا.", "/// الأرشيف حالة مستقلة عن الحذف الحقيقي:\n/// - isDeleted = حذف حقيقي للمزامنة.\n/// - isArchived = إخفاء مؤقت من القوائم والإجماليات.\n/// - العميل وطلباته بيتأرشفوا ويرجعوا معًا.")
+          s = s.replace("o.customerId.equals(customerId) & o.isDeleted.equals(false)", "o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(false)")
+          s = s.replace("        isDeleted: const Value(true),\n        dirty: const Value(true),", "        isArchived: const Value(true),\n        dirty: const Value(true),", 1)
+          s = s.replace("        isDeleted: const Value(false),\n        dirty: const Value(true),", "        isArchived: const Value(false),\n        dirty: const Value(true),", 1)
+          s = s.replace("..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(true))", "..where((o) => o.customerId.equals(customerId) & o.isDeleted.equals(false) & o.isArchived.equals(true))")
+          p.write_text(s, encoding='utf-8')
+
+          # sync service: persist isArchived to Firebase and read it back.
+          p = Path('lib/services/sync_service.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("            isDeleted: const Value(false),\n            dirty: const Value(false),", "            isDeleted: const Value(false),\n            isArchived: Value(map['isArchived'] == true),\n            dirty: const Value(false),", 2)
+          s = s.replace("          'updatedAt': row.updatedAt,\n        });", "          'updatedAt': row.updatedAt,\n          'isArchived': row.isArchived,\n        });", 2)
+          s = s.replace("    final orders = await (_db.select(_db.orders)..where((t) => t.isDeleted.equals(false))).get();", "    final orders = await (_db.select(_db.orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).get();", 1)
+          p.write_text(s, encoding='utf-8')
+
+          # Local repository: new records explicitly start unarchived.
+          p = Path('lib/data/local_repository.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("      isDeleted: const Value(false),\n      dirty: const Value(true),", "      isDeleted: const Value(false),\n      isArchived: const Value(false),\n      dirty: const Value(true),", 2)
+          s = s.replace("      isDeleted: const Value(false),\n      dirty: const Value(true),", "      isDeleted: const Value(false),\n      isArchived: const Value(false),\n      dirty: const Value(true),", 1)
+          p.write_text(s, encoding='utf-8')
+
+          # Remove this temporary workflow after the fix is committed.
+          wf = Path('.github/workflows/fix-archive-v3.yml')
+          wf.unlink()
+
+      - name: Commit and push
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib .github/workflows/fix-archive-v3.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'Apply safe archive v3'
+          git push
