@@ -1,0 +1,52 @@
+name: Run customer archive desktop v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/run-customer-archive-desktop-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.2'
+          channel: stable
+          cache: true
+
+      - name: Execute implementation script from workflow source
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+          src = Path('.github/workflows/apply-customer-archive-desktop-v2.yml').read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(src) if line.strip() == 'from pathlib import Path')
+          end = next(i for i, line in enumerate(src[start:], start) if line.startswith('      - name: Fetch dependencies'))
+          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in src[start:end])
+          exec(compile(code, 'customer_archive_impl.py', 'exec'), {'__name__': '__main__'})
+
+      - name: Fetch dependencies and regenerate Drift code
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib
+          git diff --cached --quiet || git commit -m "Implement professional customer archive on desktop"
+          git push
