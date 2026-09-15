@@ -1,0 +1,245 @@
+name: Implement Customer Archive
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[archive-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply archive feature
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              s = p.read_text(encoding='utf-8')
+              if old not in s:
+                  raise SystemExit(f'Pattern not found in {path}: {old[:120]}')
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # ---------------- database.dart ----------------
+          p = Path('lib/data/database.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace(
+              "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الطلبات",
+              "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();\n  IntColumn get archivedAt => integer().nullable()();\n  IntColumn get archiveYear => integer().nullable()();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الطلبات",
+              1)
+          s = s.replace(
+              "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الدفعات",
+              "  BoolColumn get dirty => boolean().withDefault(const Constant(true))();\n  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();\n  IntColumn get archivedAt => integer().nullable()();\n  IntColumn get archiveYear => integer().nullable()();\n\n  @override\n  Set<Column> get primaryKey => {id};\n}\n\n/// جدول الدفعات",
+              1)
+          s = s.replace("  int get schemaVersion => 10;", "  int get schemaVersion => 11;")
+          s = s.replace(
+              "        if (from < 10) {\n          // ربط مديونية الورشة بالطلب اللي ولّدها (نسخة 10) - لحالة العميل\n          // اللي دفع أكتر من السعر النهائي بعد تعديله\n          await m.addColumn(workshopDebts, workshopDebts.orderId);\n        }",
+              "        if (from < 10) {\n          // ربط مديونية الورشة بالطلب اللي ولّدها (نسخة 10) - لحالة العميل\n          // اللي دفع أكتر من السعر النهائي بعد تعديله\n          await m.addColumn(workshopDebts, workshopDebts.orderId);\n        }\n        if (from < 11) {\n          // أرشيف العملاء والطلبات: السجلات لا تُحذف، فقط تُعلّم كمؤرشفة\n          await m.addColumn(customers, customers.isArchived);\n          await m.addColumn(customers, customers.archivedAt);\n          await m.addColumn(customers, customers.archiveYear);\n          await m.addColumn(orders, orders.isArchived);\n          await m.addColumn(orders, orders.archivedAt);\n          await m.addColumn(orders, orders.archiveYear);\n        }",
+              1)
+          s = s.replace(
+              "  Stream<List<Customer>> watchCustomers() {\n    return (select(customers)..where((t) => t.isDeleted.equals(false))).watch();\n  }",
+              "  Stream<List<Customer>> watchCustomers() {\n    return (select(customers)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();\n  }\n\n  Stream<List<Customer>> watchArchivedCustomers({int? year}) {\n    final query = select(customers)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true));\n    if (year != null) query.where((t) => t.archiveYear.equals(year));\n    return (query..orderBy([(t) => OrderingTerm.desc(t.archivedAt)])).watch();\n  }\n\n  Stream<List<Order>> watchArchivedOrders({int? year}) {\n    final query = select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true));\n    if (year != null) query.where((t) => t.archiveYear.equals(year));\n    return (query..orderBy([(t) => OrderingTerm.desc(t.archivedAt)])).watch();\n  }\n\n  Stream<List<Order>> watchArchivedOrdersForCustomer(String customerId) {\n    return (select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(true) & t.customerId.equals(customerId))\n          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))\n        .watch();\n  }\n\n  Future<String?> getCustomerArchiveBlockReason(String customerId) async {\n    final orders = await (select(this.orders)..where((t) => t.customerId.equals(customerId) & t.isDeleted.equals(false))).get();\n    if (orders.isEmpty) return null;\n    if (orders.any((o) => o.remaining > 0)) return 'العميل عليه مبلغ متبقي';\n    if (orders.any((o) => o.status != 'تم التسليم')) return 'يوجد طلب لم يتم تسليمه بعد';\n    return null;\n  }\n\n  Future<bool> archiveCustomer(String customerId) async {\n    final reason = await getCustomerArchiveBlockReason(customerId);\n    if (reason != null) return false;\n    final customer = await (select(customers)..where((t) => t.id.equals(customerId) & t.isDeleted.equals(false))).getSingleOrNull();\n    if (customer == null || customer.isArchived) return false;\n    final now = DateTime.now().millisecondsSinceEpoch;\n    final year = DateTime.now().year;\n    await transaction(() async {\n      await (update(customers)..where((t) => t.id.equals(customerId))).write(CustomersCompanion(\n        isArchived: const Value(true), archivedAt: Value(now), archiveYear: Value(year),\n        updatedAt: Value(now), dirty: const Value(true),\n      ));\n      await (update(orders)..where((t) => t.customerId.equals(customerId) & t.isDeleted.equals(false))).write(OrdersCompanion(\n        isArchived: const Value(true), archivedAt: Value(now), archiveYear: Value(year),\n        updatedAt: Value(now), dirty: const Value(true),\n      ));\n    });\n    return true;\n  }\n\n  Stream<List<Order>> watchOrders() {\n    return (select(orders)..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false))).watch();\n  }"
+          )
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------- sync_service.dart ----------------
+          p = Path('lib/services/sync_service.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace(
+              "            updatedAt: Value(remoteUpdatedAt),\n            isDeleted: const Value(false),\n            dirty: const Value(false),\n          ));",
+              "            updatedAt: Value(remoteUpdatedAt),\n            isDeleted: const Value(false),\n            isArchived: Value(map['isArchived'] == true),\n            archivedAt: Value((map['archivedAt'] as num?)?.toInt()),\n            archiveYear: Value((map['archiveYear'] as num?)?.toInt()),\n            dirty: const Value(false),\n          ));",
+              1)
+          s = s.replace(
+              "          'createdAt': row.createdAt,\n          'updatedAt': row.updatedAt,\n        });",
+              "          'createdAt': row.createdAt,\n          'updatedAt': row.updatedAt,\n          'isArchived': row.isArchived,\n          'archivedAt': row.archivedAt,\n          'archiveYear': row.archiveYear,\n        });",
+              1)
+          # Orders remote -> local (second occurrence of the same generated block)
+          marker = "            updatedAt: Value(remoteUpdatedAt),\n            isDeleted: const Value(false),\n            dirty: const Value(false),\n          ));"
+          pos = s.find(marker)
+          if pos == -1:
+              raise SystemExit('order sync marker not found')
+          end = pos + len(marker)
+          s = s[:pos] + marker.replace(
+              "            dirty: const Value(false),",
+              "            isArchived: Value(map['isArchived'] == true),\n            archivedAt: Value((map['archivedAt'] as num?)?.toInt()),\n            archiveYear: Value((map['archiveYear'] as num?)?.toInt()),\n            dirty: const Value(false),"
+          ) + s[end:]
+          s = s.replace(
+              "          'createdAt': row.createdAt,\n          'updatedAt': row.updatedAt,\n        });",
+              "          'createdAt': row.createdAt,\n          'updatedAt': row.updatedAt,\n          'isArchived': row.isArchived,\n          'archivedAt': row.archivedAt,\n          'archiveYear': row.archiveYear,\n        });",
+              1)
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------- app_shell.dart ----------------
+          p = Path('lib/screens/app_shell.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("import 'customers_screen.dart';", "import 'customers_screen.dart';\nimport 'customer_archive_screen.dart';")
+          s = s.replace(
+              "    (Icons.people_alt_rounded, 'العملاء', 'customers'),\n    (Icons.checkroom_rounded, 'الطلبات', 'orders'),",
+              "    (Icons.people_alt_rounded, 'العملاء', 'customers'),\n    (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),\n    (Icons.checkroom_rounded, 'الطلبات', 'orders'),"
+          )
+          s = s.replace(
+              "    const CustomersScreen(),\n    const OrdersScreen(),",
+              "    const CustomersScreen(),\n    const CustomerArchiveScreen(),\n    const OrdersScreen(),"
+          )
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------- customers_screen.dart ----------------
+          p = Path('lib/screens/customers_screen.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("import '../providers/data_providers.dart';", "import '../providers/data_providers.dart';\nimport '../providers/auth_provider.dart';")
+          s = s.replace(
+              "    final customersAsync = ref.watch(customersProvider);",
+              "    final customersAsync = ref.watch(customersProvider);\n    final session = ref.watch(sessionProvider).value;"
+          )
+          s = s.replace(
+              "                        onDelete: () async {",
+              "                        onArchive: session?.isAdmin == true ? () => _archiveCustomer(context, ref, c) : null,\n                        onDelete: () async {"
+          )
+          s = s.replace(
+              "  @override\n  Widget build(BuildContext context) {",
+              "  Future<void> _archiveCustomer(BuildContext context, WidgetRef ref, Customer customer) async {\n    final db = ref.read(databaseProvider);\n    final reason = await db.getCustomerArchiveBlockReason(customer.id);\n    if (!context.mounted) return;\n    if (reason != null) {\n      await showDialog<void>(context: context, builder: (ctx) => AlertDialog(\n        title: const Text('لا يمكن أرشفة العميل'),\n        content: Text(reason),\n        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('حسنًا'))],\n      ));\n      return;\n    }\n    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(\n      title: const Text('أرشفة العميل'),\n      content: Text('سيتم نقل العميل "${customer.name}" وكل طلباته المكتملة إلى الأرشيف مع الاحتفاظ بكل التفاصيل والدفعات. هل تريد المتابعة؟'),\n      actions: [\n        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),\n        ElevatedButton.icon(icon: const Icon(Icons.archive_rounded), label: const Text('أرشفة'), onPressed: () => Navigator.pop(ctx, true)),\n      ],\n    ));\n    if (ok == true) {\n      await db.archiveCustomer(customer.id);\n      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت أرشفة العميل بنجاح')));\n    }\n  }\n\n  @override\n  Widget build(BuildContext context) {",
+              1)
+          s = s.replace(
+              "  final VoidCallback onDelete;\n  const _CustomerRow({required this.customer, required this.onTap, required this.onEdit, required this.onDelete});",
+              "  final VoidCallback? onArchive;\n  final VoidCallback onDelete;\n  const _CustomerRow({required this.customer, required this.onTap, required this.onEdit, required this.onDelete, this.onArchive});"
+          )
+          s = s.replace(
+              "            IconButton(\n              tooltip: 'حذف',",
+              "            if (onArchive != null)\n              IconButton(\n                tooltip: 'أرشفة العميل',\n                icon: const Icon(Icons.archive_outlined, size: 20, color: AppColors.wood),\n                onPressed: onArchive,\n              ),\n            IconButton(\n              tooltip: 'حذف',"
+          )
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------- archive screen ----------------
+          Path('lib/screens/customer_archive_screen.dart').write_text(r'''import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart' hide TextDirection;
+import '../data/database.dart';
+import '../providers/database_provider.dart';
+import '../core/search_bar.dart';
+import '../core/theme.dart';
+
+class CustomerArchiveScreen extends ConsumerStatefulWidget {
+  const CustomerArchiveScreen({super.key});
+  @override
+  ConsumerState<CustomerArchiveScreen> createState() => _CustomerArchiveScreenState();
+}
+
+class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  int? _year;
+
+  @override
+  void dispose() { _searchController.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final db = ref.watch(databaseProvider);
+    return StreamBuilder<List<Customer>>(
+      stream: db.watchArchivedCustomers(year: _year),
+      builder: (context, snapshot) {
+        final customers = snapshot.data ?? const <Customer>[];
+        return StreamBuilder<List<Order>>(
+          stream: db.watchArchivedOrders(year: _year),
+          builder: (context, ordersSnapshot) {
+            final orders = ordersSnapshot.data ?? const <Order>[];
+            final q = normalizeForSearch(_query);
+            final filtered = q.isEmpty ? customers : customers.where((c) =>
+              normalizeForSearch(c.name).contains(q) ||
+              normalizeForSearch(c.phone).contains(q) ||
+              c.serialNumber.toString().contains(q)).toList();
+            final totalValue = orders.fold<double>(0, (s, o) => s + (o.totalAmount - o.discountAmount));
+            final totalPaid = orders.fold<double>(0, (s, o) => s + o.totalPaid);
+            final years = customers.map((c) => c.archiveYear).whereType<int>().toSet().toList()..sort((a,b) => b.compareTo(a));
+            return Container(
+              color: const Color(0xFFFAF6F0),
+              child: Column(children: [
+                Padding(padding: const EdgeInsets.fromLTRB(28,28,28,0), child: Row(children: [
+                  Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppColors.wood.withValues(alpha:.1), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.archive_rounded, color: AppColors.wood)),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('أرشيف العملاء', style: GoogleFonts.cairo(fontSize: 21, fontWeight: FontWeight.w900, color: const Color(0xFF2A2320))),
+                    Text('السجلات المؤرشفة محفوظة بالكامل للرجوع إليها في أي وقت', style: GoogleFonts.cairo(fontSize: 12, color: Colors.grey.shade600)),
+                  ])),
+                  if (years.isNotEmpty) DropdownButton<int?>(value: years.contains(_year) ? _year : null, hint: const Text('كل السنوات'), items: [const DropdownMenuItem<int?>(value: null, child: Text('كل السنوات')), ...years.map((y) => DropdownMenuItem(value:y, child: Text('أرشيف $y')))], onChanged: (v) => setState(() => _year=v)),
+                ])),
+                Padding(padding: const EdgeInsets.fromLTRB(28,18,28,0), child: AppSearchBar(controller:_searchController, hintText:'ابحث بالاسم أو الهاتف أو الرقم التسلسلي...', onChanged:(v)=>setState(()=>_query=v), onClear:()=>setState(()=>_query=''))),
+                Padding(padding: const EdgeInsets.fromLTRB(28,18,28,0), child: Row(children: [
+                  _Stat(title:'العملاء', value:'${filtered.length}', icon:Icons.people_alt_rounded),
+                  const SizedBox(width:10), _Stat(title:'الطلبات', value:'${orders.length}', icon:Icons.checkroom_rounded),
+                  const SizedBox(width:10), _Stat(title:'إجمالي الطلبات', value:'${totalValue.toStringAsFixed(0)} ج', icon:Icons.payments_rounded),
+                  const SizedBox(width:10), _Stat(title:'إجمالي المدفوع', value:'${totalPaid.toStringAsFixed(0)} ج', icon:Icons.account_balance_wallet_rounded),
+                ])),
+                Expanded(child: filtered.isEmpty ? const Center(child: Text('لا يوجد عملاء مؤرشفون')) : ListView.builder(padding: const EdgeInsets.fromLTRB(28,18,28,24), itemCount:filtered.length, itemBuilder:(context,index){ final c=filtered[index]; return _ArchiveCustomerCard(customer:c, db:db); })),
+              ]),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ArchiveCustomerCard extends StatelessWidget {
+  final Customer customer; final AppDatabase db;
+  const _ArchiveCustomerCard({required this.customer, required this.db});
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Order>>(
+      stream: db.watchArchivedOrdersForCustomer(customer.id),
+      builder:(context,snapshot){
+        final orders=snapshot.data??const <Order>[];
+        final value=orders.fold<double>(0,(s,o)=>s+o.totalAmount-o.discountAmount);
+        final paid=orders.fold<double>(0,(s,o)=>s+o.totalPaid);
+        return Card(margin:const EdgeInsets.only(bottom:12), elevation:0, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16), side:BorderSide(color:Colors.black.withValues(alpha:.06))), child:ExpansionTile(
+          leading:CircleAvatar(backgroundColor:AppColors.wood.withValues(alpha:.1), child:Text(customer.name.isNotEmpty?customer.name[0]:'?', style:const TextStyle(color:AppColors.wood,fontWeight:FontWeight.bold))),
+          title:Text('${customer.name}  #${customer.serialNumber}',style:GoogleFonts.cairo(fontWeight:FontWeight.w800)),
+          subtitle:Text('${customer.phone} • أرشيف ${customer.archiveYear ?? '-'}',style:GoogleFonts.cairo(fontSize:11,color:Colors.grey.shade600)),
+          trailing:Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.end,children:[Text('${value.toStringAsFixed(0)} ج',style:const TextStyle(fontWeight:FontWeight.bold)),Text('مدفوع ${paid.toStringAsFixed(0)} ج',style:TextStyle(fontSize:10,color:AppColors.success))]),
+          children:[Padding(padding:const EdgeInsets.fromLTRB(16,0,16,14),child:Column(children:orders.map((o)=>ListTile(contentPadding:EdgeInsets.zero,title:Text(o.itemType,style:GoogleFonts.cairo(fontWeight:FontWeight.w700)),subtitle:Text('${o.status} • ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}'),trailing:Text('${(o.totalAmount-o.discountAmount).toStringAsFixed(0)} ج'),onTap:()=>showDialog(context:context,builder:(_)=>_ArchiveOrderDialog(order:o))).toList()))],
+        ));
+      },
+    );
+  }
+}
+
+class _ArchiveOrderDialog extends StatelessWidget {
+  final Order order; const _ArchiveOrderDialog({required this.order});
+  @override
+  Widget build(BuildContext context) => AlertDialog(title:Text(order.itemType,style:GoogleFonts.cairo(fontWeight:FontWeight.w800)), content:SizedBox(width:520, child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    _line('العميل',order.customerName), _line('الحالة',order.status), _line('التسليم',DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(order.deliveryDate))), _line('الإجمالي', '${order.totalAmount.toStringAsFixed(0)} ج'), _line('الخصم','${order.discountAmount.toStringAsFixed(0)} ج${order.discountReason.isNotEmpty?' • ${order.discountReason}':''}'), _line('المدفوع','${order.totalPaid.toStringAsFixed(0)} ج'), _line('المتبقي','${order.remaining.toStringAsFixed(0)} ج'), const Divider(), Text('تفاصيل الطلب',style:GoogleFonts.cairo(fontWeight:FontWeight.bold)), const SizedBox(height:6), Text(order.details.isEmpty?'لا توجد تفاصيل':order.details,style:GoogleFonts.cairo()),
+  ]))), actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إغلاق'))]);
+  static Widget _line(String a,String b)=>Padding(padding:const EdgeInsets.only(bottom:7),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[SizedBox(width:90,child:Text(a,style:const TextStyle(fontWeight:FontWeight.bold))),Expanded(child:Text(b))]));
+}
+
+class _Stat extends StatelessWidget { final String title,value; final IconData icon; const _Stat({required this.title,required this.value,required this.icon}); @override Widget build(BuildContext context)=>Expanded(child:Container(padding:const EdgeInsets.symmetric(horizontal:14,vertical:12),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(14)),child:Row(children:[Icon(icon,color:AppColors.wood,size:22),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:GoogleFonts.cairo(fontSize:10,color:Colors.grey.shade600)),Text(value,style:GoogleFonts.cairo(fontSize:14,fontWeight:FontWeight.w800))]))]))); }
+''', encoding='utf-8')
+
+          # ---------------- providers: archived records must not enter active totals ----------------
+          # Existing dashboard already derives revenue and payment-source totals from ordersProvider,
+          # so filtering watchOrders above removes archived orders from current revenue/cash automatically.
+
+      - name: Generate Drift
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Verify
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Commit changes and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/implement-customer-archive.yml
+          git add lib/data/database.dart lib/services/sync_service.dart lib/screens/app_shell.dart lib/screens/customers_screen.dart lib/screens/customer_archive_screen.dart .github/workflows/implement-customer-archive.yml
+          git commit -m "Implement customer archive system [archive-applied]"
+          git push
