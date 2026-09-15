@@ -6,6 +6,7 @@ import '../providers/navigation_provider.dart';
 import '../providers/auth_provider.dart';
 import 'dashboard_screen.dart';
 import 'customers_screen.dart';
+import 'customer_archive_screen.dart';
 import 'orders_screen.dart';
 import 'debts_screen.dart';
 import 'workshop_debts_screen.dart';
@@ -22,6 +23,7 @@ class AppShell extends ConsumerWidget {
   static final _allDestinations = [
     (Icons.dashboard_rounded, 'الرئيسية', null),
     (Icons.people_alt_rounded, 'العملاء', 'customers'),
+    (Icons.archive_rounded, 'أرشيف العملاء', 'customers'),
     (Icons.checkroom_rounded, 'الطلبات', 'orders'),
     (Icons.account_balance_wallet_rounded, 'المديونيات', 'debts'),
     (Icons.store_rounded, 'مديونيات الورشة', 'debts'),
@@ -36,6 +38,7 @@ class AppShell extends ConsumerWidget {
   static final _allScreens = [
     const DashboardScreen(),
     const CustomersScreen(),
+    const CustomerArchiveScreen(),
     const OrdersScreen(),
     const DebtsScreen(),
     const WorkshopDebtsScreen(),
