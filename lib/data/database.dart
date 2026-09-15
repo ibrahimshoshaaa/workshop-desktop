@@ -305,9 +305,9 @@ class AppDatabase extends _$AppDatabase {
           // its archive marker. Convert those local records to the new
           // non-destructive archive state before sync runs again.
           await (update(customers)..where((c) => c.isDeleted.equals(true)))
-              .write(const CustomersCompanion(isDeleted: Value(false), isArchived: Value(true)));
+              .write(const CustomersCompanion(isDeleted: Value(false), isArchived: Value(true), dirty: Value(true)));
           await (update(orders)..where((o) => o.isDeleted.equals(true)))
-              .write(const OrdersCompanion(isDeleted: Value(false), isArchived: Value(true)));
+              .write(const OrdersCompanion(isDeleted: Value(false), isArchived: Value(true), dirty: Value(true)));
         }
       },
     );
