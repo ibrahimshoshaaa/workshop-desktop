@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../data/database.dart';
 import '../core/order_calculations.dart';
 import '../core/constants.dart';
+import '../core/accounting.dart';
 
 /// خدمة توليد وحفظ ملف Excel - على سطح المكتب بنسأل المستخدم فين عايز
 /// يحفظ الملف (بدل المشاركة المباشرة زي الموبايل)
@@ -17,6 +18,7 @@ class ExcelExportService {
     required List<Order> orders,
     required List<Expense> expenses,
     List<PaymentTransaction> transactions = const [],
+    List<CashTransfer> transfers = const [],
   }) {
     final excel = Excel.createExcel();
     final defaultSheetName = excel.getDefaultSheet()!;
@@ -39,8 +41,11 @@ class ExcelExportService {
         DoubleCellValue(o.effectiveTotal),
         DoubleCellValue(o.totalPaid),
         DoubleCellValue(o.remaining),
-        TextCellValue(DateFormat('d/M/yyyy')
-            .format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))),
+        TextCellValue(
+          DateFormat(
+            'd/M/yyyy',
+          ).format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate)),
+        ),
       ]);
     }
 
@@ -60,42 +65,66 @@ class ExcelExportService {
         TextCellValue(e.workerName ?? ''),
         TextCellValue(paymentMethods[e.paymentMethod] ?? e.paymentMethod),
         DoubleCellValue(e.amount),
-        TextCellValue(DateFormat('d/M/yyyy')
-            .format(DateTime.fromMillisecondsSinceEpoch(e.date))),
+        TextCellValue(
+          DateFormat(
+            'd/M/yyyy',
+          ).format(DateTime.fromMillisecondsSinceEpoch(e.date)),
+        ),
       ]);
     }
 
-    // ورقة ملخص - تفنيط "المبلغ المتاح" حسب مصدره (نقدي/إنستاباي) - بنستبعد
-    // أي دفعة مرتبطة بطلب اتحذف (شايف نفس الشرح في dashboardStatsProvider)
-    final liveOrderIds = orders.map((o) => o.id).toSet();
-    double revenueByMethod(String method) => transactions
-        .where((t) =>
-            t.paymentMethod == method && liveOrderIds.contains(t.orderId))
-        .fold<double>(0, (s, t) => s + t.amountPaid);
-    double expensesByMethod(String method) => expenses
-        .where((e) => e.paymentMethod == method)
-        .fold<double>(0, (s, e) => s + e.amount);
-    final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-    final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
-
+    final totals = AccountingSnapshot(
+      orders: orders,
+      transactions: transactions,
+      expenses: expenses,
+      transfers: transfers,
+    );
+    final totalRevenue = totals.revenue;
+    final totalExpenses = totals.expense;
+    final paymentsSheet = excel['حركات الدفعات في الفترة'];
+    paymentsSheet.appendRow([
+      TextCellValue('معرّف الطلب'),
+      TextCellValue('المبلغ'),
+      TextCellValue('الحالة'),
+      TextCellValue('طريقة الدفع'),
+      TextCellValue('تاريخ الدفع'),
+    ]);
+    for (final tx in transactions.where((t) => !t.isDeleted)) {
+      paymentsSheet.appendRow([
+        TextCellValue(tx.orderId),
+        DoubleCellValue(tx.amountPaid),
+        TextCellValue(
+          tx.status == 'completed' ? 'مكتملة' : 'معلقة — خارج الإيراد',
+        ),
+        TextCellValue(tx.paymentMethod),
+        TextCellValue(
+          DateFormat(
+            'yyyy/MM/dd HH:mm',
+          ).format(DateTime.fromMillisecondsSinceEpoch(tx.paymentDate)),
+        ),
+      ]);
+    }
     final summarySheet = excel['ملخص الخزينة'];
     summarySheet.appendRow([TextCellValue('البند'), TextCellValue('القيمة')]);
-    summarySheet.appendRow(
-        [TextCellValue('إجمالي الإيرادات'), DoubleCellValue(totalRevenue)]);
-    summarySheet.appendRow(
-        [TextCellValue('إجمالي المصروفات'), DoubleCellValue(totalExpenses)]);
     summarySheet.appendRow([
-      TextCellValue('المبلغ المتاح'),
-      DoubleCellValue(totalRevenue - totalExpenses)
+      TextCellValue('إجمالي الإيرادات'),
+      DoubleCellValue(totalRevenue),
     ]);
     summarySheet.appendRow([
-      TextCellValue('المبلغ المتاح - نقدي'),
-      DoubleCellValue(revenueByMethod('cash') - expensesByMethod('cash'))
+      TextCellValue('إجمالي المصروفات'),
+      DoubleCellValue(totalExpenses),
     ]);
     summarySheet.appendRow([
-      TextCellValue('المبلغ المتاح - إنستاباي'),
-      DoubleCellValue(
-          revenueByMethod('instapay') - expensesByMethod('instapay'))
+      TextCellValue('صافي حركة الفترة'),
+      DoubleCellValue(totals.net),
+    ]);
+    summarySheet.appendRow([
+      TextCellValue('صافي حركة الفترة - نقدي'),
+      DoubleCellValue(totals.cash),
+    ]);
+    summarySheet.appendRow([
+      TextCellValue('صافي حركة الفترة - إنستاباي'),
+      DoubleCellValue(totals.instapay),
     ]);
 
     excel.delete(defaultSheetName);

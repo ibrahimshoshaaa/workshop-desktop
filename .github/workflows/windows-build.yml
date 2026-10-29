@@ -1,4 +1,4 @@
-name: Windows Build
+name: Local Windows Build
 
 on:
   push:
@@ -9,11 +9,29 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 20
     # بيسمح للـ GITHUB_TOKEN إنه ينشئ/يعدّل Release - مطلوب لخطوة الرفع
     # الأخيرة (الرفع كـ Release بدل Artifact)
     permissions:
       contents: write
+      actions: write
     steps:
+      - name: Cancel superseded builds for this PR branch
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: ${{ github.head_ref }}
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json" }
+          $runs = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/workflows/windows-build.yml/runs?per_page=30"
+          foreach ($run in $runs.workflow_runs) {
+            if ($run.head_branch -eq $env:PR_BRANCH -and $run.event -eq 'pull_request' -and $run.id -lt [long]$env:GITHUB_RUN_ID -and $run.status -in @('queued', 'in_progress')) {
+              try { Invoke-RestMethod -Method Post -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$($run.id)/cancel" | Out-Null }
+              catch { Write-Host "Superseded run $($run.id) already finished or could not be cancelled." }
+            }
+          }
+
       - uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -99,6 +117,12 @@ jobs:
       - name: Analyze (non-fatal infos/warnings)
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
+      - name: Use Egypt local calendar for DST boundary tests
+        run: tzutil /s "Egypt Standard Time"
+
+      - name: Test local persistence, backups and migration
+        run: flutter test
+
       - name: Build Windows (release)
         run: flutter build windows --release
 
@@ -106,11 +130,18 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath workshop-desktop-windows.zip
 
+      - name: Upload review build
+        uses: actions/upload-artifact@v4
+        with:
+          name: workshop-desktop-audited-windows
+          path: workshop-desktop-windows.zip
+
       - name: Upload Windows build to GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest-windows
-          name: "آخر نسخة ويندوز"
+          tag_name: latest-local-windows
+          name: "نسخة ويندوز المحلية المستقلة"
           body: "آخر بناء ناجح من الفرع ${{ github.ref_name }} - كوميت ${{ github.sha }}"
           files: workshop-desktop-windows.zip
           make_latest: true

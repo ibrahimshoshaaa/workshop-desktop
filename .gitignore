@@ -11,3 +11,9 @@ windows/
 
 .vscode/
 .idea/
+
+# Local runtime data and migration sources
+*.sqlite
+*.sqlite-*
+*.wbackup
+firebase-export*.json

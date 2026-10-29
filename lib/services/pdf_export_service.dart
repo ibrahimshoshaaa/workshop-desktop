@@ -9,6 +9,8 @@ import '../data/database.dart';
 import '../core/order_calculations.dart';
 import '../core/constants.dart';
 import '../core/theme.dart';
+import '../core/accounting.dart';
+import '../core/money.dart';
 
 /// خدمة توليد ملفات PDF - نفس منطق نسخة الموبايل، بس هنا بنستخدم
 /// Printing.layoutPdf بدل sharePdf عشان دي الطريقة الصح لفتح نافذة
@@ -22,8 +24,12 @@ class PdfExportService {
   pw.MemoryImage? _logo;
 
   Future<void> _ensureFontsLoaded() async {
-    _arabicFont ??= await PdfGoogleFonts.cairoRegular();
-    _arabicFontBold ??= await PdfGoogleFonts.cairoBold();
+    _arabicFont ??= pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Cairo-Regular.ttf'),
+    );
+    _arabicFontBold ??= pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Cairo-Bold.ttf'),
+    );
     if (_logo == null) {
       final data = await rootBundle.load('assets/icon/app_icon.png');
       _logo = pw.MemoryImage(data.buffer.asUint8List());
@@ -40,8 +46,11 @@ class PdfExportService {
     );
   }
 
-  final _currency =
-      NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
+  final _currency = NumberFormat.currency(
+    locale: 'ar_EG',
+    symbol: 'ج.م',
+    decimalDigits: 2,
+  );
 
   /// عربي Locale بيضيف حروف اتجاه مخفية (bidi/format marks) جوه النص عشان
   /// يظبط ترتيب الأرقام والعملة، بس خط Cairo مالوش شكل ليها فبتظهر كمربع
@@ -69,9 +78,9 @@ class PdfExportService {
   }) async {
     await _ensureFontsLoaded();
     final doc = pw.Document();
-    final totalAmount = orders.fold<double>(0, (s, o) => s + o.effectiveTotal);
-    final totalPaid = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-    final totalRemaining = totalAmount - totalPaid;
+    final totalAmount = Money.sum(orders.map((o) => o.effectiveTotal));
+    final totalPaid = Money.sum(orders.map((o) => o.totalPaid));
+    final totalRemaining = Money.subtract(totalAmount, totalPaid);
 
     doc.addPage(
       pw.MultiPage(
@@ -85,13 +94,21 @@ class PdfExportService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text('فاتورة عميل',
-                        style: pw.TextStyle(
-                            fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'فاتورة عميل',
+                      style: pw.TextStyle(
+                        fontSize: 22,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
                     pw.SizedBox(height: 4),
-                    pw.Text('Tahoun Royal Home',
-                        style: const pw.TextStyle(
-                            fontSize: 12, color: PdfColors.grey700)),
+                    pw.Text(
+                      'Tahoun Royal Home',
+                      style: const pw.TextStyle(
+                        fontSize: 12,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -100,44 +117,54 @@ class PdfExportService {
             ],
           ),
           pw.Divider(height: 24),
-          pw.Text('اسم العميل: ${_s(customer.name)}',
-              style: const pw.TextStyle(fontSize: 14)),
-          pw.Text('رقم الهاتف: ${_s(customer.phone)}',
-              style: const pw.TextStyle(fontSize: 14)),
-          if (customer.address.isNotEmpty)
-            pw.Text('العنوان: ${_s(customer.address)}',
-                style: const pw.TextStyle(fontSize: 14)),
           pw.Text(
-              'تاريخ الإصدار: ${DateFormat('d/M/yyyy').format(DateTime.now())}',
-              style:
-                  const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+            'اسم العميل: ${_s(customer.name)}',
+            style: const pw.TextStyle(fontSize: 14),
+          ),
+          pw.Text(
+            'رقم الهاتف: ${_s(customer.phone)}',
+            style: const pw.TextStyle(fontSize: 14),
+          ),
+          if (customer.address.isNotEmpty)
+            pw.Text(
+              'العنوان: ${_s(customer.address)}',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+          pw.Text(
+            'تاريخ الإصدار: ${DateFormat('d/M/yyyy').format(DateTime.now())}',
+            style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+          ),
           pw.SizedBox(height: 20),
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.white,
-                font: _arabicFontBold),
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+              font: _arabicFontBold,
+            ),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellStyle: pw.TextStyle(font: _arabicFont),
             cellAlignment: pw.Alignment.centerRight,
             tableDirection: pw.TextDirection.rtl,
             headers: ['المتبقي', 'المدفوع', 'الإجمالي', 'الحالة', 'الصنف'],
             data: orders
-                .map((o) => [
-                      _fmt(o.remaining),
-                      _fmt(o.totalPaid),
-                      _fmt(o.effectiveTotal),
-                      _s(o.status),
-                      _s(o.itemType),
-                    ])
+                .map(
+                  (o) => [
+                    _fmt(o.remaining),
+                    _fmt(o.totalPaid),
+                    _fmt(o.effectiveTotal),
+                    _s(o.status),
+                    _s(o.itemType),
+                  ],
+                )
                 .toList(),
           ),
           pw.SizedBox(height: 20),
           pw.Container(
             padding: const pw.EdgeInsets.all(12),
             decoration: pw.BoxDecoration(
-                color: PdfColors.grey100,
-                borderRadius: pw.BorderRadius.circular(8)),
+              color: PdfColors.grey100,
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
@@ -145,38 +172,53 @@ class PdfExportService {
                 pw.SizedBox(height: 4),
                 pw.Text('إجمالي المدفوع: ${_fmt(totalPaid)}'),
                 pw.SizedBox(height: 4),
-                pw.Text('إجمالي المتبقي: ${_fmt(totalRemaining)}',
-                    style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold,
-                        color: totalRemaining > 0
-                            ? PdfColors.red700
-                            : PdfColors.green700)),
+                pw.Text(
+                  'إجمالي المتبقي: ${_fmt(totalRemaining)}',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: totalRemaining > 0
+                        ? PdfColors.red700
+                        : PdfColors.green700,
+                  ),
+                ),
               ],
             ),
           ),
           if (orders.any((o) => o.details.trim().isNotEmpty)) ...[
             pw.SizedBox(height: 20),
-            pw.Text('تفاصيل الطلبات',
-                style:
-                    pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.Text(
+              'تفاصيل الطلبات',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
             pw.SizedBox(height: 8),
-            ...orders.where((o) => o.details.trim().isNotEmpty).map(
+            ...orders
+                .where((o) => o.details.trim().isNotEmpty)
+                .map(
                   (o) => pw.Container(
                     margin: const pw.EdgeInsets.only(bottom: 8),
                     padding: const pw.EdgeInsets.all(10),
                     decoration: pw.BoxDecoration(
-                        color: PdfColors.grey100,
-                        borderRadius: pw.BorderRadius.circular(8)),
+                      color: PdfColors.grey100,
+                      borderRadius: pw.BorderRadius.circular(8),
+                    ),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
-                        pw.Text(_s(o.itemType),
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                        pw.Text(
+                          _s(o.itemType),
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
                         pw.SizedBox(height: 4),
-                        pw.Text(_s(o.details.trim()),
-                            style: const pw.TextStyle(
-                                fontSize: 11, color: PdfColors.grey800)),
+                        pw.Text(
+                          _s(o.details.trim()),
+                          style: const pw.TextStyle(
+                            fontSize: 11,
+                            color: PdfColors.grey800,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -194,33 +236,23 @@ class PdfExportService {
     required List<PaymentTransaction> transactions,
     required DateTime from,
     required DateTime to,
+    List<CashTransfer> transfers = const [],
   }) async {
     await _ensureFontsLoaded();
     final doc = pw.Document();
 
-    final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-    // بنجمع بس الطلبات اللي لسه عليها متبقٍ فعلي - نفس شرح
-    // dashboardStatsProvider بالظبط (طلب متبقيه سالب معناه العميل دفع
-    // زيادة، وده مش "مديونية عميل")
-    final totalDebts = orders
-        .where((o) => o.remaining > 0)
-        .fold<double>(0, (s, o) => s + o.remaining);
-    final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
-    final netProfit = totalRevenue - totalExpenses;
-
-    // تفنيط "المبلغ المتاح" حسب مصدره: كاش/إنستاباي - بنستبعد أي دفعة
-    // مرتبطة بطلب اتحذف (شايف نفس الشرح في dashboardStatsProvider)
-    final liveOrderIds = orders.map((o) => o.id).toSet();
-    double revenueByMethod(String method) => transactions
-        .where((t) =>
-            t.paymentMethod == method && liveOrderIds.contains(t.orderId))
-        .fold<double>(0, (s, t) => s + t.amountPaid);
-    double expensesByMethod(String method) => expenses
-        .where((e) => e.paymentMethod == method)
-        .fold<double>(0, (s, e) => s + e.amount);
-    final cashAvailable = revenueByMethod('cash') - expensesByMethod('cash');
-    final instapayAvailable =
-        revenueByMethod('instapay') - expensesByMethod('instapay');
+    final totals = AccountingSnapshot(
+      orders: orders,
+      transactions: transactions,
+      expenses: expenses,
+      transfers: transfers,
+    );
+    final totalRevenue = totals.revenue;
+    final totalDebts = totals.debts;
+    final totalExpenses = totals.expense;
+    final netProfit = totals.net;
+    final cashAvailable = totals.cash;
+    final instapayAvailable = totals.instapay;
 
     doc.addPage(
       pw.MultiPage(
@@ -234,13 +266,20 @@ class PdfExportService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text('تقرير مالي شامل',
-                        style: pw.TextStyle(
-                            fontSize: 22, fontWeight: pw.FontWeight.bold)),
                     pw.Text(
-                        'من ${DateFormat('d/M/yyyy').format(from)} إلى ${DateFormat('d/M/yyyy').format(to)}',
-                        style: const pw.TextStyle(
-                            fontSize: 12, color: PdfColors.grey700)),
+                      'تقرير مالي شامل',
+                      style: pw.TextStyle(
+                        fontSize: 22,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.Text(
+                      'من ${DateFormat('d/M/yyyy').format(from)} إلى ${DateFormat('d/M/yyyy').format(to)}',
+                      style: const pw.TextStyle(
+                        fontSize: 12,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -253,75 +292,93 @@ class PdfExportService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               _summaryBox('الإيرادات', totalRevenue, PdfColors.green700),
-              _summaryBox('المديونيات', totalDebts, PdfColors.red700),
+              _summaryBox(
+                'مديونيات العملاء الحالية',
+                totalDebts,
+                PdfColors.red700,
+              ),
               _summaryBox('المصروفات', totalExpenses, PdfColors.orange700),
-              _summaryBox('المبلغ المتاح', netProfit,
-                  netProfit >= 0 ? PdfColors.blue700 : PdfColors.red700),
+              _summaryBox(
+                'صافي حركة الفترة',
+                netProfit,
+                netProfit >= 0 ? PdfColors.blue700 : PdfColors.red700,
+              ),
             ],
           ),
           pw.SizedBox(height: 12),
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              _summaryBox('المبلغ المتاح - نقدي', cashAvailable,
-                  cashAvailable >= 0 ? PdfColors.green700 : PdfColors.red700),
               _summaryBox(
-                  'المبلغ المتاح - إنستاباي',
-                  instapayAvailable,
-                  instapayAvailable >= 0
-                      ? PdfColors.blue700
-                      : PdfColors.red700),
+                'صافي الحركة - نقدي',
+                cashAvailable,
+                cashAvailable >= 0 ? PdfColors.green700 : PdfColors.red700,
+              ),
+              _summaryBox(
+                'صافي الحركة - إنستاباي',
+                instapayAvailable,
+                instapayAvailable >= 0 ? PdfColors.blue700 : PdfColors.red700,
+              ),
             ],
           ),
           pw.SizedBox(height: 24),
-          pw.Text('الطلبات',
-              style:
-                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'الطلبات',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
           pw.SizedBox(height: 8),
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.white,
-                font: _arabicFontBold),
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+              font: _arabicFontBold,
+            ),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellStyle: pw.TextStyle(font: _arabicFont),
             cellAlignment: pw.Alignment.centerRight,
             tableDirection: pw.TextDirection.rtl,
             headers: ['المتبقي', 'الإجمالي', 'الحالة', 'الصنف', 'العميل'],
             data: orders
-                .map((o) => [
-                      _fmt(o.remaining),
-                      _fmt(o.effectiveTotal),
-                      _s(o.status),
-                      _s(o.itemType),
-                      _s(o.customerName)
-                    ])
+                .map(
+                  (o) => [
+                    _fmt(o.remaining),
+                    _fmt(o.effectiveTotal),
+                    _s(o.status),
+                    _s(o.itemType),
+                    _s(o.customerName),
+                  ],
+                )
                 .toList(),
           ),
           pw.SizedBox(height: 24),
-          pw.Text('المصروفات',
-              style:
-                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'المصروفات',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
           pw.SizedBox(height: 8),
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.white,
-                font: _arabicFontBold),
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+              font: _arabicFontBold,
+            ),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.brown700),
             cellStyle: pw.TextStyle(font: _arabicFont),
             cellAlignment: pw.Alignment.centerRight,
             tableDirection: pw.TextDirection.rtl,
             headers: ['المبلغ', 'التاريخ', 'المصدر', 'الوصف', 'الفئة'],
             data: expenses
-                .map((e) => [
-                      _fmt(e.amount),
-                      DateFormat('d/M/yyyy')
-                          .format(DateTime.fromMillisecondsSinceEpoch(e.date)),
-                      _s(paymentMethods[e.paymentMethod] ?? e.paymentMethod),
-                      _s(e.description),
-                      _s(expenseCategories[e.category] ?? e.category),
-                    ])
+                .map(
+                  (e) => [
+                    _fmt(e.amount),
+                    DateFormat(
+                      'd/M/yyyy',
+                    ).format(DateTime.fromMillisecondsSinceEpoch(e.date)),
+                    _s(paymentMethods[e.paymentMethod] ?? e.paymentMethod),
+                    _s(e.description),
+                    _s(expenseCategories[e.category] ?? e.category),
+                  ],
+                )
                 .toList(),
           ),
         ],
@@ -351,13 +408,23 @@ class PdfExportService {
             pw.Center(child: _logoWidget(size: 56)),
             pw.SizedBox(height: 8),
             pw.Center(
-                child: pw.Text('إيصال استلام',
-                    style: pw.TextStyle(
-                        fontSize: 22, fontWeight: pw.FontWeight.bold))),
+              child: pw.Text(
+                'إيصال استلام',
+                style: pw.TextStyle(
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
             pw.Center(
-                child: pw.Text('Tahoun Royal Home',
-                    style: const pw.TextStyle(
-                        fontSize: 12, color: PdfColors.grey700))),
+              child: pw.Text(
+                'Tahoun Royal Home',
+                style: const pw.TextStyle(
+                  fontSize: 12,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ),
             pw.Divider(height: 24),
             pw.SizedBox(height: 8),
             _receiptRow('اسم العميل', _s(customerName)),
@@ -366,12 +433,16 @@ class PdfExportService {
             _receiptRow('طريقة الاستلام', _s(method)),
             _receiptRow('حالة الدفعة', _s(status)),
             _receiptRow(
-                'التاريخ', DateFormat('d/M/yyyy - hh:mm a').format(date)),
+              'التاريخ',
+              DateFormat('d/M/yyyy - hh:mm a').format(date),
+            ),
             pw.SizedBox(height: 24),
             pw.Divider(),
             pw.SizedBox(height: 12),
-            pw.Text('توقيع المستلم: ..............................',
-                style: const pw.TextStyle(fontSize: 12)),
+            pw.Text(
+              'توقيع المستلم: ..............................',
+              style: const pw.TextStyle(fontSize: 12),
+            ),
           ],
         ),
       ),
@@ -385,14 +456,22 @@ class PdfExportService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(label,
-              style: pw.TextStyle(
-                  fontSize: 12, color: PdfColors.grey700, font: _arabicFont)),
-          pw.Text(value,
-              style: pw.TextStyle(
-                  fontSize: 13,
-                  fontWeight: pw.FontWeight.bold,
-                  font: _arabicFontBold)),
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: 12,
+              color: PdfColors.grey700,
+              font: _arabicFont,
+            ),
+          ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 13,
+              fontWeight: pw.FontWeight.bold,
+              font: _arabicFontBold,
+            ),
+          ),
         ],
       ),
     );
@@ -422,13 +501,20 @@ class PdfExportService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text('تقرير التسليمات القادمة',
-                        style: pw.TextStyle(
-                            fontSize: 22, fontWeight: pw.FontWeight.bold)),
                     pw.Text(
-                        'من ${DateFormat('d/M/yyyy').format(from)} إلى ${DateFormat('d/M/yyyy').format(to)}',
-                        style: const pw.TextStyle(
-                            fontSize: 12, color: PdfColors.grey700)),
+                      'تقرير التسليمات القادمة',
+                      style: pw.TextStyle(
+                        fontSize: 22,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.Text(
+                      'من ${DateFormat('d/M/yyyy').format(from)} إلى ${DateFormat('d/M/yyyy').format(to)}',
+                      style: const pw.TextStyle(
+                        fontSize: 12,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -438,16 +524,20 @@ class PdfExportService {
           ),
           pw.Divider(height: 24),
           if (sorted.isEmpty)
-            pw.Text('لا توجد تسليمات مقررة خلال هذه الفترة',
-                style: const pw.TextStyle(fontSize: 14))
+            pw.Text(
+              'لا توجد تسليمات مقررة خلال هذه الفترة',
+              style: const pw.TextStyle(fontSize: 14),
+            )
           else
             pw.TableHelper.fromTextArray(
               headerStyle: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.white,
-                  font: _arabicFontBold),
-              headerDecoration:
-                  const pw.BoxDecoration(color: PdfColors.brown700),
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+                font: _arabicFontBold,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.brown700,
+              ),
               cellStyle: pw.TextStyle(font: _arabicFont),
               cellAlignment: pw.Alignment.centerRight,
               tableDirection: pw.TextDirection.rtl,
@@ -456,18 +546,20 @@ class PdfExportService {
                 'تاريخ التسليم',
                 'الحالة',
                 'الصنف',
-                'العميل'
+                'العميل',
               ],
               data: sorted
-                  .map((o) => [
-                        _fmt(o.remaining),
-                        DateFormat('EEEE d/M', 'ar_EG').format(
-                            DateTime.fromMillisecondsSinceEpoch(
-                                o.deliveryDate)),
-                        _s(o.status),
-                        _s(o.itemType),
-                        _s(o.customerName),
-                      ])
+                  .map(
+                    (o) => [
+                      _fmt(o.remaining),
+                      DateFormat('EEEE d/M', 'ar_EG').format(
+                        DateTime.fromMillisecondsSinceEpoch(o.deliveryDate),
+                      ),
+                      _s(o.status),
+                      _s(o.itemType),
+                      _s(o.customerName),
+                    ],
+                  )
                   .toList(),
             ),
         ],
@@ -480,16 +572,24 @@ class PdfExportService {
     return pw.Container(
       padding: const pw.EdgeInsets.all(10),
       decoration: pw.BoxDecoration(
-          color: PdfColors.grey100, borderRadius: pw.BorderRadius.circular(8)),
+        color: PdfColors.grey100,
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
       child: pw.Column(
         children: [
-          pw.Text(label,
-              style:
-                  const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+          pw.Text(
+            label,
+            style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+          ),
           pw.SizedBox(height: 4),
-          pw.Text(_fmt(value),
-              style: pw.TextStyle(
-                  fontSize: 13, fontWeight: pw.FontWeight.bold, color: color)),
+          pw.Text(
+            _fmt(value),
+            style: pw.TextStyle(
+              fontSize: 13,
+              fontWeight: pw.FontWeight.bold,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -500,7 +600,10 @@ class PdfExportService {
   /// يحصل تصدير خالص. ده بديل previewAndPrint اللي كانت بتفتح ديالوج
   /// الطباعة بتاع ويندوز على طول من غير معاينة.
   Future<void> preview(
-      BuildContext context, Uint8List bytes, String fileName) async {
+    BuildContext context,
+    Uint8List bytes,
+    String fileName,
+  ) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Scaffold(

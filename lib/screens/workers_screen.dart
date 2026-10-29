@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../core/safe_save_button.dart';
+import '../core/money.dart';
+import '../core/calendar_dates.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../providers/data_providers.dart';
 import '../data/database.dart';
@@ -34,13 +36,17 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
     super.dispose();
   }
 
-  Future<void> _showWorkerDialog(BuildContext context, WidgetRef ref,
-      {Worker? worker}) async {
+  Future<void> _showWorkerDialog(
+    BuildContext context,
+    WidgetRef ref, {
+    Worker? worker,
+  }) async {
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: worker?.name ?? '');
     final jobController = TextEditingController(text: worker?.jobTitle ?? '');
     final amountController = TextEditingController(
-        text: worker != null ? worker.salaryAmount.toStringAsFixed(0) : '');
+      text: worker != null ? worker.salaryAmount.toStringAsFixed(2) : '',
+    );
     final phoneController = TextEditingController(text: worker?.phone ?? '');
     final notesController = TextEditingController(text: worker?.notes ?? '');
     String salaryType = worker?.salaryType ?? 'monthly';
@@ -50,12 +56,17 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Text(
-              worker == null ? 'إضافة عامل جديد' : 'تعديل بيانات العامل',
-              style:
-                  GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+            worker == null ? 'إضافة عامل جديد' : 'تعديل بيانات العامل',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
           content: SizedBox(
             width: 420,
             child: Form(
@@ -67,7 +78,9 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                     TextFormField(
                       controller: nameController,
                       decoration: _fieldDecoration(
-                          'اسم العامل', Icons.person_outline_rounded),
+                        'اسم العامل',
+                        Icons.person_outline_rounded,
+                      ),
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'الاسم مطلوب'
                           : null,
@@ -76,8 +89,9 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                     TextFormField(
                       controller: jobController,
                       decoration: _fieldDecoration(
-                          'الوظيفة (صنايعي، محاسب، مدير سوشيال...)',
-                          Icons.badge_outlined),
+                        'الوظيفة (صنايعي، محاسب، مدير سوشيال...)',
+                        Icons.badge_outlined,
+                      ),
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'الوظيفة مطلوبة'
                           : null,
@@ -86,10 +100,16 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                     DropdownButtonFormField<String>(
                       value: salaryType,
                       decoration: _fieldDecoration(
-                          'نوع المرتب', Icons.calendar_view_week_rounded),
+                        'نوع المرتب',
+                        Icons.calendar_view_week_rounded,
+                      ),
                       items: _salaryTypes.entries
-                          .map((e) => DropdownMenuItem(
-                              value: e.key, child: Text(e.value)))
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value),
+                            ),
+                          )
                           .toList(),
                       onChanged: (v) => setDialogState(() => salaryType = v!),
                     ),
@@ -98,10 +118,16 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                       DropdownButtonFormField<int>(
                         value: payWeekday,
                         decoration: _fieldDecoration(
-                            'يوم القبض الأسبوعي', Icons.event_rounded),
+                          'يوم القبض الأسبوعي',
+                          Icons.event_rounded,
+                        ),
                         items: _weekdays.entries
-                            .map((e) => DropdownMenuItem(
-                                value: e.key, child: Text(e.value)))
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value),
+                              ),
+                            )
                             .toList(),
                         onChanged: (v) => setDialogState(() => payWeekday = v!),
                       ),
@@ -114,26 +140,31 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                         salaryType == 'monthly'
                             ? 'المرتب الشهري (ج.م)'
                             : salaryType == 'weekly'
-                                ? 'المرتب الأسبوعي (ج.م)'
-                                : 'المرتب اليومي (ج.م)',
+                            ? 'المرتب الأسبوعي (ج.م)'
+                            : 'المرتب اليومي (ج.م)',
                         Icons.payments_outlined,
                       ),
-                      validator: (v) =>
-                          (v == null || double.tryParse(v) == null)
-                              ? 'أدخل مبلغ صحيح'
-                              : null,
+                      validator: (v) => (v == null || Money.tryParse(v) == null)
+                          ? 'أدخل مبلغ صحيح'
+                          : null,
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
-                        controller: phoneController,
-                        decoration: _fieldDecoration(
-                            'رقم الهاتف (اختياري)', Icons.phone_outlined)),
+                      controller: phoneController,
+                      decoration: _fieldDecoration(
+                        'رقم الهاتف (اختياري)',
+                        Icons.phone_outlined,
+                      ),
+                    ),
                     const SizedBox(height: 14),
                     TextFormField(
-                        controller: notesController,
-                        maxLines: 2,
-                        decoration: _fieldDecoration(
-                            'ملاحظات (اختياري)', Icons.notes_rounded)),
+                      controller: notesController,
+                      maxLines: 2,
+                      decoration: _fieldDecoration(
+                        'ملاحظات (اختياري)',
+                        Icons.notes_rounded,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -141,24 +172,28 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
           ),
           actions: [
             if (worker != null)
-              TextButton(
+              SafeSaveButton.text(
                 onPressed: () async {
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (context) => AlertDialog(
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                       title: const Text('حذف العامل'),
                       content: Text('هل أنت متأكد من حذف "${worker.name}"؟'),
                       actions: [
                         TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('إلغاء')),
-                        ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.danger),
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('حذف')),
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('إلغاء'),
+                        ),
+                        SafeSaveButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.danger,
+                          ),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('حذف'),
+                        ),
                       ],
                     ),
                   );
@@ -167,13 +202,16 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                     if (context.mounted) Navigator.pop(context);
                   }
                 },
-                child: const Text('حذف',
-                    style: TextStyle(color: AppColors.danger)),
+                child: const Text(
+                  'حذف',
+                  style: TextStyle(color: AppColors.danger),
+                ),
               ),
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('إلغاء')),
-            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            SafeSaveButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 final repo = ref.read(repositoryProvider);
@@ -182,7 +220,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                     name: nameController.text.trim(),
                     jobTitle: jobController.text.trim(),
                     salaryType: salaryType,
-                    salaryAmount: double.parse(amountController.text.trim()),
+                    salaryAmount: Money.parse(amountController.text.trim()),
                     payWeekday: payWeekday,
                     phone: phoneController.text.trim(),
                     notes: notesController.text.trim(),
@@ -193,7 +231,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                     name: nameController.text.trim(),
                     jobTitle: jobController.text.trim(),
                     salaryType: salaryType,
-                    salaryAmount: double.parse(amountController.text.trim()),
+                    salaryAmount: Money.parse(amountController.text.trim()),
                     payWeekday: payWeekday,
                     phone: phoneController.text.trim(),
                     notes: notesController.text.trim(),
@@ -244,7 +282,8 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                     color: AppColors.warning.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                        color: AppColors.warning.withValues(alpha: 0.25)),
+                      color: AppColors.warning.withValues(alpha: 0.25),
+                    ),
                   ),
                   padding: const EdgeInsets.all(18),
                   child: Column(
@@ -255,38 +294,50 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                           Container(
                             padding: const EdgeInsets.all(9),
                             decoration: BoxDecoration(
-                                color:
-                                    AppColors.warning.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(11)),
+                              color: AppColors.warning.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
                             child: const Icon(
-                                Icons.notifications_active_rounded,
-                                color: AppColors.warning,
-                                size: 20),
+                              Icons.notifications_active_rounded,
+                              color: AppColors.warning,
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 12),
-                          Text('فيه عمال مستحقين لسه ما اتأكدش دفعهم',
-                              style: GoogleFonts.cairo(
-                                  fontWeight: FontWeight.w800, fontSize: 14)),
+                          Text(
+                            'فيه عمال مستحقين لسه ما اتأكدش دفعهم',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      ...dueToday.map((w) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 5),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                      '${w.name} (${w.jobTitle}) - ${w.salaryAmount.toStringAsFixed(0)} ج.م',
-                                      style: GoogleFonts.cairo(fontSize: 13)),
+                      ...dueToday.map(
+                        (w) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${w.name} (${w.jobTitle}) - ${w.salaryAmount.toStringAsFixed(2)} ج.م',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 13,
+                                  ),
                                 ),
-                                ElevatedButton(
-                                  onPressed: () =>
-                                      _confirmPayment(context, ref, w),
-                                  child: const Text('تأكيد الدفع'),
-                                ),
-                              ],
-                            ),
-                          )),
+                              ),
+                              SafeSaveButton(
+                                onPressed: () =>
+                                    _confirmPayment(context, ref, w),
+                                child: const Text('تأكيد الدفع'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -309,8 +360,9 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
               data: (workers) {
                 if (workers.isEmpty) {
                   return const _EmptyState(
-                      icon: Icons.engineering_outlined,
-                      text: 'لا يوجد عمال بعد');
+                    icon: Icons.engineering_outlined,
+                    text: 'لا يوجد عمال بعد',
+                  );
                 }
                 final q = normalizeForSearch(_query);
                 final filtered = q.isEmpty
@@ -321,8 +373,9 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                       }).toList();
                 if (filtered.isEmpty) {
                   return const _EmptyState(
-                      icon: Icons.search_off_rounded,
-                      text: 'لا توجد نتائج مطابقة');
+                    icon: Icons.search_off_rounded,
+                    text: 'لا توجد نتائج مطابقة',
+                  );
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
@@ -335,58 +388,75 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                       padding: const EdgeInsets.only(bottom: 14),
                       child: _HoverCard(
                         onTap: () => showDialog(
-                            context: context,
-                            builder: (context) =>
-                                _WorkerDetailDialog(worker: w)),
+                          context: context,
+                          builder: (context) => _WorkerDetailDialog(worker: w),
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 14),
+                            horizontal: 18,
+                            vertical: 14,
+                          ),
                           child: Row(
                             children: [
                               CircleAvatar(
                                 radius: 24,
                                 backgroundColor: accent.withValues(alpha: 0.14),
                                 child: Text(
-                                    w.name.isNotEmpty
-                                        ? w.name[0].toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                        color: accent,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16)),
+                                  w.name.isNotEmpty
+                                      ? w.name[0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                    color: accent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(w.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.cairo(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w800,
-                                            color: const Color(0xFF2A2320))),
+                                    Text(
+                                      w.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF2A2320),
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       '${w.jobTitle} - ${_salaryTypes[w.salaryType]}${w.salaryType == 'weekly' ? ' (${_weekdays[w.payWeekday]})' : ''}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.cairo(
-                                          fontSize: 11.5,
-                                          color: Colors.grey.shade500),
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 11.5,
+                                        color: Colors.grey.shade500,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                              Text('${w.salaryAmount.toStringAsFixed(0)} ج.م',
-                                  style: GoogleFonts.cairo(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 13.5,
-                                      color: const Color(0xFF2A2320))),
+                              Text(
+                                '${w.salaryAmount.toStringAsFixed(2)} ج.م',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.5,
+                                  color: const Color(0xFF2A2320),
+                                ),
+                              ),
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    size: 20, color: AppColors.navy),
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  size: 20,
+                                  color: AppColors.navy,
+                                ),
                                 onPressed: () =>
                                     _showWorkerDialog(context, ref, worker: w),
                               ),
@@ -399,7 +469,8 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                 );
               },
               loading: () => const Center(
-                  child: CircularProgressIndicator(color: AppColors.wood)),
+                child: CircularProgressIndicator(color: AppColors.wood),
+              ),
               error: (e, _) => Center(child: Text('خطأ: $e')),
             ),
           ),
@@ -409,7 +480,10 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
   }
 
   Future<void> _confirmPayment(
-      BuildContext context, WidgetRef ref, Worker worker) async {
+    BuildContext context,
+    WidgetRef ref,
+    Worker worker,
+  ) async {
     final now = DateTime.now();
     final anchor = workerPeriodAnchor(worker, now);
     final confirm = await showDialog<bool>(
@@ -418,20 +492,31 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('تأكيد الدفع'),
         content: Text(
-            'هل تم صرف ${worker.salaryAmount.toStringAsFixed(0)} ج.م لـ "${worker.name}"؟'),
+          'هل تم صرف ${worker.salaryAmount.toStringAsFixed(2)} ج.م لـ "${worker.name}"؟',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('تأكيد')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          SafeSaveButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('تأكيد'),
+          ),
         ],
       ),
     );
     if (confirm == true) {
-      await ref.read(repositoryProvider).confirmWorkerPayment(
-          worker: worker, amount: worker.salaryAmount, periodStart: anchor);
+      await runGuardedSave(
+        context,
+        () => ref
+            .read(repositoryProvider)
+            .confirmWorkerPayment(
+              worker: worker,
+              amount: worker.salaryAmount,
+              periodStart: anchor,
+            ),
+      );
     }
   }
 }
@@ -449,8 +534,14 @@ class _WorkerDetailDialog extends ConsumerWidget {
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      title: Text(worker.name,
-          style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+      title: Text(
+        worker.name,
+        style: TextStyle(
+          fontFamily: 'Cairo',
+          fontWeight: FontWeight.w800,
+          fontSize: 16,
+        ),
+      ),
       content: SizedBox(
         width: 420,
         height: 420,
@@ -459,23 +550,39 @@ class _WorkerDetailDialog extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                  '${worker.jobTitle} - ${_salaryTypes[worker.salaryType]}${worker.salaryType == 'weekly' ? ' (${_weekdays[worker.payWeekday]})' : ''}',
-                  style: GoogleFonts.cairo(
-                      fontSize: 13, color: Colors.grey.shade600)),
+                '${worker.jobTitle} - ${_salaryTypes[worker.salaryType]}${worker.salaryType == 'weekly' ? ' (${_weekdays[worker.payWeekday]})' : ''}',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                ),
+              ),
               const SizedBox(height: 6),
-              Text('المرتب: ${worker.salaryAmount.toStringAsFixed(0)} ج.م',
-                  style: GoogleFonts.cairo(
-                      fontWeight: FontWeight.w800, fontSize: 14)),
+              Text(
+                'المرتب: ${worker.salaryAmount.toStringAsFixed(2)} ج.م',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
               if (worker.phone.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text('الهاتف: ${worker.phone}',
-                    style: GoogleFonts.cairo(fontSize: 13))
+                Text(
+                  'الهاتف: ${worker.phone}',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                ),
               ],
               if (worker.notes.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(worker.notes,
-                    style: GoogleFonts.cairo(
-                        color: Colors.grey.shade600, fontSize: 12.5)),
+                Text(
+                  worker.notes,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    color: Colors.grey.shade600,
+                    fontSize: 12.5,
+                  ),
+                ),
               ],
               const SizedBox(height: 18),
               _FieldLabel('سجل القبض'),
@@ -484,29 +591,37 @@ class _WorkerDetailDialog extends ConsumerWidget {
                 data: (payments) {
                   if (payments.isEmpty) {
                     return const _EmptyState(
-                        icon: Icons.history_toggle_off_rounded,
-                        text: 'لسه ماتسجّلش أي قبض لهذا العامل');
+                      icon: Icons.history_toggle_off_rounded,
+                      text: 'لسه ماتسجّلش أي قبض لهذا العامل',
+                    );
                   }
                   return Column(
                     children: payments
-                        .map((p) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _MiniRow(
-                                icon: Icons.check_circle_outline_rounded,
-                                iconColor: AppColors.success,
-                                title: '${p.amount.toStringAsFixed(0)} ج.م',
-                                subtitle:
-                                    DateFormat('d/M/yyyy - hh:mm a', 'ar_EG')
-                                        .format(
-                                            DateTime.fromMillisecondsSinceEpoch(
-                                                p.paymentDate)),
-                              ),
-                            ))
+                        .map(
+                          (p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _MiniRow(
+                              icon: Icons.check_circle_outline_rounded,
+                              iconColor: AppColors.success,
+                              title: '${p.amount.toStringAsFixed(2)} ج.م',
+                              subtitle:
+                                  DateFormat(
+                                    'd/M/yyyy - hh:mm a',
+                                    'ar_EG',
+                                  ).format(
+                                    DateTime.fromMillisecondsSinceEpoch(
+                                      p.paymentDate,
+                                    ),
+                                  ),
+                            ),
+                          ),
+                        )
                         .toList(),
                   );
                 },
                 loading: () => const Center(
-                    child: CircularProgressIndicator(color: AppColors.wood)),
+                  child: CircularProgressIndicator(color: AppColors.wood),
+                ),
                 error: (e, _) => Text('خطأ: $e'),
               ),
             ],
@@ -515,8 +630,9 @@ class _WorkerDetailDialog extends ConsumerWidget {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إغلاق')),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('إغلاق'),
+        ),
         ElevatedButton.icon(
           icon: const Icon(Icons.payments_rounded, size: 18),
           label: const Text('تسجيل قبض'),
@@ -527,26 +643,36 @@ class _WorkerDetailDialog extends ConsumerWidget {
               context: context,
               builder: (context) => AlertDialog(
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 title: const Text('تأكيد الدفع'),
                 content: Text(
-                    'هل تم صرف ${worker.salaryAmount.toStringAsFixed(0)} ج.م لـ "${worker.name}"؟'),
+                  'هل تم صرف ${worker.salaryAmount.toStringAsFixed(2)} ج.م لـ "${worker.name}"؟',
+                ),
                 actions: [
                   TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('إلغاء')),
-                  ElevatedButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('تأكيد')),
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('إلغاء'),
+                  ),
+                  SafeSaveButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('تأكيد'),
+                  ),
                 ],
               ),
             );
             if (confirm == true) {
-              await ref.read(repositoryProvider).confirmWorkerPayment(
-                  worker: worker,
-                  amount: worker.salaryAmount,
-                  periodStart: anchor);
-              if (context.mounted) Navigator.pop(context);
+              final saved = await runGuardedSave(
+                context,
+                () => ref
+                    .read(repositoryProvider)
+                    .confirmWorkerPayment(
+                      worker: worker,
+                      amount: worker.salaryAmount,
+                      periodStart: anchor,
+                    ),
+              );
+              if (saved && context.mounted) Navigator.pop(context);
             }
           },
         ),
@@ -558,19 +684,23 @@ class _WorkerDetailDialog extends ConsumerWidget {
 InputDecoration _fieldDecoration(String label, [IconData? icon]) {
   return InputDecoration(
     labelText: label,
-    prefixIcon:
-        icon != null ? Icon(icon, size: 20, color: AppColors.wood) : null,
+    prefixIcon: icon != null
+        ? Icon(icon, size: 20, color: AppColors.wood)
+        : null,
     filled: true,
     fillColor: Colors.grey.shade50,
     border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300)),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
     enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300)),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
     focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: AppColors.wood, width: 1.5)),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+      borderSide: BorderSide(color: AppColors.wood, width: 1.5),
+    ),
   );
 }
 
@@ -582,11 +712,15 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: Text(text,
-          style: GoogleFonts.cairo(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF2A2320))),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'Cairo',
+          fontSize: 13.5,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF2A2320),
+        ),
+      ),
     );
   }
 }
@@ -596,11 +730,12 @@ class _MiniRow extends StatelessWidget {
   final Color? iconColor;
   final String title;
   final String subtitle;
-  const _MiniRow(
-      {required this.icon,
-      required this.title,
-      required this.subtitle,
-      this.iconColor});
+  const _MiniRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.iconColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -613,8 +748,9 @@ class _MiniRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                  color: (iconColor ?? AppColors.wood).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10)),
+                color: (iconColor ?? AppColors.wood).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Icon(icon, size: 18, color: iconColor ?? AppColors.wood),
             ),
             const SizedBox(width: 12),
@@ -622,15 +758,24 @@ class _MiniRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: GoogleFonts.cairo(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF2A2320))),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF2A2320),
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: GoogleFonts.cairo(
-                          fontSize: 11.5, color: Colors.grey.shade500)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11.5,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -661,89 +806,120 @@ class _PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final narrow = constraints.maxWidth < 620;
-      final title0 = Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 620;
+        final title0 = Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
                 color: AppColors.wood.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, color: AppColors.wood, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title,
-                      style: GoogleFonts.cairo(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF2A2320))),
-                  if (badge != null) ...[
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: AppColors.wood.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Text(badge!,
-                          style: GoogleFonts.cairo(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.wood)),
-                    ),
-                  ],
-                ],
+                borderRadius: BorderRadius.circular(14),
               ),
-              const SizedBox(height: 4),
-              Text(subtitle,
-                  style: GoogleFonts.cairo(
-                      fontSize: 13, color: Colors.grey.shade600)),
-            ],
-          ),
-        ],
-      );
+              child: Icon(icon, color: AppColors.wood, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF2A2320),
+                      ),
+                    ),
+                    if (badge != null) ...[
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.wood.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          badge!,
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.wood,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
 
-      final action = _HoverCard(
-        onTap: onAction,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-          decoration: BoxDecoration(
+        final action = _HoverCard(
+          onTap: onAction,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+            decoration: BoxDecoration(
               gradient: const LinearGradient(
-                  colors: [AppColors.wood, AppColors.woodDark]),
-              borderRadius: BorderRadius.circular(14)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(actionIcon, size: 18, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(actionLabel,
-                  style: GoogleFonts.cairo(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white)),
-            ],
+                colors: [AppColors.wood, AppColors.woodDark],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(actionIcon, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  actionLabel,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+        );
 
-      if (narrow) {
-        return Column(
+        if (narrow) {
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [title0, const SizedBox(height: 16), action]);
-      }
-      return Row(children: [Expanded(child: title0), action]);
-    });
+            children: [title0, const SizedBox(height: 16), action],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: title0),
+            action,
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -760,9 +936,14 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(icon, size: 48, color: Colors.grey.shade300),
           const SizedBox(height: 14),
-          Text(text,
-              style: GoogleFonts.cairo(
-                  fontSize: 14.5, color: Colors.grey.shade500)),
+          Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 14.5,
+              color: Colors.grey.shade500,
+            ),
+          ),
         ],
       ),
     );
@@ -776,10 +957,11 @@ class _HoverCard extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final BorderRadius borderRadius;
-  const _HoverCard(
-      {required this.child,
-      this.onTap,
-      this.borderRadius = const BorderRadius.all(Radius.circular(18))});
+  const _HoverCard({
+    required this.child,
+    this.onTap,
+    this.borderRadius = const BorderRadius.all(Radius.circular(18)),
+  });
 
   @override
   State<_HoverCard> createState() => _HoverCardState();
@@ -816,9 +998,10 @@ class _HoverCardState extends State<_HoverCard> {
           borderRadius: widget.borderRadius,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-              onTap: widget.onTap,
-              borderRadius: widget.borderRadius,
-              child: widget.child),
+            onTap: widget.onTap,
+            borderRadius: widget.borderRadius,
+            child: widget.child,
+          ),
         ),
       ),
     );

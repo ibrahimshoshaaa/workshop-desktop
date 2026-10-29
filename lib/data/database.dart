@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../core/money.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
@@ -236,20 +237,23 @@ class CashTransfers extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [
-  Customers,
-  Orders,
-  PaymentTransactions,
-  Expenses,
-  MaterialItems,
-  Workers,
-  WorkerPayments,
-  WorkshopDebts,
-  CashTransfers,
-  SyncMeta,
-])
+@DriftDatabase(
+  tables: [
+    Customers,
+    Orders,
+    PaymentTransactions,
+    Expenses,
+    MaterialItems,
+    Workers,
+    WorkerPayments,
+    WorkshopDebts,
+    CashTransfers,
+    SyncMeta,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
+  AppDatabase.withExecutor(QueryExecutor executor) : super(executor);
 
   @override
   int get schemaVersion => 11;
@@ -281,18 +285,24 @@ class AppDatabase extends _$AppDatabase {
           // إضافة الرقم التسلسلي للعميل (نسخة 5) - وترقيم العملاء
           // الموجودين بالفعل حسب ترتيب تاريخ إضافتهم عشان محدش يفضل صفر
           await m.addColumn(customers, customers.serialNumber);
-          final existing = await (select(customers)
-                ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-              .get();
+          // During upgrade the archive columns do not exist yet. Selecting
+          // the generated Customer row would read the latest schema too early.
+          final existing = await customSelect(
+            'SELECT id FROM customers ORDER BY created_at',
+          ).get();
           for (var i = 0; i < existing.length; i++) {
-            await (update(customers)..where((t) => t.id.equals(existing[i].id)))
-                .write(CustomersCompanion(serialNumber: Value(i + 1)));
+            await customStatement(
+              'UPDATE customers SET serial_number = ? WHERE id = ?',
+              [i + 1, existing[i].read<String>('id')],
+            );
           }
         }
         if (from < 6) {
           // إضافة طريقة الاستلام (نقدي/إنستاباي) وحالة الدفعة على الدفعات (نسخة 6)
           await m.addColumn(
-              paymentTransactions, paymentTransactions.paymentMethod);
+            paymentTransactions,
+            paymentTransactions.paymentMethod,
+          );
           await m.addColumn(paymentTransactions, paymentTransactions.status);
         }
         if (from < 7) {
@@ -310,7 +320,7 @@ class AppDatabase extends _$AppDatabase {
           // جدول سحب إنستاباي كاش (نسخة 9)
           await m.createTable(cashTransfers);
         }
-        if (from < 10) {
+        if (from >= 7 && from < 10) {
           // ربط مديونية الورشة بالطلب اللي ولّدها (نسخة 10) - لحالة العميل
           // اللي دفع أكتر من السعر النهائي بعد تعديله
           await m.addColumn(workshopDebts, workshopDebts.orderId);
@@ -323,16 +333,22 @@ class AppDatabase extends _$AppDatabase {
           // The previous desktop archive implementation used isDeleted as
           // its archive marker. Convert those local records to the new
           // non-destructive archive state before sync runs again.
-          await (update(customers)..where((c) => c.isDeleted.equals(true)))
-              .write(const CustomersCompanion(
-                  isDeleted: Value(false),
-                  isArchived: Value(true),
-                  dirty: Value(true)));
+          await (update(
+            customers,
+          )..where((c) => c.isDeleted.equals(true))).write(
+            const CustomersCompanion(
+              isDeleted: Value(false),
+              isArchived: Value(true),
+              dirty: Value(true),
+            ),
+          );
           await (update(orders)..where((o) => o.isDeleted.equals(true))).write(
-              const OrdersCompanion(
-                  isDeleted: Value(false),
-                  isArchived: Value(true),
-                  dirty: Value(true)));
+            const OrdersCompanion(
+              isDeleted: Value(false),
+              isArchived: Value(true),
+              dirty: Value(true),
+            ),
+          );
         }
       },
     );
@@ -341,9 +357,9 @@ class AppDatabase extends _$AppDatabase {
   // ---------------- Customers ----------------
 
   Stream<List<Customer>> watchCustomers() {
-    return (select(customers)
-          ..where(
-              (t) => t.isDeleted.equals(false) & t.isArchived.equals(false)))
+    return (select(
+          customers,
+        )..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false)))
         .watch();
   }
 
@@ -355,17 +371,18 @@ class AppDatabase extends _$AppDatabase {
   /// أي عدد من الأعمدة من غير ما تحتاج تبعت كل الأعمدة الإجبارية، لأن
   /// UPSERT في SQLite بيتطلب قيم لكل الأعمدة NOT NULL حتى لو السجل
   /// موجود بالفعل وهدفك تعدّل عمود واحد بس
-  Future<void> updateCustomerFields(CustomersCompanion entry) =>
-      (update(customers)..where((t) => t.id.equals(entry.id.value)))
-          .write(entry);
+  Future<void> updateCustomerFields(CustomersCompanion entry) => (update(
+    customers,
+  )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   Future<void> softDeleteCustomer(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(customers)..where((t) => t.id.equals(id))).write(
       CustomersCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
@@ -382,11 +399,32 @@ class AppDatabase extends _$AppDatabase {
 
   // ---------------- Orders ----------------
 
-  Stream<List<Order>> watchOrders() {
-    return (select(orders)
-          ..where(
-              (t) => t.isDeleted.equals(false) & t.isArchived.equals(false)))
-        .watch();
+  Stream<List<Order>> watchOrders({
+    bool includeArchived = false,
+    bool archivedOnly = false,
+  }) {
+    final archiveFilter = archivedOnly
+        ? 'AND o.is_archived = 1'
+        : includeArchived
+        ? ''
+        : 'AND o.is_archived = 0';
+    return customSelect(
+      "SELECT o.*, COALESCE((SELECT SUM(CAST(ROUND(p.amount_paid * 100) AS INTEGER)) "
+      "FROM payment_transactions p WHERE p.order_id = o.id AND p.is_deleted = 0 "
+      "AND p.status = 'completed'), 0) AS settled_cents "
+      'FROM orders o WHERE o.is_deleted = 0 $archiveFilter ORDER BY o.created_at DESC',
+      readsFrom: {orders, paymentTransactions},
+    ).watch().map(
+      (rows) => rows
+          .map(
+            (row) => orders
+                .map(row.data)
+                .copyWith(
+                  totalPaid: Money.amount(row.read<int>('settled_cents')),
+                ),
+          )
+          .toList(),
+    );
   }
 
   Future<void> upsertOrder(OrdersCompanion entry) =>
@@ -401,9 +439,10 @@ class AppDatabase extends _$AppDatabase {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(orders)..where((t) => t.id.equals(id))).write(
       OrdersCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
@@ -416,26 +455,35 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Stream<List<PaymentTransaction>> watchAllTransactions() {
-    return (select(paymentTransactions)
-          ..where((t) => t.isDeleted.equals(false)))
-        .watch();
+    return (select(
+      paymentTransactions,
+    )..where((t) => t.isDeleted.equals(false))).watch();
   }
 
   Future<void> upsertTransaction(PaymentTransactionsCompanion entry) =>
       into(paymentTransactions).insertOnConflictUpdate(entry);
 
   Future<void> updateTransactionFields(PaymentTransactionsCompanion entry) =>
-      (update(paymentTransactions)..where((t) => t.id.equals(entry.id.value)))
-          .write(entry);
+      (update(
+        paymentTransactions,
+      )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   /// تحديث حالة دفعة معيّنة بس (معلقة/مكتملة) من غير ما نلمس باقي الأعمدة
-  Future<void> updatePaymentStatus(String id, String status) {
+  Future<void> updatePaymentStatus(
+    String id,
+    String status, {
+    int? paymentDate,
+  }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(paymentTransactions)..where((t) => t.id.equals(id))).write(
       PaymentTransactionsCompanion(
-          status: Value(status),
-          updatedAt: Value(now),
-          dirty: const Value(true)),
+        status: Value(status),
+        paymentDate: paymentDate == null
+            ? const Value.absent()
+            : Value(paymentDate),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
     );
   }
 
@@ -447,11 +495,12 @@ class AppDatabase extends _$AppDatabase {
     return (update(paymentTransactions)
           ..where((t) => t.orderId.equals(orderId) & t.isDeleted.equals(false)))
         .write(
-      PaymentTransactionsCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
-    );
+          PaymentTransactionsCompanion(
+            isDeleted: const Value(true),
+            dirty: const Value(true),
+            updatedAt: Value(now),
+          ),
+        );
   }
 
   /// بيحذف دفعة واحدة بس (اتسجلت غلط) - عكس [softDeleteTransactionsForOrder]
@@ -461,9 +510,10 @@ class AppDatabase extends _$AppDatabase {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(paymentTransactions)..where((t) => t.id.equals(id))).write(
       PaymentTransactionsCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
@@ -471,31 +521,36 @@ class AppDatabase extends _$AppDatabase {
   /// متراكم متخزّن) - ده اللي بيضمن إن الرقم صح دايمًا مهما حصل تعارض
   /// أو تكرار مزامنة، لأن SUM() عملية "idempotent" ومفيهاش تراكم أخطاء
   Future<double> sumPaymentsForOrder(String orderId) async {
-    final sumExp = paymentTransactions.amountPaid.sum();
-    final query = selectOnly(paymentTransactions)
-      ..addColumns([sumExp])
-      ..where(paymentTransactions.orderId.equals(orderId) &
-          paymentTransactions.isDeleted.equals(false));
-    final row = await query.getSingleOrNull();
-    return row?.read(sumExp) ?? 0;
+    final rows =
+        await (select(paymentTransactions)..where(
+              (t) =>
+                  t.orderId.equals(orderId) &
+                  t.isDeleted.equals(false) &
+                  t.status.equals('completed'),
+            ))
+            .get();
+    return Money.sum(rows.map((t) => t.amountPaid));
   }
 
   /// بيعيد حساب totalPaid لطلب معيّن من الصفر بناءً على سجل الدفعات
   /// الفعلي، وبيحدّثه في جدول الطلبات لو مختلف عن القيمة الحالية
-  Future<void> recomputeOrderTotalPaid(String orderId) async {
-    final order = await (select(orders)..where((t) => t.id.equals(orderId)))
-        .getSingleOrNull();
+  Future<void> recomputeOrderTotalPaid(String orderId) => transaction(() async {
+    final order = await (select(
+      orders,
+    )..where((t) => t.id.equals(orderId))).getSingleOrNull();
     if (order == null) return;
     final correctTotal = await sumPaymentsForOrder(orderId);
     if (correctTotal != order.totalPaid) {
-      await updateOrderFields(OrdersCompanion(
-        id: Value(orderId),
-        totalPaid: Value(correctTotal),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-        dirty: const Value(true),
-      ));
+      await updateOrderFields(
+        OrdersCompanion(
+          id: Value(orderId),
+          totalPaid: Value(correctTotal),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+          dirty: const Value(true),
+        ),
+      );
     }
-  }
+  });
 
   // ---------------- Expenses ----------------
 
@@ -512,89 +567,98 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertExpense(ExpensesCompanion entry) =>
       into(expenses).insertOnConflictUpdate(entry);
 
-  Future<void> updateExpenseFields(ExpensesCompanion entry) =>
-      (update(expenses)..where((t) => t.id.equals(entry.id.value)))
-          .write(entry);
+  Future<void> updateExpenseFields(ExpensesCompanion entry) => (update(
+    expenses,
+  )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   Future<void> softDeleteExpense(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(expenses)..where((t) => t.id.equals(id))).write(
       ExpensesCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
   // ---------------- Workshop Debts ----------------
 
   Stream<List<WorkshopDebt>> watchWorkshopDebts() {
-    return (select(workshopDebts)..where((t) => t.isDeleted.equals(false)))
-        .watch();
+    return (select(
+      workshopDebts,
+    )..where((t) => t.isDeleted.equals(false))).watch();
   }
 
   Future<void> upsertWorkshopDebt(WorkshopDebtsCompanion entry) =>
       into(workshopDebts).insertOnConflictUpdate(entry);
 
   Future<void> updateWorkshopDebtFields(WorkshopDebtsCompanion entry) =>
-      (update(workshopDebts)..where((t) => t.id.equals(entry.id.value)))
-          .write(entry);
+      (update(
+        workshopDebts,
+      )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   Future<void> softDeleteWorkshopDebt(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(workshopDebts)..where((t) => t.id.equals(id))).write(
       WorkshopDebtsCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
   // ---------------- Cash Transfers (سحب إنستاباي كاش) ----------------
 
   Stream<List<CashTransfer>> watchCashTransfers() {
-    return (select(cashTransfers)..where((t) => t.isDeleted.equals(false)))
-        .watch();
+    return (select(
+      cashTransfers,
+    )..where((t) => t.isDeleted.equals(false))).watch();
   }
 
   Future<void> upsertCashTransfer(CashTransfersCompanion entry) =>
       into(cashTransfers).insertOnConflictUpdate(entry);
 
   Future<void> updateCashTransferFields(CashTransfersCompanion entry) =>
-      (update(cashTransfers)..where((t) => t.id.equals(entry.id.value)))
-          .write(entry);
+      (update(
+        cashTransfers,
+      )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   Future<void> softDeleteCashTransfer(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(cashTransfers)..where((t) => t.id.equals(id))).write(
       CashTransfersCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
   // ---------------- Materials ----------------
 
   Stream<List<MaterialItem>> watchMaterials() {
-    return (select(materialItems)..where((t) => t.isDeleted.equals(false)))
-        .watch();
+    return (select(
+      materialItems,
+    )..where((t) => t.isDeleted.equals(false))).watch();
   }
 
   Future<void> upsertMaterial(MaterialItemsCompanion entry) =>
       into(materialItems).insertOnConflictUpdate(entry);
 
-  Future<void> updateMaterialFields(MaterialItemsCompanion entry) =>
-      (update(materialItems)..where((t) => t.id.equals(entry.id.value)))
-          .write(entry);
+  Future<void> updateMaterialFields(MaterialItemsCompanion entry) => (update(
+    materialItems,
+  )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   Future<void> softDeleteMaterial(String id) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(materialItems)..where((t) => t.id.equals(id))).write(
       MaterialItemsCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
@@ -614,23 +678,26 @@ class AppDatabase extends _$AppDatabase {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(workers)..where((t) => t.id.equals(id))).write(
       WorkersCompanion(
-          isDeleted: const Value(true),
-          dirty: const Value(true),
-          updatedAt: Value(now)),
+        isDeleted: const Value(true),
+        dirty: const Value(true),
+        updatedAt: Value(now),
+      ),
     );
   }
 
   // ---------------- Worker Payments ----------------
 
   Stream<List<WorkerPayment>> watchWorkerPayments() {
-    return (select(workerPayments)..where((t) => t.isDeleted.equals(false)))
-        .watch();
+    return (select(
+      workerPayments,
+    )..where((t) => t.isDeleted.equals(false))).watch();
   }
 
   Stream<List<WorkerPayment>> watchPaymentsForWorker(String workerId) {
     return (select(workerPayments)
           ..where(
-              (t) => t.workerId.equals(workerId) & t.isDeleted.equals(false))
+            (t) => t.workerId.equals(workerId) & t.isDeleted.equals(false),
+          )
           ..orderBy([(t) => OrderingTerm.desc(t.paymentDate)]))
         .watch();
   }
@@ -642,27 +709,30 @@ class AppDatabase extends _$AppDatabase {
       into(workerPayments).insertOnConflictUpdate(entry);
 
   Future<void> updateWorkerPaymentFields(WorkerPaymentsCompanion entry) =>
-      (update(workerPayments)..where((t) => t.id.equals(entry.id.value)))
-          .write(entry);
+      (update(
+        workerPayments,
+      )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   // ---------------- Sync Meta ----------------
 
   Future<String?> getMeta(String key) async {
-    final row = await (select(syncMeta)..where((t) => t.key.equals(key)))
-        .getSingleOrNull();
+    final row = await (select(
+      syncMeta,
+    )..where((t) => t.key.equals(key))).getSingleOrNull();
     return row?.value;
   }
 
   Future<void> setMeta(String key, String value) {
-    return into(syncMeta).insertOnConflictUpdate(
-        SyncMetaCompanion.insert(key: key, value: value));
+    return into(
+      syncMeta,
+    ).insertOnConflictUpdate(SyncMetaCompanion.insert(key: key, value: value));
   }
 }
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationSupportDirectory();
-    final file = File(p.join(dbFolder.path, 'workshop_desktop.sqlite'));
+    final file = File(p.join(dbFolder.path, 'workshop_desktop_local.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
 }
