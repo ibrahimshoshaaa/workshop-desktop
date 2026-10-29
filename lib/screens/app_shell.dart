@@ -21,7 +21,7 @@ class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
   static final _allDestinations = [
-    (Icons.dashboard_rounded, 'الرئيسية', null),
+    (Icons.dashboard_rounded, 'الرئيسية', 'dashboard'),
     (Icons.people_alt_rounded, 'العملاء', 'customers'),
     (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),
     (Icons.checkroom_rounded, 'الطلبات', 'orders'),
@@ -31,7 +31,7 @@ class AppShell extends ConsumerWidget {
     (Icons.receipt_long_rounded, 'المصروفات', 'expenses'),
     (Icons.inventory_2_rounded, 'المخزون', 'inventory'),
     (Icons.summarize_rounded, 'التقارير', 'reports'),
-    (Icons.history_rounded, 'سجل النشاط', null),
+    (Icons.history_rounded, 'سجل النشاط', 'activity'),
     (Icons.settings_rounded, 'الإعدادات', 'admin_only'),
   ];
 
@@ -60,7 +60,7 @@ class AppShell extends ConsumerWidget {
         visibleIndexes.add(i);
       } else if (permKey == 'admin_only') {
         if (session?.isAdmin ?? false) visibleIndexes.add(i);
-      } else if (session?.can(permKey) ?? true) {
+      } else if (session?.can(permKey) ?? false) {
         visibleIndexes.add(i);
       }
     }
@@ -69,7 +69,8 @@ class AppShell extends ConsumerWidget {
         .toList();
     final screens = visibleIndexes.map((i) => _allScreens[i]).toList();
     final rawIndex = ref.watch(selectedTabProvider);
-    final index = screens.isEmpty ? 0 : rawIndex.clamp(0, screens.length - 1);
+    final visibleIndex = visibleIndexes.indexOf(rawIndex);
+    final index = visibleIndex < 0 ? 0 : visibleIndex;
 
     return Scaffold(
       appBar: AppBar(
@@ -109,46 +110,54 @@ class AppShell extends ConsumerWidget {
       ),
       body: Row(
         children: [
-          SizedBox(
-            width: 120,
-            child: Scrollbar(
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: NavigationRail(
-                  selectedIndex: index,
-                  onDestinationSelected: (i) =>
-                      ref.read(selectedTabProvider.notifier).state = i,
-                  labelType: NavigationRailLabelType.all,
-                  backgroundColor: AppColors.woodDark,
-                  selectedIconTheme: const IconThemeData(
-                    color: AppColors.amber,
+          if (destinations.length > 1)
+            SizedBox(
+              width: 120,
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: NavigationRail(
+                    selectedIndex: index,
+                    onDestinationSelected: (i) =>
+                        ref.read(selectedTabProvider.notifier).state =
+                            visibleIndexes[i],
+                    labelType: NavigationRailLabelType.all,
+                    backgroundColor: AppColors.woodDark,
+                    selectedIconTheme: const IconThemeData(
+                      color: AppColors.amber,
+                    ),
+                    unselectedIconTheme: IconThemeData(
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                    selectedLabelTextStyle: const TextStyle(
+                      color: AppColors.amber,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    unselectedLabelTextStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                    destinations: destinations
+                        .map(
+                          (d) => NavigationRailDestination(
+                            icon: Icon(d.$1),
+                            label: Text(d.$2),
+                          ),
+                        )
+                        .toList(),
                   ),
-                  unselectedIconTheme: IconThemeData(
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                  selectedLabelTextStyle: const TextStyle(
-                    color: AppColors.amber,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  unselectedLabelTextStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                  destinations: destinations
-                      .map(
-                        (d) => NavigationRailDestination(
-                          icon: Icon(d.$1),
-                          label: Text(d.$2),
-                        ),
-                      )
-                      .toList(),
                 ),
               ),
             ),
-          ),
-          const VerticalDivider(width: 1),
+          if (destinations.length > 1) const VerticalDivider(width: 1),
           Expanded(
-            child: screens.isEmpty ? const SizedBox.shrink() : screens[index],
+            child: screens.isEmpty
+                ? const Center(
+                    child: Text(
+                      'لا توجد شاشات مسموحة لهذا الحساب. راجع المدير.',
+                    ),
+                  )
+                : screens[index],
           ),
         ],
       ),

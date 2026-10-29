@@ -1,5 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../core/safe_save_button.dart';
+import '../core/money.dart';
+import '../core/calendar_dates.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../core/constants.dart';
@@ -80,7 +83,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final monthEnd = DateTime(m.year, m.month + 1, 1);
       final revenue = transactions
           .where((t) {
-            if (!liveOrderIds.contains(t.orderId)) return false;
+            if (!liveOrderIds.contains(t.orderId) || t.status != 'completed')
+              return false;
             final d = DateTime.fromMillisecondsSinceEpoch(t.paymentDate);
             return !d.isBefore(m) && d.isBefore(monthEnd);
           })
@@ -134,7 +138,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _ActivityItem(
           time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
           title: 'تم تسجيل إيراد جديد',
-          subtitle: '+${t.amountPaid.toStringAsFixed(0)} ج.م',
+          subtitle: '+${t.amountPaid.toStringAsFixed(2)} ج.م',
           icon: Icons.trending_up_rounded,
           color: AppColors.success,
         ),
@@ -146,7 +150,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           time: DateTime.fromMillisecondsSinceEpoch(e.date),
           title: 'تم تسجيل مصروف',
           subtitle:
-              '-${e.amount.toStringAsFixed(0)} ج.م • ${expenseCategories[e.category] ?? e.category}',
+              '-${e.amount.toStringAsFixed(2)} ج.م • ${expenseCategories[e.category] ?? e.category}',
           icon: Icons.receipt_long_rounded,
           color: AppColors.danger,
         ),
@@ -199,6 +203,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
+    ref.watch(calendarClockProvider);
+    final financeSources = [
+      ref.watch(accountingOrdersProvider),
+      ref.watch(allTransactionsProvider),
+      ref.watch(expensesProvider),
+      ref.watch(workshopDebtsProvider),
+      ref.watch(cashTransfersProvider),
+    ];
+    if (financeSources.any((v) => v.hasError))
+      return const Center(
+        child: Text('تعذر قراءة الحسابات؛ راجع فحص البيانات'),
+      );
+    if (financeSources.any((v) => !v.hasValue))
+      return const Center(child: CircularProgressIndicator());
     final stats = ref.watch(dashboardStatsProvider);
     final dueWorkers = ref.watch(workersDueTodayProvider);
     final upcomingDeliveries = ref.watch(upcomingDeliveriesProvider);
@@ -220,10 +238,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final formatter = NumberFormat.currency(
       locale: 'ar_EG',
       symbol: 'ج.م',
-      decimalDigits: 0,
+      decimalDigits: 2,
     );
 
-    final monthlySeries = _buildMonthlySeries(orders, transactions, expenses);
+    final monthlySeries = _buildMonthlySeries(
+      ref.watch(accountingOrdersProvider).value ?? [],
+      transactions,
+      expenses,
+    );
     final expenseSlices = _buildExpenseSlices(expenses);
     final activity = _buildActivity(orders, transactions, expenses, customers);
 
@@ -245,17 +267,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               debtorOrdersCount: debtorOrders.length,
               workshopDebtsCount: outstandingWorkshopDebts.length,
               onWorkersTap: () =>
-                  ref.read(selectedTabProvider.notifier).state = 5,
+                  ref.read(selectedTabProvider.notifier).state = AppTab.workers,
               onDebtorsTap: () =>
-                  ref.read(selectedTabProvider.notifier).state = 3,
+                  ref.read(selectedTabProvider.notifier).state = AppTab.debts,
               onWorkshopDebtsTap: () =>
-                  ref.read(selectedTabProvider.notifier).state = 4,
+                  ref.read(selectedTabProvider.notifier).state =
+                      AppTab.workshopDebts,
             ),
             const SizedBox(height: 28),
             if (dueWorkers.isNotEmpty) ...[
               _DueWorkersBanner(
                 names: dueWorkers.map((w) => w.name).join('، '),
-                onTap: () => ref.read(selectedTabProvider.notifier).state = 5,
+                onTap: () => ref.read(selectedTabProvider.notifier).state =
+                    AppTab.workers,
               ),
               const SizedBox(height: 20),
             ],
@@ -282,8 +306,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     value: formatter.format(stats.totalDebts),
                     icon: Icons.warning_amber_rounded,
                     color: AppColors.danger,
-                    onTap: () =>
-                        ref.read(selectedTabProvider.notifier).state = 3,
+                    onTap: () => ref.read(selectedTabProvider.notifier).state =
+                        AppTab.debts,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -293,8 +317,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     value: formatter.format(stats.totalExpenses),
                     icon: Icons.receipt_long_rounded,
                     color: AppColors.warning,
-                    onTap: () =>
-                        ref.read(selectedTabProvider.notifier).state = 6,
+                    onTap: () => ref.read(selectedTabProvider.notifier).state =
+                        AppTab.expenses,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -331,8 +355,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     value: formatter.format(stats.totalWorkshopDebts),
                     icon: Icons.store_rounded,
                     color: AppColors.danger,
-                    onTap: () =>
-                        ref.read(selectedTabProvider.notifier).state = 4,
+                    onTap: () => ref.read(selectedTabProvider.notifier).state =
+                        AppTab.workshopDebts,
                   ),
                 ),
               ],
@@ -416,7 +440,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               title: '${o.customerName} - ${o.itemType}',
                               subtitle: o.status,
                               trailingText:
-                                  '${o.totalPaid.toStringAsFixed(0)} ج.م',
+                                  '${o.totalPaid.toStringAsFixed(2)} ج.م',
                               onTap: () => showDialog(
                                 context: context,
                                 builder: (context) =>
@@ -1717,15 +1741,27 @@ class _QuickActionsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actions = [
-      (Icons.people_alt_rounded, 'العملاء', 1),
-      (Icons.checkroom_rounded, 'الطلبات', 2),
-      (Icons.account_balance_wallet_rounded, 'المديونيات', 3),
-      (Icons.store_rounded, 'مديونيات الورشة', 4),
-      (Icons.engineering_rounded, 'العمال', 5),
-      (Icons.receipt_long_rounded, 'المصروفات', 6),
-      (Icons.summarize_rounded, 'التقارير', 7),
-    ];
+    final actions =
+        [
+          (Icons.people_alt_rounded, 'العملاء', AppTab.customers),
+          (Icons.checkroom_rounded, 'الطلبات', AppTab.orders),
+          (Icons.account_balance_wallet_rounded, 'المديونيات', AppTab.debts),
+          (Icons.store_rounded, 'مديونيات الورشة', AppTab.workshopDebts),
+          (Icons.engineering_rounded, 'العمال', AppTab.workers),
+          (Icons.receipt_long_rounded, 'المصروفات', AppTab.expenses),
+          (Icons.summarize_rounded, 'التقارير', AppTab.reports),
+        ].where((a) {
+          const keys = {
+            AppTab.customers: 'customers',
+            AppTab.orders: 'orders',
+            AppTab.debts: 'debts',
+            AppTab.workshopDebts: 'debts',
+            AppTab.workers: 'workers',
+            AppTab.expenses: 'expenses',
+            AppTab.reports: 'reports',
+          };
+          return ref.watch(sessionProvider).value?.can(keys[a.$3]!) ?? false;
+        }).toList();
 
     return _HoverCard(
       child: Padding(
@@ -1831,7 +1867,7 @@ void _showCashTransferDialog(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'المتاح حاليًا في إنستاباي: ${availableInstapay.toStringAsFixed(0)} ج.م',
+                  'المتاح حاليًا في إنستاباي: ${availableInstapay.toStringAsFixed(2)} ج.م',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 12,
@@ -1850,11 +1886,11 @@ void _showCashTransferDialog(
                           labelText: 'المبلغ اللي اتسحب (ج.م)',
                         ),
                         validator: (v) {
-                          final amount = double.tryParse(v ?? '');
+                          final amount = Money.tryParse(v ?? '');
                           if (amount == null || amount <= 0)
                             return 'أدخل مبلغ صحيح';
                           if (amount > availableInstapay) {
-                            return 'المبلغ أكبر من المتاح في إنستاباي (${availableInstapay.toStringAsFixed(0)} ج.م)';
+                            return 'المبلغ أكبر من المتاح في إنستاباي (${availableInstapay.toStringAsFixed(2)} ج.م)';
                           }
                           return null;
                         },
@@ -1905,7 +1941,7 @@ void _showCashTransferDialog(
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           dense: true,
-                          title: Text('${t.amount.toStringAsFixed(0)} ج.م'),
+                          title: Text('${t.amount.toStringAsFixed(2)} ج.م'),
                           subtitle: Text(
                             [
                               '${date.day}/${date.month}/${date.year}',
@@ -1937,7 +1973,7 @@ void _showCashTransferDialog(
             onPressed: () => Navigator.pop(context),
             child: const Text('إغلاق'),
           ),
-          ElevatedButton(
+          SafeSaveButton(
             onPressed: isSaving
                 ? null
                 : () async {
@@ -1947,7 +1983,7 @@ void _showCashTransferDialog(
                       await ref
                           .read(repositoryProvider)
                           .addCashTransfer(
-                            amount: double.parse(amountController.text.trim()),
+                            amount: Money.parse(amountController.text.trim()),
                             note: noteController.text.trim(),
                           );
                       amountController.clear();

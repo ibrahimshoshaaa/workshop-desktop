@@ -9,6 +9,8 @@ import '../data/database.dart';
 import '../core/order_calculations.dart';
 import '../core/constants.dart';
 import '../core/theme.dart';
+import '../core/accounting.dart';
+import '../core/money.dart';
 
 /// خدمة توليد ملفات PDF - نفس منطق نسخة الموبايل، بس هنا بنستخدم
 /// Printing.layoutPdf بدل sharePdf عشان دي الطريقة الصح لفتح نافذة
@@ -47,7 +49,7 @@ class PdfExportService {
   final _currency = NumberFormat.currency(
     locale: 'ar_EG',
     symbol: 'ج.م',
-    decimalDigits: 0,
+    decimalDigits: 2,
   );
 
   /// عربي Locale بيضيف حروف اتجاه مخفية (bidi/format marks) جوه النص عشان
@@ -76,9 +78,9 @@ class PdfExportService {
   }) async {
     await _ensureFontsLoaded();
     final doc = pw.Document();
-    final totalAmount = orders.fold<double>(0, (s, o) => s + o.effectiveTotal);
-    final totalPaid = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-    final totalRemaining = totalAmount - totalPaid;
+    final totalAmount = Money.sum(orders.map((o) => o.effectiveTotal));
+    final totalPaid = Money.sum(orders.map((o) => o.totalPaid));
+    final totalRemaining = Money.subtract(totalAmount, totalPaid);
 
     doc.addPage(
       pw.MultiPage(
@@ -234,34 +236,23 @@ class PdfExportService {
     required List<PaymentTransaction> transactions,
     required DateTime from,
     required DateTime to,
+    List<CashTransfer> transfers = const [],
   }) async {
     await _ensureFontsLoaded();
     final doc = pw.Document();
 
-    final totalRevenue = orders.fold<double>(0, (s, o) => s + o.totalPaid);
-    // بنجمع بس الطلبات اللي لسه عليها متبقٍ فعلي - نفس شرح
-    // dashboardStatsProvider بالظبط (طلب متبقيه سالب معناه العميل دفع
-    // زيادة، وده مش "مديونية عميل")
-    final totalDebts = orders
-        .where((o) => o.remaining > 0)
-        .fold<double>(0, (s, o) => s + o.remaining);
-    final totalExpenses = expenses.fold<double>(0, (s, e) => s + e.amount);
-    final netProfit = totalRevenue - totalExpenses;
-
-    // تفنيط "المبلغ المتاح" حسب مصدره: كاش/إنستاباي - بنستبعد أي دفعة
-    // مرتبطة بطلب اتحذف (شايف نفس الشرح في dashboardStatsProvider)
-    final liveOrderIds = orders.map((o) => o.id).toSet();
-    double revenueByMethod(String method) => transactions
-        .where(
-          (t) => t.paymentMethod == method && liveOrderIds.contains(t.orderId),
-        )
-        .fold<double>(0, (s, t) => s + t.amountPaid);
-    double expensesByMethod(String method) => expenses
-        .where((e) => e.paymentMethod == method)
-        .fold<double>(0, (s, e) => s + e.amount);
-    final cashAvailable = revenueByMethod('cash') - expensesByMethod('cash');
-    final instapayAvailable =
-        revenueByMethod('instapay') - expensesByMethod('instapay');
+    final totals = AccountingSnapshot(
+      orders: orders,
+      transactions: transactions,
+      expenses: expenses,
+      transfers: transfers,
+    );
+    final totalRevenue = totals.revenue;
+    final totalDebts = totals.debts;
+    final totalExpenses = totals.expense;
+    final netProfit = totals.net;
+    final cashAvailable = totals.cash;
+    final instapayAvailable = totals.instapay;
 
     doc.addPage(
       pw.MultiPage(
@@ -301,7 +292,11 @@ class PdfExportService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               _summaryBox('الإيرادات', totalRevenue, PdfColors.green700),
-              _summaryBox('المديونيات', totalDebts, PdfColors.red700),
+              _summaryBox(
+                'مديونيات العملاء الحالية',
+                totalDebts,
+                PdfColors.red700,
+              ),
               _summaryBox('المصروفات', totalExpenses, PdfColors.orange700),
               _summaryBox(
                 'المبلغ المتاح',

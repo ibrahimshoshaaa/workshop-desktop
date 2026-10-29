@@ -38,8 +38,14 @@ class BackupService extends ChangeNotifier {
   }
 
   Future<void> start() async {
-    secondaryFolder = await db.getMeta('backup_secondary_folder');
-    lastBackup = await db.getMeta('last_local_backup');
+    try {
+      secondaryFolder = await db.getMeta('backup_secondary_folder');
+      lastBackup = await db.getMeta('last_local_backup');
+    } catch (e) {
+      error = 'تعذر قراءة إعدادات النسخ الاحتياطي: $e';
+      _changed();
+      return;
+    }
     try {
       await createBackup();
     } catch (_) {
@@ -181,10 +187,15 @@ class BackupService extends ChangeNotifier {
       error = 'فشل النسخ الاحتياطي: $e';
       rethrow;
     } finally {
-      if (staging != null && await staging.exists())
-        await staging.delete(recursive: true);
-      busy = false;
-      _changed();
+      try {
+        if (staging != null && await staging.exists())
+          await staging.delete(recursive: true);
+      } catch (e) {
+        error ??= 'تعذر تنظيف الملفات المؤقتة: $e';
+      } finally {
+        busy = false;
+        _changed();
+      }
     }
   }
 

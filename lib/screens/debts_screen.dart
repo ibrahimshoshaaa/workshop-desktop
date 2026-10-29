@@ -84,7 +84,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: _HeroStatCard(
                 label: 'إجمالي المديونيات المستحقة',
-                value: '${totalDebt.toStringAsFixed(0)} ج.م',
+                value: '${totalDebt.toStringAsFixed(2)} ج.م',
                 caption: '${debtors.length} عميل عليه مديونية',
                 icon: Icons.priority_high_rounded,
                 color: AppColors.danger,
@@ -160,7 +160,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                                       ],
                                     ),
                                   ),
-                                  Text('${remaining.toStringAsFixed(0)} ج.م',
+                                  Text('${remaining.toStringAsFixed(2)} ج.م',
                                       style: TextStyle(fontFamily: 'Cairo',
                                           color: AppColors.danger,
                                           fontWeight: FontWeight.w800,

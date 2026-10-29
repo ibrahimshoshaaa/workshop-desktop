@@ -7,6 +7,7 @@ import '../providers/backup_provider.dart';
 import '../providers/database_provider.dart';
 import '../services/legacy_import_service.dart';
 import '../services/local_media_service.dart';
+import '../services/data_integrity_service.dart';
 
 class LocalDataPanel extends ConsumerStatefulWidget {
   const LocalDataPanel({super.key});
@@ -190,6 +191,30 @@ class _LocalDataPanelState extends ConsumerState<LocalDataPanel> {
     return 'الصور المحفوظة: $saved من ${references.length}. المتبقي: ${references.length - saved}. الصور القديمة تحتاج إنترنت لحفظها أول مرة.';
   }
 
+  Future<String> _scanData() async {
+    final issues = await DataIntegrityService(
+      ref.read(databaseProvider),
+    ).scan();
+    if (issues.isEmpty)
+      return 'الفحص لم يجد اختلافات في الحسابات والروابط التي تم اختبارها.';
+    return 'تنبيهات الفحص: ${issues.length}\n${issues.map((i) => '• ${i.message}').join('\n')}';
+  }
+
+  Future<String> _repairDerived() async {
+    final service = DataIntegrityService(ref.read(databaseProvider));
+    final before = await service.scan();
+    final ids = before
+        .map((i) => i.repairOrderId)
+        .whereType<String>()
+        .toSet()
+        .toList();
+    if (ids.isEmpty)
+      return 'لا توجد إجماليات قابلة لإعادة البناء الآمن. التنبيهات الأخرى تحتاج مراجعة السجلات الأصلية.';
+    await ref.read(backupServiceProvider).createBackup();
+    final count = await service.repairDerivedOrders(ids);
+    return 'تم تحديث إجماليات $count طلب من دفتر الدفعات بعد حفظ نسخة رجوع.\n${await _scanData()}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final backup = ref.watch(backupServiceProvider);
@@ -230,6 +255,17 @@ class _LocalDataPanelState extends ConsumerState<LocalDataPanel> {
               spacing: 8,
               runSpacing: 10,
               children: [
+                OutlinedButton.icon(
+                  onPressed: disabled ? null : () => _run(_scanData),
+                  icon: const Icon(Icons.fact_check),
+                  label: const Text('فحص الحسابات والروابط'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: disabled ? null : () => _run(_repairDerived),
+                  icon: const Icon(Icons.calculate),
+                  label: const Text('تحديث الإجماليات من الدفعات'),
+                ),
+
                 OutlinedButton.icon(
                   onPressed: disabled
                       ? null

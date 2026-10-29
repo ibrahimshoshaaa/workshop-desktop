@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../core/safe_save_button.dart';
+import '../core/money.dart';
+import '../core/calendar_dates.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -44,7 +47,7 @@ Future<void> _offerReceiptPrint(
           onPressed: () => Navigator.pop(context, false),
           child: const Text('لا'),
         ),
-        ElevatedButton(
+        SafeSaveButton(
           onPressed: () => Navigator.pop(context, true),
           child: const Text('طباعة إيصال'),
         ),
@@ -405,7 +408,7 @@ Future<void> showAddOrderDialog(
   final totalController = TextEditingController();
   final depositController = TextEditingController();
   String depositMethod = 'cash';
-  DateTime deliveryDate = DateTime.now().add(const Duration(days: 7));
+  DateTime deliveryDate = CalendarDates.addDays(DateTime.now(), 7);
   final pickedImages = <PlatformFile>[];
   bool isSaving = false;
 
@@ -518,7 +521,7 @@ Future<void> showAddOrderDialog(
                         context: context,
                         initialDate: deliveryDate,
                         firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        lastDate: CalendarDates.addDays(DateTime.now(), 365),
                       );
                       if (picked != null)
                         setDialogState(() => deliveryDate = picked);
@@ -532,7 +535,7 @@ Future<void> showAddOrderDialog(
                       'إجمالي الاتفاق (ج.م)',
                       Icons.request_quote_outlined,
                     ),
-                    validator: (v) => (v == null || double.tryParse(v) == null)
+                    validator: (v) => (v == null || Money.tryParse(v) == null)
                         ? 'أدخل مبلغ صحيح'
                         : null,
                   ),
@@ -572,7 +575,7 @@ Future<void> showAddOrderDialog(
             onPressed: isSaving ? null : () => Navigator.pop(context),
             child: const Text('إلغاء'),
           ),
-          ElevatedButton(
+          SafeSaveButton(
             onPressed: isSaving
                 ? null
                 : () async {
@@ -599,8 +602,10 @@ Future<void> showAddOrderDialog(
                           presetCustomer ??
                           customers.firstWhere((c) => c.id == customerId);
                       final repo = ref.read(repositoryProvider);
-                      final deposit =
-                          double.tryParse(depositController.text.trim()) ?? 0;
+                      final depositText = depositController.text.trim();
+                      final deposit = depositText.isEmpty
+                          ? 0.0
+                          : Money.parse(depositText);
                       if (!deposit.isFinite || deposit < 0)
                         throw StateError('قيمة العربون غير صالحة');
                       final orderId = await repo.addOrder(
@@ -608,7 +613,7 @@ Future<void> showAddOrderDialog(
                         customerName: customer.name,
                         itemType: itemType,
                         details: detailsController.text.trim(),
-                        totalAmount: double.parse(totalController.text.trim()),
+                        totalAmount: Money.parse(totalController.text.trim()),
                         deliveryDate: deliveryDate,
                         imageUrls: imageUrls,
                         initialDeposit: deposit,
@@ -672,7 +677,7 @@ Future<void> showEditOrderDialog(
   String itemType = order.itemType;
   final detailsController = TextEditingController(text: order.details);
   final totalController = TextEditingController(
-    text: order.totalAmount.toStringAsFixed(0),
+    text: order.totalAmount.toStringAsFixed(2),
   );
   DateTime deliveryDate = DateTime.fromMillisecondsSinceEpoch(
     order.deliveryDate,
@@ -772,7 +777,7 @@ Future<void> showEditOrderDialog(
                         firstDate: DateTime.now().subtract(
                           const Duration(days: 365),
                         ),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        lastDate: CalendarDates.addDays(DateTime.now(), 365),
                       );
                       if (picked != null)
                         setDialogState(() => deliveryDate = picked);
@@ -786,7 +791,7 @@ Future<void> showEditOrderDialog(
                       'إجمالي الاتفاق (ج.م)',
                       Icons.request_quote_outlined,
                     ),
-                    validator: (v) => (v == null || double.tryParse(v) == null)
+                    validator: (v) => (v == null || Money.tryParse(v) == null)
                         ? 'أدخل مبلغ صحيح'
                         : null,
                   ),
@@ -800,7 +805,7 @@ Future<void> showEditOrderDialog(
             onPressed: isSaving ? null : () => Navigator.pop(context),
             child: const Text('إلغاء'),
           ),
-          ElevatedButton(
+          SafeSaveButton(
             onPressed: isSaving
                 ? null
                 : () async {
@@ -814,28 +819,23 @@ Future<void> showEditOrderDialog(
                     setDialogState(() => isSaving = true);
                     try {
                       final repo = ref.read(repositoryProvider);
-                      final newTotal = double.parse(
-                        totalController.text.trim(),
-                      );
+                      final newTotal = Money.parse(totalController.text.trim());
+                      final added = newImages.isEmpty
+                          ? <String>[]
+                          : await LocalMediaService(
+                              await LocalPaths.load(),
+                            ).saveMultiple(
+                              newImages.map((f) => f.bytes!.toList()).toList(),
+                            );
                       await repo.updateOrder(
                         order,
                         itemType: itemType,
                         details: detailsController.text.trim(),
                         totalAmount: newTotal,
                         deliveryDate: deliveryDate,
+                        removedImages: removedImageUrls,
+                        addedImages: added,
                       );
-                      for (final url in removedImageUrls) {
-                        await repo.removeImageFromOrder(order, url);
-                      }
-                      if (newImages.isNotEmpty) {
-                        final uploadedUrls =
-                            await (LocalMediaService(
-                              await LocalPaths.load(),
-                            )).saveMultiple(
-                              newImages.map((f) => f.bytes!.toList()).toList(),
-                            );
-                        await repo.addImagesToOrder(order, uploadedUrls);
-                      }
                       await NotificationService.instance
                           .scheduleOrderDeliveryReminders(
                             orderId: order.id,
@@ -1111,7 +1111,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                               ),
                               Text(
                                 remaining > 0
-                                    ? 'متبقي ${remaining.toStringAsFixed(0)}'
+                                    ? 'متبقي ${remaining.toStringAsFixed(2)}'
                                     : 'مكتمل',
                                 style: TextStyle(
                                   color: remaining > 0
@@ -1229,7 +1229,7 @@ class OrderDetailDialog extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'الاتفاق الأصلي: ${currentOrder.totalAmount.toStringAsFixed(0)} ج.م - خصم ${currentOrder.discountAmount.toStringAsFixed(0)} ج.م'
+                    'الاتفاق الأصلي: ${currentOrder.totalAmount.toStringAsFixed(2)} ج.م - خصم ${currentOrder.discountAmount.toStringAsFixed(2)} ج.م'
                     '${currentOrder.discountReason.isNotEmpty ? ' (${currentOrder.discountReason})' : ''}',
                     style: TextStyle(
                       fontFamily: 'Cairo',
@@ -1324,7 +1324,8 @@ class OrderDetailDialog extends ConsumerWidget {
                     return _HoverCard(
                       borderRadius: BorderRadius.circular(14),
                       onTap: () =>
-                          ref.read(selectedTabProvider.notifier).state = 4,
+                          ref.read(selectedTabProvider.notifier).state =
+                              AppTab.workshopDebts,
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
@@ -1342,7 +1343,7 @@ class OrderDetailDialog extends ConsumerWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'العميل دفع ${owed.toStringAsFixed(0)} ج.م زيادة عن الاتفاق الحالي - '
+                                'العميل دفع ${owed.toStringAsFixed(2)} ج.م زيادة عن الاتفاق الحالي - '
                                 'مسجّلة كمديونية ورشة، سدّدها من هناك وهتتظبط تلقائي',
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
@@ -1384,20 +1385,31 @@ class OrderDetailDialog extends ConsumerWidget {
                       icon: t.paymentType == 'deposit'
                           ? Icons.savings_rounded
                           : Icons.payments_rounded,
-                      title: '${t.amountPaid.toStringAsFixed(0)} ج.م',
+                      title: '${t.amountPaid.toStringAsFixed(2)} ج.م',
                       subtitle:
                           '${t.paymentType == 'deposit' ? 'عربون' : 'قسط/دفعة'} - ${paymentMethods[t.paymentMethod] ?? t.paymentMethod}',
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           GestureDetector(
-                            onTap: () {
+                            onTap: () async {
                               final next = t.status == 'completed'
                                   ? 'pending'
                                   : 'completed';
-                              ref
-                                  .read(repositoryProvider)
-                                  .updatePaymentStatus(t.id, next);
+                              try {
+                                await ref
+                                    .read(repositoryProvider)
+                                    .updatePaymentStatus(t.id, next);
+                              } catch (e) {
+                                if (context.mounted)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'تعذر تغيير حالة الدفعة: $e',
+                                      ),
+                                    ),
+                                  );
+                              }
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -1499,7 +1511,7 @@ class OrderDetailDialog extends ConsumerWidget {
                     onPressed: () => Navigator.pop(context, false),
                     child: const Text('إلغاء'),
                   ),
-                  ElevatedButton(
+                  SafeSaveButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.danger,
                     ),
@@ -1522,7 +1534,7 @@ class OrderDetailDialog extends ConsumerWidget {
             style: TextStyle(color: AppColors.danger),
           ),
         ),
-        ElevatedButton(
+        SafeSaveButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('إغلاق'),
         ),
@@ -1539,7 +1551,7 @@ class OrderDetailDialog extends ConsumerWidget {
     required PaymentTransaction tx,
   }) {
     final controller = TextEditingController(
-      text: tx.amountPaid.toStringAsFixed(0),
+      text: tx.amountPaid.toStringAsFixed(2),
     );
     String paymentMethod = tx.paymentMethod;
     showDialog(
@@ -1588,9 +1600,9 @@ class OrderDetailDialog extends ConsumerWidget {
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('إلغاء'),
             ),
-            ElevatedButton(
+            SafeSaveButton(
               onPressed: () async {
-                final newAmount = double.tryParse(controller.text.trim());
+                final newAmount = Money.tryParse(controller.text.trim());
                 if (newAmount == null || newAmount <= 0) return;
                 await ref
                     .read(repositoryProvider)
@@ -1628,7 +1640,7 @@ class OrderDetailDialog extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('حذف الدفعة'),
         content: Text(
-          'هل أنت متأكد من حذف دفعة ${tx.amountPaid.toStringAsFixed(0)} ج.م؟ '
+          'هل أنت متأكد من حذف دفعة ${tx.amountPaid.toStringAsFixed(2)} ج.م؟ '
           'المبلغ ده هيتشال من المدفوع تلقائيًا.',
         ),
         actions: [
@@ -1636,7 +1648,7 @@ class OrderDetailDialog extends ConsumerWidget {
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('إلغاء'),
           ),
-          ElevatedButton(
+          SafeSaveButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () async {
               await ref.read(repositoryProvider).deletePayment(orderId, tx.id);
@@ -1658,11 +1670,11 @@ class OrderDetailDialog extends ConsumerWidget {
     final formKey = GlobalKey<FormState>();
     final amountController = TextEditingController(
       text: order.discountAmount > 0
-          ? order.discountAmount.toStringAsFixed(0)
+          ? order.discountAmount.toStringAsFixed(2)
           : '',
     );
     final reasonController = TextEditingController(text: order.discountReason);
-    final maxDiscount = order.totalAmount - order.totalPaid;
+    final maxDiscount = order.totalAmount;
 
     showDialog(
       context: context,
@@ -1682,7 +1694,7 @@ class OrderDetailDialog extends ConsumerWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'الخصم مبلغ ثابت (مش نسبة) - بيتشال من الاتفاق الأصلي (${order.totalAmount.toStringAsFixed(0)} ج.م)، '
+                    'الخصم مبلغ ثابت (مش نسبة) - بيتشال من الاتفاق الأصلي (${order.totalAmount.toStringAsFixed(2)} ج.م)، '
                     'ومش بيتحسب مديونية عليه ولا إيراد للورشة',
                     style: TextStyle(
                       fontFamily: 'Cairo',
@@ -1700,10 +1712,10 @@ class OrderDetailDialog extends ConsumerWidget {
                     Icons.percent_rounded,
                   ),
                   validator: (v) {
-                    final amount = double.tryParse(v ?? '');
+                    final amount = Money.tryParse(v ?? '');
                     if (amount == null || amount < 0) return 'أدخل مبلغ صحيح';
                     if (amount > maxDiscount)
-                      return 'الخصم أكبر من المتبقي (${maxDiscount.toStringAsFixed(0)} ج.م)';
+                      return 'الخصم أكبر من إجمالي الاتفاق (${maxDiscount.toStringAsFixed(2)} ج.م)';
                     return null;
                   },
                 ),
@@ -1737,10 +1749,10 @@ class OrderDetailDialog extends ConsumerWidget {
             onPressed: () => Navigator.pop(context),
             child: const Text('إلغاء'),
           ),
-          ElevatedButton(
+          SafeSaveButton(
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
-              final amount = double.parse(amountController.text.trim());
+              final amount = Money.parse(amountController.text.trim());
               await ref
                   .read(repositoryProvider)
                   .setOrderDiscount(
@@ -1789,7 +1801,7 @@ class OrderDetailDialog extends ConsumerWidget {
                   controller: controller,
                   keyboardType: TextInputType.number,
                   decoration: _fieldDecoration(
-                    'المبلغ (المتبقي ${maxAmount.toStringAsFixed(0)} ج.م)',
+                    'المبلغ (المتبقي ${maxAmount.toStringAsFixed(2)} ج.م)',
                     Icons.payments_outlined,
                   ),
                 ),
@@ -1835,11 +1847,11 @@ class OrderDetailDialog extends ConsumerWidget {
               onPressed: saving ? null : () => Navigator.pop(context),
               child: const Text('إلغاء'),
             ),
-            ElevatedButton(
+            SafeSaveButton(
               onPressed: saving
                   ? null
                   : () async {
-                      final amount = double.tryParse(controller.text.trim());
+                      final amount = Money.tryParse(controller.text.trim());
                       if (amount == null || !amount.isFinite || amount <= 0)
                         return;
                       setDialogState(() => saving = true);
@@ -1953,8 +1965,7 @@ class OrderDetailDialog extends ConsumerWidget {
                         'المبلغ (ج.م)',
                         Icons.payments_outlined,
                       ),
-                      validator: (v) =>
-                          (v == null || double.tryParse(v) == null)
+                      validator: (v) => (v == null || Money.tryParse(v) == null)
                           ? 'أدخل مبلغ صحيح'
                           : null,
                     ),
@@ -2012,7 +2023,7 @@ class OrderDetailDialog extends ConsumerWidget {
               onPressed: () => Navigator.pop(context),
               child: const Text('إلغاء'),
             ),
-            ElevatedButton(
+            SafeSaveButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 if (category.trim().isEmpty) {
@@ -2029,7 +2040,7 @@ class OrderDetailDialog extends ConsumerWidget {
                 await ref
                     .read(repositoryProvider)
                     .addExpense(
-                      amount: double.parse(amountController.text.trim()),
+                      amount: Money.parse(amountController.text.trim()),
                       category: category,
                       description: descriptionController.text.trim(),
                       workerName: workerName,
@@ -2040,7 +2051,7 @@ class OrderDetailDialog extends ConsumerWidget {
                           orderId: order.id,
                           customerId: order.customerId,
                           customerName: order.customerName,
-                          amount: double.parse(amountController.text.trim()),
+                          amount: Money.parse(amountController.text.trim()),
                         ),
                       ],
                     );
@@ -2108,7 +2119,7 @@ class _OrderImagesSectionState extends ConsumerState<_OrderImagesSection> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('إلغاء'),
           ),
-          ElevatedButton(
+          SafeSaveButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('حذف'),
@@ -2181,8 +2192,8 @@ class _OrderExpensesList extends ConsumerWidget {
                 icon: Icons.receipt_long_rounded,
                 iconColor: AppColors.warning,
                 title: s.totalOrdersCount > 1
-                    ? '${s.shareAmount.toStringAsFixed(0)} ج.م (نصيبك من ${s.expense.amount.toStringAsFixed(0)} ج.م) - ${expenseCategories[s.expense.category] ?? s.expense.category}'
-                    : '${s.shareAmount.toStringAsFixed(0)} ج.م - ${expenseCategories[s.expense.category] ?? s.expense.category}',
+                    ? '${s.shareAmount.toStringAsFixed(2)} ج.م (نصيبك من ${s.expense.amount.toStringAsFixed(2)} ج.م) - ${expenseCategories[s.expense.category] ?? s.expense.category}'
+                    : '${s.shareAmount.toStringAsFixed(2)} ج.م - ${expenseCategories[s.expense.category] ?? s.expense.category}',
                 subtitle: [
                   if (s.expense.description.isNotEmpty) s.expense.description,
                   if (s.expense.workerName != null)
@@ -2228,7 +2239,7 @@ class _MoneyBox extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         Text(
-          value.toStringAsFixed(0),
+          value.toStringAsFixed(2),
           style: TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.w800,

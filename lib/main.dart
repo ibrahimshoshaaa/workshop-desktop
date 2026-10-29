@@ -17,8 +17,8 @@ void main() async {
   try {
     final paths = await LocalPaths.load();
     instanceLock = await SingleInstanceLock.acquire(paths);
-    await paths.prepareLocalDatabase();
     await BackupService.applyPendingRestore(paths);
+    await paths.prepareLocalDatabase();
     await initializeDateFormatting('ar_EG', null);
     await NotificationService.instance.init();
     runApp(

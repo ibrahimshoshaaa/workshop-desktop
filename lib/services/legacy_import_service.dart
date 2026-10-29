@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import '../data/database.dart';
+import '../core/money.dart';
 import 'backup_service.dart';
 
 class ImportRecord {
@@ -18,8 +19,9 @@ class ImportRecord {
 }
 
 class ImportPreview {
-  ImportPreview(this.source, this.records, this.unchanged);
+  ImportPreview(this.source, this.records, this.unchanged, this.sourceText);
   final File source;
+  final String sourceText;
   final List<ImportRecord> records;
   final int unchanged;
   Iterable<ImportRecord> get conflicts => records.where((r) => !r.isNew);
@@ -53,7 +55,8 @@ class LegacyImportService {
   Future<ImportPreview> preview(File source) async {
     if (await source.length() > 128 * 1024 * 1024)
       throw const FormatException('ملف الاستيراد كبير جدًا');
-    final decoded = jsonDecode(await source.readAsString());
+    final sourceText = await source.readAsString();
+    final decoded = jsonDecode(sourceText);
     if (decoded is! Map || !nodeTables.keys.any(decoded.containsKey))
       throw const FormatException(
         'اختار تصدير JSON من جذر Firebase ويحتوي على جداول الورشة',
@@ -131,6 +134,27 @@ class LegacyImportService {
             throw FormatException('قيمة مطلوبة: ${spec.key}/$id/$name');
           result[name] = value;
         }
+        for (final name in [
+          'total_amount',
+          'total_paid',
+          'discount_amount',
+          'paid_amount',
+          'amount',
+          'amount_paid',
+          'salary_amount',
+        ]) {
+          final value = result[name];
+          if (value is num) Money.cents(value);
+        }
+        if (spec.key == 'orders' &&
+            ((result['total_amount'] as num) < 0 ||
+                (result['discount_amount'] as num) < 0 ||
+                (result['discount_amount'] as num) >
+                    (result['total_amount'] as num)))
+          throw FormatException('اتفاق أو خصم غير صالح: $id');
+        if (spec.key == 'transactions' &&
+            !const ['pending', 'completed'].contains(result['status']))
+          throw FormatException('حالة دفعة غير معروفة: $id');
         result['dirty'] = 0;
         if (previous != null && _equal(result, previous)) {
           unchanged++;
@@ -139,7 +163,7 @@ class LegacyImportService {
         records.add(ImportRecord(spec.key, table, result, previous));
       }
     }
-    return ImportPreview(source, records, unchanged);
+    return ImportPreview(source, records, unchanged, sourceText);
   }
 
   Future<int> apply(ImportPreview preview) async {
@@ -150,12 +174,12 @@ class LegacyImportService {
       p.join(backups.paths.backups.path, 'firebase-exports'),
     );
     await sources.create(recursive: true);
-    await preview.source.copy(
+    await File(
       p.join(
         sources.path,
         'firebase-${DateTime.now().microsecondsSinceEpoch}.json',
       ),
-    );
+    ).writeAsString(preview.sourceText, flush: true);
     var changed = 0;
     await db.transaction(() async {
       final touchedOrders = <String>{};
@@ -202,8 +226,11 @@ class LegacyImportService {
           updates: {record.table},
         );
         if (record.node == 'orders') touchedOrders.add(values['id'] as String);
-        if (record.node == 'transactions')
+        if (record.node == 'transactions') {
           touchedOrders.add(values['order_id'] as String);
+          if (record.existing != null)
+            touchedOrders.add(record.existing!['order_id'] as String);
+        }
         changed++;
       }
       for (final id in touchedOrders) {
@@ -211,8 +238,16 @@ class LegacyImportService {
           db.orders,
         )..where((o) => o.id.equals(id))).getSingleOrNull();
         if (order == null) throw StateError('دفعة مرتبطة بطلب غير موجود: $id');
+        final payments =
+            await (db.select(db.paymentTransactions)..where(
+                  (t) => t.orderId.equals(id) & t.isDeleted.equals(false),
+                ))
+                .get();
+        if (payments.any((t) => t.customerId != order.customerId))
+          throw StateError('عميل الدفعة لا يطابق الطلب: $id');
         if (!order.isDeleted &&
-            (order.totalPaid - await db.sumPaymentsForOrder(id)).abs() > 0.01)
+            Money.cents(order.totalPaid) !=
+                Money.cents(await db.sumPaymentsForOrder(id)))
           throw StateError(
             'إجمالي دفعات طلب ${order.customerName} لا يطابق المدفوع. راجع اختيار الطلب ودفعاته معًا. لم يتم الاستيراد.',
           );

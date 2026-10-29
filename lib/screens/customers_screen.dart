@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/safe_save_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../core/order_calculations.dart';
@@ -86,7 +87,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               onPressed: saving ? null : () => Navigator.pop(context),
               child: const Text('إلغاء'),
             ),
-            ElevatedButton(
+            SafeSaveButton(
               onPressed: saving
                   ? null
                   : () async {
@@ -431,7 +432,7 @@ class CustomerOrdersDialog extends ConsumerWidget {
                         ),
                         trailing: Text(
                           o.remaining > 0
-                              ? 'متبقي ${o.remaining.toStringAsFixed(0)}'
+                              ? 'متبقي ${o.remaining.toStringAsFixed(2)}'
                               : 'مكتمل',
                           style: TextStyle(
                             color: o.remaining > 0

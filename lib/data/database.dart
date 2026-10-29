@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../core/money.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
@@ -398,11 +399,32 @@ class AppDatabase extends _$AppDatabase {
 
   // ---------------- Orders ----------------
 
-  Stream<List<Order>> watchOrders() {
-    return (select(
-          orders,
-        )..where((t) => t.isDeleted.equals(false) & t.isArchived.equals(false)))
-        .watch();
+  Stream<List<Order>> watchOrders({
+    bool includeArchived = false,
+    bool archivedOnly = false,
+  }) {
+    final archiveFilter = archivedOnly
+        ? 'AND o.is_archived = 1'
+        : includeArchived
+        ? ''
+        : 'AND o.is_archived = 0';
+    return customSelect(
+      "SELECT o.*, COALESCE((SELECT SUM(CAST(ROUND(p.amount_paid * 100) AS INTEGER)) "
+      "FROM payment_transactions p WHERE p.order_id = o.id AND p.is_deleted = 0 "
+      "AND p.status = 'completed'), 0) AS settled_cents "
+      'FROM orders o WHERE o.is_deleted = 0 $archiveFilter ORDER BY o.created_at DESC',
+      readsFrom: {orders, paymentTransactions},
+    ).watch().map(
+      (rows) => rows
+          .map(
+            (row) => orders
+                .map(row.data)
+                .copyWith(
+                  totalPaid: Money.amount(row.read<int>('settled_cents')),
+                ),
+          )
+          .toList(),
+    );
   }
 
   Future<void> upsertOrder(OrdersCompanion entry) =>
@@ -447,11 +469,18 @@ class AppDatabase extends _$AppDatabase {
       )..where((t) => t.id.equals(entry.id.value))).write(entry);
 
   /// تحديث حالة دفعة معيّنة بس (معلقة/مكتملة) من غير ما نلمس باقي الأعمدة
-  Future<void> updatePaymentStatus(String id, String status) {
+  Future<void> updatePaymentStatus(
+    String id,
+    String status, {
+    int? paymentDate,
+  }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     return (update(paymentTransactions)..where((t) => t.id.equals(id))).write(
       PaymentTransactionsCompanion(
         status: Value(status),
+        paymentDate: paymentDate == null
+            ? const Value.absent()
+            : Value(paymentDate),
         updatedAt: Value(now),
         dirty: const Value(true),
       ),
@@ -492,15 +521,15 @@ class AppDatabase extends _$AppDatabase {
   /// متراكم متخزّن) - ده اللي بيضمن إن الرقم صح دايمًا مهما حصل تعارض
   /// أو تكرار مزامنة، لأن SUM() عملية "idempotent" ومفيهاش تراكم أخطاء
   Future<double> sumPaymentsForOrder(String orderId) async {
-    final sumExp = paymentTransactions.amountPaid.sum();
-    final query = selectOnly(paymentTransactions)
-      ..addColumns([sumExp])
-      ..where(
-        paymentTransactions.orderId.equals(orderId) &
-            paymentTransactions.isDeleted.equals(false),
-      );
-    final row = await query.getSingleOrNull();
-    return row?.read(sumExp) ?? 0;
+    final rows =
+        await (select(paymentTransactions)..where(
+              (t) =>
+                  t.orderId.equals(orderId) &
+                  t.isDeleted.equals(false) &
+                  t.status.equals('completed'),
+            ))
+            .get();
+    return Money.sum(rows.map((t) => t.amountPaid));
   }
 
   /// بيعيد حساب totalPaid لطلب معيّن من الصفر بناءً على سجل الدفعات

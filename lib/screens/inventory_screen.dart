@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/safe_save_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
@@ -88,7 +89,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('إلغاء')),
-            ElevatedButton(
+            SafeSaveButton(
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 if (unit.trim().isEmpty) {
@@ -148,7 +149,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('إلغاء')),
-          ElevatedButton(
+          SafeSaveButton(
             onPressed: () async {
               final delta = double.tryParse(controller.text.trim());
               if (delta == null || delta == 0) return;

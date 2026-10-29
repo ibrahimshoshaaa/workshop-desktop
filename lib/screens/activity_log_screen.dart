@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/calendar_dates.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../core/theme.dart';
@@ -30,7 +31,7 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final day = DateTime(d.year, d.month, d.day);
     if (day == today) return 'النهاردة';
-    if (day == today.subtract(const Duration(days: 1))) return 'إمبارح';
+    if (day == CalendarDates.addDays(today, -1)) return 'إمبارح';
     return DateFormat('EEEE، d MMMM yyyy', 'ar').format(d);
   }
 
