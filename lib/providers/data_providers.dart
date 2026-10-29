@@ -7,9 +7,13 @@ import '../core/money.dart';
 import '../core/calendar_dates.dart';
 import '../core/accounting.dart';
 import 'database_provider.dart';
+import 'mutation_provider.dart';
 
 final repositoryProvider = Provider<LocalRepository>((ref) {
-  return LocalRepository(ref.watch(databaseProvider));
+  return LocalRepository(
+    ref.watch(databaseProvider),
+    onMutation: ref.read(mutationStateProvider).changed,
+  );
 });
 
 final allCustomersProvider = StreamProvider<List<Customer>>((ref) {

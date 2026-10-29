@@ -1387,7 +1387,11 @@ class OrderDetailDialog extends ConsumerWidget {
                           : Icons.payments_rounded,
                       title: '${t.amountPaid.toStringAsFixed(2)} ج.م',
                       subtitle:
-                          '${t.paymentType == 'deposit' ? 'عربون' : 'قسط/دفعة'} - ${paymentMethods[t.paymentMethod] ?? t.paymentMethod}',
+                          '${t.paymentType == 'refund'
+                              ? 'رد أموال'
+                              : t.paymentType == 'deposit'
+                              ? 'عربون'
+                              : 'قسط/دفعة'} - ${paymentMethods[t.paymentMethod] ?? t.paymentMethod}',
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1551,7 +1555,7 @@ class OrderDetailDialog extends ConsumerWidget {
     required PaymentTransaction tx,
   }) {
     final controller = TextEditingController(
-      text: tx.amountPaid.toStringAsFixed(2),
+      text: tx.amountPaid.abs().toStringAsFixed(2),
     );
     String paymentMethod = tx.paymentMethod;
     showDialog(
@@ -1609,7 +1613,9 @@ class OrderDetailDialog extends ConsumerWidget {
                     .updatePayment(
                       orderId,
                       tx.id,
-                      newAmount: newAmount,
+                      newAmount: tx.paymentType == 'refund'
+                          ? -newAmount
+                          : newAmount,
                       paymentMethod: paymentMethod,
                     );
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
@@ -1733,7 +1739,7 @@ class OrderDetailDialog extends ConsumerWidget {
         ),
         actions: [
           if (order.discountAmount > 0)
-            TextButton(
+            SafeSaveButton.text(
               onPressed: () async {
                 await ref
                     .read(repositoryProvider)
@@ -1745,7 +1751,7 @@ class OrderDetailDialog extends ConsumerWidget {
                 style: TextStyle(color: AppColors.danger),
               ),
             ),
-          TextButton(
+          SafeSaveButton.text(
             onPressed: () => Navigator.pop(context),
             child: const Text('إلغاء'),
           ),

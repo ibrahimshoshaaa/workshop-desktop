@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:test_api/scaffolding.dart' show Timeout;
 import 'package:drift/native.dart';
 import 'package:workshop_desktop/core/safe_save_button.dart';
 import 'package:workshop_desktop/providers/backup_provider.dart';
@@ -20,6 +21,9 @@ import 'package:workshop_desktop/screens/login_screen.dart';
 import 'package:workshop_desktop/services/local_account_service.dart';
 
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  if (binding is AutomatedTestWidgetsFlutterBinding)
+    binding.defaultTestTimeout = const Timeout(Duration(seconds: 45));
   testWidgets(
     'local first-run login rejects a short password without altering existing business data',
     (tester) async {
@@ -36,13 +40,21 @@ void main() {
           child: MaterialApp(theme: buildAppTheme(), home: const LoginScreen()),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
       expect(find.text('إنشاء الحساب المحلي'), findsOneWidget);
       await tester.enterText(find.byType(TextFormField).at(0), 'manager');
       await tester.enterText(find.byType(TextFormField).at(1), 'short');
       await tester.ensureVisible(find.text('إنشاء الحساب المحلي'));
       await tester.tap(find.text('إنشاء الحساب المحلي'));
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
       expect(find.textContaining('8 حروف'), findsOneWidget);
       expect(await LocalAccountService(db).hasOwner(), isFalse);
       expect(
@@ -77,8 +89,15 @@ void main() {
       await tester.pump();
       expect(calls, 1);
       completion.complete();
-      await tester.pumpAndSettle();
-      expect(find.byType(ModalBarrier), findsNothing);
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+      expect(
+        tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+        isNotNull,
+      );
     },
   );
   testWidgets('save errors are visible and the form can be used again', (
@@ -97,9 +116,16 @@ void main() {
       ),
     );
     await tester.tap(find.text('حفظ'));
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 5),
+    );
     expect(find.textContaining('خطأ اختبار'), findsOneWidget);
-    expect(find.byType(ModalBarrier), findsNothing);
+    expect(
+      tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+      isNotNull,
+    );
   });
   for (final permissions in [
     <String, bool>{},
@@ -109,7 +135,7 @@ void main() {
     testWidgets(
       'navigation handles ${permissions.length} permitted screens without exposing other screens',
       (tester) async {
-        final temp = await Directory.systemTemp.createTemp('navigation-test-');
+        final temp = Directory.systemTemp.createTempSync('navigation-test-');
         final db = AppDatabase.withExecutor(NativeDatabase.memory());
         await tester.pumpWidget(
           ProviderScope(
@@ -132,7 +158,11 @@ void main() {
             child: const MaterialApp(home: AppShell()),
           ),
         );
-        await tester.pumpAndSettle();
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
         expect(find.text('الإعدادات'), findsNothing);
         expect(find.text('الرئيسية'), findsNothing);
         if (permissions.isEmpty)
@@ -147,7 +177,11 @@ void main() {
             1,
           );
           await tester.tap(find.text('العملاء'));
-          await tester.pumpAndSettle();
+          await tester.pumpAndSettle(
+            const Duration(milliseconds: 100),
+            EnginePhase.sendSemanticsUpdate,
+            const Duration(seconds: 5),
+          );
           final container = ProviderScope.containerOf(
             tester.element(find.byType(AppShell)),
             listen: false,
@@ -156,7 +190,7 @@ void main() {
         }
         await tester.pumpWidget(const SizedBox.shrink());
         await db.close();
-        await temp.delete(recursive: true);
+        temp.deleteSync(recursive: true);
       },
     );
   }

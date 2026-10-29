@@ -600,4 +600,63 @@ void main() {
       }
     },
   );
+  test(
+    'correcting and deleting a refund updates the credit without double counting',
+    () async {
+      final o = await order(total: 100);
+      await pay(o, 130);
+      final refund = await pay(o, -20, type: 'refund');
+      await repo.updatePayment(o.id, refund, newAmount: -10);
+      expect((await totals()).cash, 120);
+      expect(
+        (await (db.select(
+          db.workshopDebts,
+        )..where((d) => d.isDeleted.equals(false))).get()).single.remaining,
+        20,
+      );
+      await repo.deletePayment(o.id, refund);
+      expect((await totals()).cash, 130);
+      expect(
+        (await (db.select(
+          db.workshopDebts,
+        )..where((d) => d.isDeleted.equals(false))).get()).single.remaining,
+        30,
+      );
+    },
+  );
+  test(
+    'write activity is balanced after successful nested writes and rejected writes',
+    () async {
+      var active = 0;
+      final guarded = LocalRepository(
+        db,
+        onMutation: (entering) {
+          active += entering ? 1 : -1;
+          expect(active, greaterThanOrEqualTo(0));
+        },
+      );
+      await guarded.addCustomer(name: 'عميل', phone: '1', address: '');
+      final c = (await db.select(db.customers).get()).single;
+      final id = await guarded.addOrder(
+        customerId: c.id,
+        customerName: c.name,
+        itemType: 'كنبة',
+        details: '',
+        totalAmount: 100,
+        initialDeposit: 120,
+        deliveryDate: DateTime.now(),
+      );
+      expect(active, 0);
+      await expectLater(
+        guarded.addPayment(
+          orderId: id,
+          customerId: c.id,
+          amount: -999,
+          paymentType: 'refund',
+        ),
+        throwsStateError,
+      );
+      expect(active, 0);
+    },
+  );
 }

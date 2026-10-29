@@ -36,7 +36,7 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
   final orders = ref.watch(accountingOrdersProvider).value ?? [];
   final transactions = ref.watch(allTransactionsProvider).value ?? [];
   final expenses = ref.watch(expensesProvider).value ?? [];
-  final customers = ref.watch(customersProvider).value ?? [];
+  final customers = ref.watch(allCustomersProvider).value ?? [];
   final workerPayments = ref.watch(workerPaymentsProvider).value ?? [];
   final cashTransfers = ref.watch(cashTransfersProvider).value ?? [];
   final workshopDebts = ref.watch(workshopDebtsProvider).value ?? [];
@@ -61,7 +61,7 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       items.add(ActivityItem(
         time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
         kind: ActivityKind.customerRefund,
-        title: 'تم استرجاع فلوس لعميل',
+        title: t.status == 'completed' ? 'تم رد أموال لعميل' : 'رد أموال معلق',
         subtitle:
             '${order?.customerName ?? 'عميل'} - ${t.amountPaid.abs().toStringAsFixed(2)} ج.م',
         icon: Icons.undo_rounded,
@@ -71,7 +71,7 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       items.add(ActivityItem(
         time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
         kind: ActivityKind.orderPayment,
-        title: 'تم تسجيل دفعة من عميل',
+        title: t.status == 'completed' ? 'تم تسجيل دفعة مكتملة من عميل' : 'دفعة معلقة — خارج الإيراد',
         subtitle: '+${t.amountPaid.toStringAsFixed(2)} ج.م',
         icon: Icons.trending_up_rounded,
         color: AppColors.success,

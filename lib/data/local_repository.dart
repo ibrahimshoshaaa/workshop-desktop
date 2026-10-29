@@ -10,11 +10,22 @@ import '../core/accounting.dart';
 /// طبقة وسيطة بين الواجهات وقاعدة البيانات المحلية - كل عملية كتابة هنا
 /// بتحط dirty=true تلقائيًا عشان خدمة المزامنة تعرف تبعتها لـ Firebase
 class LocalRepository {
-  LocalRepository(this._db);
+  LocalRepository(this._db, {void Function(bool)? onMutation})
+    : _onMutation = onMutation;
+  final void Function(bool)? _onMutation;
   final AppDatabase _db;
   static const _uuid = Uuid();
 
   int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  Future<T> _write<T>(Future<T> Function() operation) async {
+    _onMutation?.call(true);
+    try {
+      return await _db.transaction(operation);
+    } finally {
+      _onMutation?.call(false);
+    }
+  }
 
   Future<Order> _currentOrder(String id, {bool allowArchived = false}) async {
     final row = await (_db.select(
@@ -53,7 +64,7 @@ class LocalRepository {
     );
   }
 
-  Future<void> repairDerivedOrder(String id) => _db.transaction(() async {
+  Future<void> repairDerivedOrder(String id) => _write(() async {
     await _currentOrder(id, allowArchived: true);
     await _reconcile(id);
   });
@@ -150,7 +161,7 @@ class LocalRepository {
     required String name,
     required String phone,
     required String address,
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final now = _now;
     await _db.upsertCustomer(
       CustomersCompanion(
@@ -173,7 +184,7 @@ class LocalRepository {
     required String name,
     required String phone,
     required String address,
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final fresh = await (_db.select(
       _db.customers,
     )..where((c) => c.id.equals(customer.id))).getSingleOrNull();
@@ -216,7 +227,7 @@ class LocalRepository {
     }
   });
 
-  Future<void> deleteCustomer(String id) => _db.transaction(() async {
+  Future<void> deleteCustomer(String id) => _write(() async {
     final orders = await (_db.select(
       _db.orders,
     )..where((o) => o.customerId.equals(id) & o.isDeleted.equals(false))).get();
@@ -246,7 +257,7 @@ class LocalRepository {
     List<String> imageUrls = const [],
     double initialDeposit = 0,
     String depositMethod = 'cash',
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final total = Money.require(totalAmount, allowZero: true);
     final deposit = Money.require(initialDeposit, allowZero: true);
     final customer = await (_db.select(
@@ -291,7 +302,7 @@ class LocalRepository {
   /// بيضيف روابط صور جديدة (بعد رفعها على Cloudinary) لطلب موجود، من غير
   /// ما يمسح الصور القديمة اللي كانت متسجلة عليه
   Future<void> addImagesToOrder(Order order, List<String> newImageUrls) =>
-      _db.transaction(() async {
+      _write(() async {
         final fresh = await _currentOrder(order.id);
         final images = (jsonDecode(fresh.imagesJson) as List).map(
           (e) => e.toString(),
@@ -310,7 +321,7 @@ class LocalRepository {
 
   /// بيمسح صورة واحدة بس من قائمة صور الطلب (بالرابط)
   Future<void> removeImageFromOrder(Order order, String imageUrl) =>
-      _db.transaction(() async {
+      _write(() async {
         final fresh = await _currentOrder(order.id);
         final images = (jsonDecode(fresh.imagesJson) as List)
             .map((e) => e.toString())
@@ -334,7 +345,7 @@ class LocalRepository {
     required DateTime deliveryDate,
     List<String> removedImages = const [],
     List<String> addedImages = const [],
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final fresh = await _currentOrder(order.id);
     final total = Money.require(totalAmount, allowZero: true);
     if (Money.cents(total) < Money.cents(fresh.discountAmount))
@@ -361,7 +372,7 @@ class LocalRepository {
   });
 
   Future<void> updateOrderStatus(String orderId, String status) =>
-      _db.transaction(() async {
+      _write(() async {
         await _currentOrder(orderId);
         if (!const [
           'جاري التجهيز',
@@ -382,7 +393,7 @@ class LocalRepository {
 
   /// حذف الطلب بيمسح (soft delete) كل الدفعات المسجلة عليه كمان، عشان
   /// مبلغها متفضلش محسوبة ضمن "المتاح" في الخزينة وهي مرتبطة بطلب محذوف
-  Future<void> deleteOrder(String id) => _db.transaction(() async {
+  Future<void> deleteOrder(String id) => _write(() async {
     await _currentOrder(id);
     final payments = await (_db.select(
       _db.paymentTransactions,
@@ -405,7 +416,7 @@ class LocalRepository {
     Order order, {
     required double discountAmount,
     String reason = '',
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final fresh = await _currentOrder(order.id);
     final amount = Money.require(discountAmount, allowZero: true);
     if (Money.cents(amount) > Money.cents(fresh.totalAmount))
@@ -432,7 +443,7 @@ class LocalRepository {
     required String paymentType,
     String paymentMethod = 'cash',
     String status = 'completed',
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final value = Money.require(amount, signed: true);
     final order = await _currentOrder(orderId);
     if (order.customerId != customerId)
@@ -467,7 +478,7 @@ class LocalRepository {
 
   /// تحديث حالة دفعة سابقة (مثلاً من "معلقة" لـ "مكتملة")
   Future<void> updatePaymentStatus(String transactionId, String status) =>
-      _db.transaction(() async {
+      _write(() async {
         if (!const ['pending', 'completed'].contains(status))
           throw StateError('حالة دفعة غير صالحة');
         final tx = await (_db.select(
@@ -499,7 +510,7 @@ class LocalRepository {
     String transactionId, {
     required double newAmount,
     String? paymentMethod,
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final value = Money.require(newAmount, signed: true);
     final order = await _currentOrder(orderId);
     final tx = await (_db.select(
@@ -528,22 +539,21 @@ class LocalRepository {
 
   /// حذف دفعة بالكامل (اتسجلت غلط) - بيرجّع المبلغ من المدفوع تلقائيًا عبر
   /// [recomputeOrderTotalPaid]، وبيعيد فحص مديونية الورشة (الفائض) بعد الحذف
-  Future<void> deletePayment(String orderId, String transactionId) =>
-      _db.transaction(() async {
-        final order = await _currentOrder(orderId);
-        final tx = await (_db.select(
-          _db.paymentTransactions,
-        )..where((t) => t.id.equals(transactionId))).getSingleOrNull();
-        if (tx == null || tx.isDeleted || tx.orderId != orderId)
-          throw StateError('الدفعة لا تخص الطلب');
-        if (tx.status == 'completed' &&
-            Money.subtract(order.totalPaid, tx.amountPaid) < 0)
-          throw StateError(
-            'لا يمكن حذف قبض تم رد جزء منه قبل مراجعة حركات الرد',
-          );
-        await _db.softDeleteTransaction(transactionId);
-        await _reconcile(orderId);
-      });
+  Future<void> deletePayment(String orderId, String transactionId) => _write(
+    () async {
+      final order = await _currentOrder(orderId);
+      final tx = await (_db.select(
+        _db.paymentTransactions,
+      )..where((t) => t.id.equals(transactionId))).getSingleOrNull();
+      if (tx == null || tx.isDeleted || tx.orderId != orderId)
+        throw StateError('الدفعة لا تخص الطلب');
+      if (tx.status == 'completed' &&
+          Money.subtract(order.totalPaid, tx.amountPaid) < 0)
+        throw StateError('لا يمكن حذف قبض تم رد جزء منه قبل مراجعة حركات الرد');
+      await _db.softDeleteTransaction(transactionId);
+      await _reconcile(orderId);
+    },
+  );
 
   // ---------------- Expenses ----------------
 
@@ -556,7 +566,7 @@ class LocalRepository {
     required String paymentMethod,
     List<ExpenseOrderAllocation> orderAllocations = const [],
     String? workshopDebtId,
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     if (workshopDebtId != null)
       throw StateError('سداد المديونية يتم من صفحة المديونيات');
     final value = Money.require(amount);
@@ -594,7 +604,7 @@ class LocalRepository {
     required DateTime date,
     required String paymentMethod,
     List<ExpenseOrderAllocation> orderAllocations = const [],
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final old = await (_db.select(
       _db.expenses,
     )..where((e) => e.id.equals(expense.id))).getSingleOrNull();
@@ -636,7 +646,7 @@ class LocalRepository {
     );
   });
 
-  Future<void> deleteExpense(String id) => _db.transaction(() async {
+  Future<void> deleteExpense(String id) => _write(() async {
     final expense = await (_db.select(
       _db.expenses,
     )..where((e) => e.id.equals(id))).getSingleOrNull();
@@ -665,20 +675,22 @@ class LocalRepository {
     _text(name, 'اسم العامل');
 
     final now = _now;
-    return _db.upsertWorker(
-      WorkersCompanion(
-        id: Value(_uuid.v4()),
-        name: Value(name),
-        jobTitle: Value(jobTitle),
-        salaryType: Value(salaryType),
-        salaryAmount: Value(salaryAmount),
-        payWeekday: Value(payWeekday),
-        phone: Value(phone),
-        notes: Value(notes),
-        createdAt: Value(now),
-        updatedAt: Value(now),
-        isDeleted: const Value(false),
-        dirty: const Value(true),
+    return _write(
+      () => _db.upsertWorker(
+        WorkersCompanion(
+          id: Value(_uuid.v4()),
+          name: Value(name),
+          jobTitle: Value(jobTitle),
+          salaryType: Value(salaryType),
+          salaryAmount: Value(salaryAmount),
+          payWeekday: Value(payWeekday),
+          phone: Value(phone),
+          notes: Value(notes),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          dirty: const Value(true),
+        ),
       ),
     );
   }
@@ -700,23 +712,26 @@ class LocalRepository {
       throw StateError('نظام مرتب غير صالح');
     _text(name, 'اسم العامل');
 
-    return _db.updateWorkerFields(
-      WorkersCompanion(
-        id: Value(worker.id),
-        name: Value(name),
-        jobTitle: Value(jobTitle),
-        salaryType: Value(salaryType),
-        salaryAmount: Value(salaryAmount),
-        payWeekday: Value(payWeekday),
-        phone: Value(phone),
-        notes: Value(notes),
-        updatedAt: Value(_now),
-        dirty: const Value(true),
+    return _write(
+      () => _db.updateWorkerFields(
+        WorkersCompanion(
+          id: Value(worker.id),
+          name: Value(name),
+          jobTitle: Value(jobTitle),
+          salaryType: Value(salaryType),
+          salaryAmount: Value(salaryAmount),
+          payWeekday: Value(payWeekday),
+          phone: Value(phone),
+          notes: Value(notes),
+          updatedAt: Value(_now),
+          dirty: const Value(true),
+        ),
       ),
     );
   }
 
-  Future<void> deleteWorker(String id) => _db.softDeleteWorker(id);
+  Future<void> deleteWorker(String id) =>
+      _write(() => _db.softDeleteWorker(id));
 
   /// بتسجّل قبض العامل لمرتبه (أي نوع: يومي/أسبوعي/شهري) - بتعمل صف في
   /// سجل القبض وبتضيف مصروف "أجور" مرتبط بيه تلقائيًا عشان يدخل في
@@ -727,7 +742,7 @@ class LocalRepository {
     required DateTime periodStart,
     String? note,
     String paymentMethod = 'cash',
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final value = Money.require(amount);
     final now = _now;
     final fresh = await (_db.select(
@@ -791,7 +806,7 @@ class LocalRepository {
     required double totalAmount,
     String notes = '',
     String orderId = '',
-  }) async {
+  }) => _write(() async {
     final value = Money.require(totalAmount);
     final now = _now;
     await _db.upsertWorkshopDebt(
@@ -808,14 +823,14 @@ class LocalRepository {
         dirty: const Value(true),
       ),
     );
-  }
+  });
 
   Future<void> updateWorkshopDebt(
     WorkshopDebt debt, {
     required String creditorName,
     required double totalAmount,
     String notes = '',
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final fresh = await (_db.select(
       _db.workshopDebts,
     )..where((d) => d.id.equals(debt.id))).getSingleOrNull();
@@ -838,7 +853,7 @@ class LocalRepository {
     );
   });
 
-  Future<void> deleteWorkshopDebt(String id) => _db.transaction(() async {
+  Future<void> deleteWorkshopDebt(String id) => _write(() async {
     final debt = await (_db.select(
       _db.workshopDebts,
     )..where((d) => d.id.equals(id))).getSingleOrNull();
@@ -914,7 +929,7 @@ class LocalRepository {
   /// مصروف ومش إيراد - بس نقل بين مصدرين، فمش بيدخل في "إجمالي
   /// المصروفات/الإيرادات"
   Future<void> addCashTransfer({required double amount, String note = ''}) =>
-      _db.transaction(() async {
+      _write(() async {
         final value = Money.require(amount);
         final orders = await (_db.select(
           _db.orders,
@@ -950,7 +965,8 @@ class LocalRepository {
         );
       });
 
-  Future<void> deleteCashTransfer(String id) => _db.softDeleteCashTransfer(id);
+  Future<void> deleteCashTransfer(String id) =>
+      _write(() => _db.softDeleteCashTransfer(id));
 
   /// سداد دفعة من مديونية الورشة - بيسجّلها تلقائيًا كمصروف جديد (فئة
   /// "سداد مديونية ورشة") بمصدر الدفع المحدد (نقدي/إنستاباي)، وده اللي
@@ -972,7 +988,7 @@ class LocalRepository {
     required double amount,
     required String paymentMethod,
     String? note,
-  }) => _db.transaction(() async {
+  }) => _write(() async {
     final value = Money.require(amount);
     final fresh = await (_db.select(
       _db.workshopDebts,
@@ -1040,16 +1056,18 @@ class LocalRepository {
     _text(name, 'اسم الخامة');
     _text(unit, 'وحدة الخامة');
 
-    return _db.upsertMaterial(
-      MaterialItemsCompanion(
-        id: Value(_uuid.v4()),
-        name: Value(name),
-        unit: Value(unit),
-        quantity: Value(quantity),
-        minThreshold: Value(minThreshold),
-        updatedAt: Value(_now),
-        isDeleted: const Value(false),
-        dirty: const Value(true),
+    return _write(
+      () => _db.upsertMaterial(
+        MaterialItemsCompanion(
+          id: Value(_uuid.v4()),
+          name: Value(name),
+          unit: Value(unit),
+          quantity: Value(quantity),
+          minThreshold: Value(minThreshold),
+          updatedAt: Value(_now),
+          isDeleted: const Value(false),
+          dirty: const Value(true),
+        ),
       ),
     );
   }
@@ -1069,21 +1087,23 @@ class LocalRepository {
     _text(name, 'اسم الخامة');
     _text(unit, 'وحدة الخامة');
 
-    return _db.updateMaterialFields(
-      MaterialItemsCompanion(
-        id: Value(material.id),
-        name: Value(name),
-        unit: Value(unit),
-        quantity: Value(quantity),
-        minThreshold: Value(minThreshold),
-        updatedAt: Value(_now),
-        dirty: const Value(true),
+    return _write(
+      () => _db.updateMaterialFields(
+        MaterialItemsCompanion(
+          id: Value(material.id),
+          name: Value(name),
+          unit: Value(unit),
+          quantity: Value(quantity),
+          minThreshold: Value(minThreshold),
+          updatedAt: Value(_now),
+          dirty: const Value(true),
+        ),
       ),
     );
   }
 
   Future<void> adjustMaterialQuantity(MaterialItem material, double delta) =>
-      _db.transaction(() async {
+      _write(() async {
         if (!delta.isFinite) throw StateError('كمية غير صالحة');
         final fresh = await (_db.select(
           _db.materialItems,
@@ -1102,5 +1122,6 @@ class LocalRepository {
         );
       });
 
-  Future<void> deleteMaterial(String id) => _db.softDeleteMaterial(id);
+  Future<void> deleteMaterial(String id) =>
+      _write(() => _db.softDeleteMaterial(id));
 }

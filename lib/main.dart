@@ -4,6 +4,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
 import 'providers/backup_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/mutation_provider.dart';
 import 'screens/app_shell.dart';
 import 'screens/login_screen.dart';
 import 'services/backup_service.dart';
@@ -61,6 +62,7 @@ class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
   @override
   Widget build(BuildContext context) {
     final backup = ref.watch(backupServiceProvider);
+    final saving = ref.watch(mutationStateProvider).busy;
     return MaterialApp(
       title: 'Tahoun Royal Home — محلي',
       debugShowCheckedModeBanner: false,
@@ -69,8 +71,8 @@ class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
         textDirection: TextDirection.rtl,
         child: Stack(
           children: [
-            AbsorbPointer(absorbing: backup.busy, child: child!),
-            if (backup.busy)
+            AbsorbPointer(absorbing: backup.busy || saving, child: child!),
+            if (backup.busy || saving)
               const Positioned.fill(
                 child: ColoredBox(
                   color: Color(0x66000000),
