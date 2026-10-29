@@ -177,17 +177,30 @@ class LegacyImportService {
         if (!record.isNew && !record.useIncoming) continue;
         final values = record.incoming;
         final names = values.keys.toList();
-        final expressions = <String, Expression>{
+        final parameters = <Variable>[
           for (final name in names)
-            name: values[name] is int
+            values[name] is int
                 ? Variable<int>(values[name] as int)
                 : values[name] is num
                 ? Variable<double>((values[name] as num).toDouble())
                 : Variable<String>(values[name] as String?),
-        };
-        await db
-            .into(record.table)
-            .insertOnConflictUpdate(RawValuesInsertable(expressions));
+        ];
+        String quote(String name) => '"${name.replaceAll('"', '""')}"';
+        final columns = names.map(quote).join(', ');
+        final placeholders = List.filled(names.length, '?').join(', ');
+        final assignments = names
+            .where((n) => n != 'id')
+            .map((n) => '${quote(n)} = excluded.${quote(n)}')
+            .join(', ');
+        // TableInfo is selected at runtime. A RawValuesInsertable<dynamic>
+        // fails the generated typed integrity checks. The preview validates
+        // columns/types, SQLite enforces constraints, and updates notifies Drift.
+        await db.customInsert(
+          'INSERT INTO ${quote(record.table.actualTableName)} ($columns) '
+          'VALUES ($placeholders) ON CONFLICT (id) DO UPDATE SET $assignments',
+          variables: parameters,
+          updates: {record.table},
+        );
         if (record.node == 'orders') touchedOrders.add(values['id'] as String);
         if (record.node == 'transactions')
           touchedOrders.add(values['order_id'] as String);

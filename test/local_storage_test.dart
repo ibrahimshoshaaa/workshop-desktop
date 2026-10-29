@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:drift/native.dart';
+import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workshop_desktop/data/database.dart';
@@ -14,6 +15,8 @@ import 'package:workshop_desktop/services/local_media_service.dart';
 import 'package:workshop_desktop/services/local_paths.dart';
 
 void main() {
+  // Migration fixtures intentionally open different database files at once.
+  driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   late Directory temp;
   late LocalPaths paths;
   late AppDatabase db;
