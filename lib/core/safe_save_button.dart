@@ -1,6 +1,24 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+/// Reports a failed action after a confirmation dialog has already closed.
+Future<bool> runGuardedSave(
+  BuildContext context,
+  FutureOr<void> Function() action,
+) async {
+  try {
+    await action();
+    return true;
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذر تنفيذ العملية: $error')));
+    }
+    return false;
+  }
+}
+
 /// Serializes one button action and reports failures. App-level mutation state
 /// blocks interaction only while the repository actually writes, so a callback
 /// may safely open a confirmation dialog before starting its transaction.

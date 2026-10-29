@@ -507,13 +507,16 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
       ),
     );
     if (confirm == true) {
-      await ref
-          .read(repositoryProvider)
-          .confirmWorkerPayment(
-            worker: worker,
-            amount: worker.salaryAmount,
-            periodStart: anchor,
-          );
+      await runGuardedSave(
+        context,
+        () => ref
+            .read(repositoryProvider)
+            .confirmWorkerPayment(
+              worker: worker,
+              amount: worker.salaryAmount,
+              periodStart: anchor,
+            ),
+      );
     }
   }
 }
@@ -659,14 +662,17 @@ class _WorkerDetailDialog extends ConsumerWidget {
               ),
             );
             if (confirm == true) {
-              await ref
-                  .read(repositoryProvider)
-                  .confirmWorkerPayment(
-                    worker: worker,
-                    amount: worker.salaryAmount,
-                    periodStart: anchor,
-                  );
-              if (context.mounted) Navigator.pop(context);
+              final saved = await runGuardedSave(
+                context,
+                () => ref
+                    .read(repositoryProvider)
+                    .confirmWorkerPayment(
+                      worker: worker,
+                      amount: worker.salaryAmount,
+                      periodStart: anchor,
+                    ),
+              );
+              if (saved && context.mounted) Navigator.pop(context);
             }
           },
         ),

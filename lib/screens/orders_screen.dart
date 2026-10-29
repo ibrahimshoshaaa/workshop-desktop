@@ -1526,11 +1526,13 @@ class OrderDetailDialog extends ConsumerWidget {
               ),
             );
             if (confirm == true) {
-              await ref.read(repositoryProvider).deleteOrder(currentOrder.id);
-              await NotificationService.instance.cancelOrderReminders(
-                currentOrder.id,
-              );
-              if (context.mounted) Navigator.pop(context);
+              await runGuardedSave(context, () async {
+                await ref.read(repositoryProvider).deleteOrder(currentOrder.id);
+                await NotificationService.instance.cancelOrderReminders(
+                  currentOrder.id,
+                );
+                if (context.mounted) Navigator.pop(context);
+              });
             }
           },
           child: const Text(
@@ -2134,9 +2136,12 @@ class _OrderImagesSectionState extends ConsumerState<_OrderImagesSection> {
       ),
     );
     if (confirm == true) {
-      await ref
-          .read(repositoryProvider)
-          .removeImageFromOrder(widget.order, url);
+      await runGuardedSave(
+        context,
+        () => ref
+            .read(repositoryProvider)
+            .removeImageFromOrder(widget.order, url),
+      );
     }
   }
 

@@ -113,40 +113,33 @@ class AppShell extends ConsumerWidget {
           if (destinations.length > 1)
             SizedBox(
               width: 120,
-              child: Scrollbar(
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: NavigationRail(
-                    selectedIndex: index,
-                    onDestinationSelected: (i) =>
-                        ref.read(selectedTabProvider.notifier).state =
-                            visibleIndexes[i],
-                    labelType: NavigationRailLabelType.all,
-                    backgroundColor: AppColors.woodDark,
-                    selectedIconTheme: const IconThemeData(
-                      color: AppColors.amber,
-                    ),
-                    unselectedIconTheme: IconThemeData(
-                      color: Colors.white.withValues(alpha: 0.6),
-                    ),
-                    selectedLabelTextStyle: const TextStyle(
-                      color: AppColors.amber,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    unselectedLabelTextStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
-                    ),
-                    destinations: destinations
-                        .map(
-                          (d) => NavigationRailDestination(
-                            icon: Icon(d.$1),
-                            label: Text(d.$2),
-                          ),
-                        )
-                        .toList(),
-                  ),
+              child: NavigationRail(
+                scrollable: true,
+                selectedIndex: index,
+                onDestinationSelected: (i) =>
+                    ref.read(selectedTabProvider.notifier).state =
+                        visibleIndexes[i],
+                labelType: NavigationRailLabelType.all,
+                backgroundColor: AppColors.woodDark,
+                selectedIconTheme: const IconThemeData(color: AppColors.amber),
+                unselectedIconTheme: IconThemeData(
+                  color: Colors.white.withValues(alpha: 0.6),
                 ),
+                selectedLabelTextStyle: const TextStyle(
+                  color: AppColors.amber,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelTextStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
+                destinations: destinations
+                    .map(
+                      (d) => NavigationRailDestination(
+                        icon: Icon(d.$1),
+                        label: Text(d.$2),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
           if (destinations.length > 1) const VerticalDivider(width: 1),

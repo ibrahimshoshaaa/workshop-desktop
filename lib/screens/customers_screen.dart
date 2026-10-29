@@ -175,11 +175,15 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    final count = await CustomerArchiveService(db).archiveCustomer(customer.id);
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('تمت أرشفة العميل مع $count طلب.')));
+    await runGuardedSave(context, () async {
+      final count = await CustomerArchiveService(
+        db,
+      ).archiveCustomer(customer.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تمت أرشفة العميل مع $count طلب.')),
+      );
+    });
   }
 
   @override
