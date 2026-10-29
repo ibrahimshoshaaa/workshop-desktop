@@ -51,6 +51,10 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(accountingOrdersProvider);
     final txAsync = ref.watch(allTransactionsProvider);
+    if (ordersAsync.hasError || txAsync.hasError)
+      return const Scaffold(
+        body: Center(child: Text('تعذر قراءة حركات الإيرادات')),
+      );
     if (!ordersAsync.hasValue || !txAsync.hasValue)
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     final orders = ordersAsync.value!;

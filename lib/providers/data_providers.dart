@@ -136,8 +136,8 @@ bool isWorkerPaidForCurrentPeriod(
   return payments.any(
     (p) =>
         p.workerId == worker.id &&
-        DateTime.fromMillisecondsSinceEpoch(
-          p.periodStart,
+        CalendarDates.day(
+          DateTime.fromMillisecondsSinceEpoch(p.periodStart),
         ).isAtSameMomentAs(anchor),
   );
 }

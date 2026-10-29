@@ -115,7 +115,7 @@ jobs:
       - name: Upload review build
         uses: actions/upload-artifact@v4
         with:
-          name: workshop-desktop-local-windows
+          name: workshop-desktop-audited-windows
           path: workshop-desktop-windows.zip
 
       - name: Upload Windows build to GitHub Release

@@ -123,11 +123,18 @@ class LocalRepository {
               (w) => w.expenseId.equals(expense.id) & w.isDeleted.equals(false),
             ))
             .get();
+    if (wages.length > 1 ||
+        wages.any((w) => Money.cents(w.amount) != Money.cents(expense.amount)))
+      throw StateError(
+        'صرف العامل المرتبط بالمصروف مختلف أو مكرر؛ راجع فحص البيانات',
+      );
     for (final wage in wages) {
       await _db.updateWorkerPaymentFields(
         WorkerPaymentsCompanion(
           id: Value(wage.id),
-          amount: Value(Money.sum([wage.amount, delta])),
+          amount: Value(
+            deleting ? wage.amount : Money.sum([wage.amount, delta]),
+          ),
           paymentDate: date == null ? const Value.absent() : Value(date),
           isDeleted: Value(deleting),
           updatedAt: Value(_now),

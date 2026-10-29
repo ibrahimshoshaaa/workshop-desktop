@@ -299,7 +299,7 @@ class PdfExportService {
               ),
               _summaryBox('المصروفات', totalExpenses, PdfColors.orange700),
               _summaryBox(
-                'المبلغ المتاح',
+                'صافي حركة الفترة',
                 netProfit,
                 netProfit >= 0 ? PdfColors.blue700 : PdfColors.red700,
               ),
@@ -310,12 +310,12 @@ class PdfExportService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               _summaryBox(
-                'المبلغ المتاح - نقدي',
+                'صافي الحركة - نقدي',
                 cashAvailable,
                 cashAvailable >= 0 ? PdfColors.green700 : PdfColors.red700,
               ),
               _summaryBox(
-                'المبلغ المتاح - إنستاباي',
+                'صافي الحركة - إنستاباي',
                 instapayAvailable,
                 instapayAvailable >= 0 ? PdfColors.blue700 : PdfColors.red700,
               ),
