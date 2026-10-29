@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../providers/data_providers.dart';
 import '../core/theme.dart';
@@ -61,13 +60,13 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('المديونيات',
-                        style: GoogleFonts.cairo(
+                        style: TextStyle(fontFamily: 'Cairo',
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF2A2320))),
                     const SizedBox(height: 4),
                     Text('الطلبات اللي لسه عليها متبقٍ من العملاء',
-                        style: GoogleFonts.cairo(
+                        style: TextStyle(fontFamily: 'Cairo',
                             fontSize: 13, color: Colors.grey.shade600)),
                   ],
                 ),
@@ -147,7 +146,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                                             '${o.customerName} - ${o.itemType}',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.cairo(
+                                            style: TextStyle(fontFamily: 'Cairo',
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w800,
                                                 color:
@@ -155,14 +154,14 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                                         const SizedBox(height: 4),
                                         Text(
                                             'تسليم: ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(o.deliveryDate))}',
-                                            style: GoogleFonts.cairo(
+                                            style: TextStyle(fontFamily: 'Cairo',
                                                 fontSize: 11.5,
                                                 color: Colors.grey.shade500)),
                                       ],
                                     ),
                                   ),
                                   Text('${remaining.toStringAsFixed(0)} ج.م',
-                                      style: GoogleFonts.cairo(
+                                      style: TextStyle(fontFamily: 'Cairo',
                                           color: AppColors.danger,
                                           fontWeight: FontWeight.w800,
                                           fontSize: 15)),
@@ -224,17 +223,17 @@ class _HeroStatCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         fontSize: 13, color: Colors.grey.shade600)),
                 const SizedBox(height: 6),
                 Text(value,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
                         color: color)),
                 const SizedBox(height: 4),
                 Text(caption,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         fontSize: 12, color: Colors.grey.shade500)),
               ],
             ),
@@ -259,7 +258,7 @@ class _EmptyState extends StatelessWidget {
           Icon(icon, size: 48, color: Colors.grey.shade300),
           const SizedBox(height: 14),
           Text(text,
-              style: GoogleFonts.cairo(
+              style: TextStyle(fontFamily: 'Cairo',
                   fontSize: 14.5, color: Colors.grey.shade500)),
         ],
       ),

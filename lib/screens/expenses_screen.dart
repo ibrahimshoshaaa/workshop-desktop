@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:collection/collection.dart';
 import '../providers/data_providers.dart';
@@ -54,7 +53,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text('اختار الطلبات',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800)),
             content: SizedBox(
               width: 420,
               height: 440,
@@ -80,12 +79,12 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 value: checked,
                                 activeColor: AppColors.wood,
                                 title: Text('${o.customerName} - ${o.itemType}',
-                                    style: GoogleFonts.cairo(
+                                    style: TextStyle(fontFamily: 'Cairo',
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.w600)),
                                 subtitle: Text(
                                     '${o.status} | المتبقي: ${o.remaining.toStringAsFixed(0)} ج.م',
-                                    style: GoogleFonts.cairo(fontSize: 11.5)),
+                                    style: TextStyle(fontFamily: 'Cairo', fontSize: 11.5)),
                                 onChanged: (v) => setPickerState(() {
                                   if (v == true) {
                                     selectedOrderIds.add(o.id);
@@ -150,7 +149,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(expense == null ? 'إضافة مصروف' : 'تعديل المصروف',
               style:
-                  GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+                  TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 16)),
           content: SizedBox(
             width: 420,
             child: Form(
@@ -236,14 +235,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('تحميل المصروف على طلبات (اختياري)',
-                                      style: GoogleFonts.cairo(
+                                      style: TextStyle(fontFamily: 'Cairo',
                                           fontSize: 11,
                                           color: Colors.grey.shade500)),
                                   Text(
                                     selectedOrderIds.isEmpty
                                         ? 'مصروف عام - مش مقسّم على أي طلب'
                                         : '${selectedOrderIds.length} طلب مختار - هيتقسم المبلغ عليهم بالتساوي',
-                                    style: GoogleFonts.cairo(
+                                    style: TextStyle(fontFamily: 'Cairo',
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: selectedOrderIds.isEmpty
@@ -273,7 +272,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                   o != null
                                       ? '${o.customerName} - ${o.itemType}'
                                       : 'طلب محذوف',
-                                  style: GoogleFonts.cairo(fontSize: 11.5)),
+                                  style: TextStyle(fontFamily: 'Cairo', fontSize: 11.5)),
                               onDeleted: () => setDialogState(
                                   () => selectedOrderIds.remove(id)),
                               backgroundColor:
@@ -522,7 +521,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                               e.category),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.cairo(
+                                      style: TextStyle(fontFamily: 'Cairo',
                                           fontSize: 14,
                                           fontWeight: FontWeight.w800,
                                           color: const Color(0xFF2A2320)),
@@ -535,7 +534,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                       ' - ${DateFormat('d/M/yyyy').format(DateTime.fromMillisecondsSinceEpoch(e.date))}',
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.cairo(
+                                      style: TextStyle(fontFamily: 'Cairo',
                                           fontSize: 11.5,
                                           color: Colors.grey.shade500),
                                     ),
@@ -543,7 +542,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 ),
                               ),
                               Text('${e.amount.toStringAsFixed(0)} ج.م',
-                                  style: GoogleFonts.cairo(
+                                  style: TextStyle(fontFamily: 'Cairo',
                                       fontWeight: FontWeight.w800,
                                       color: AppColors.danger,
                                       fontSize: 14)),
@@ -617,10 +616,10 @@ class _DatePickerRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label,
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 11, color: Colors.grey.shade500)),
                   Text('${date.year}/${date.month}/${date.day}',
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 13.5, fontWeight: FontWeight.w700)),
                 ],
               ),
@@ -655,7 +654,7 @@ class _FilterChip extends StatelessWidget {
               color: selected ? AppColors.wood : Colors.grey.shade300),
         ),
         child: Text(label,
-            style: GoogleFonts.cairo(
+            style: TextStyle(fontFamily: 'Cairo',
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 color: selected ? Colors.white : Colors.grey.shade700)),
@@ -706,7 +705,7 @@ class _PageHeader extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(title,
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF2A2320))),
@@ -719,7 +718,7 @@ class _PageHeader extends StatelessWidget {
                           color: AppColors.wood.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20)),
                       child: Text(badge!,
-                          style: GoogleFonts.cairo(
+                          style: TextStyle(fontFamily: 'Cairo',
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.wood)),
@@ -729,7 +728,7 @@ class _PageHeader extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(subtitle,
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13, color: Colors.grey.shade600)),
             ],
           ),
@@ -751,7 +750,7 @@ class _PageHeader extends StatelessWidget {
               Icon(actionIcon, size: 18, color: Colors.white),
               const SizedBox(width: 8),
               Text(actionLabel,
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
@@ -784,7 +783,7 @@ class _EmptyState extends StatelessWidget {
           Icon(icon, size: 48, color: Colors.grey.shade300),
           const SizedBox(height: 14),
           Text(text,
-              style: GoogleFonts.cairo(
+              style: TextStyle(fontFamily: 'Cairo',
                   fontSize: 14.5, color: Colors.grey.shade500)),
         ],
       ),

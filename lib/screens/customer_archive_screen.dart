@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../core/search_bar.dart';
 import '../core/theme.dart';
 import '../providers/data_providers.dart';
@@ -91,14 +90,14 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('أرشيف العملاء',
-                          style: GoogleFonts.cairo(
+                          style: TextStyle(fontFamily: 'Cairo',
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFF2A2320))),
                       const SizedBox(height: 4),
                       Text(
                           'العملاء وطلباتهم القديمة — يمكن استرجاع العميل بكل طلباته',
-                          style: GoogleFonts.cairo(
+                          style: TextStyle(fontFamily: 'Cairo',
                               fontSize: 13, color: Colors.grey.shade600)),
                     ],
                   ),
@@ -153,7 +152,7 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                             q.isEmpty
                                 ? 'لا يوجد عملاء في الأرشيف'
                                 : 'لا توجد نتائج مطابقة',
-                            style: GoogleFonts.cairo(
+                            style: TextStyle(fontFamily: 'Cairo',
                                 color: Colors.grey.shade500,
                                 fontWeight: FontWeight.w600)),
                       ],
@@ -209,7 +208,7 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                                               child: Text(c.name,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                  style: GoogleFonts.cairo(
+                                                  style: TextStyle(fontFamily: 'Cairo',
                                                       fontWeight:
                                                           FontWeight.w800,
                                                       color: const Color(
@@ -227,7 +226,7 @@ class _CustomerArchiveScreenState extends ConsumerState<CustomerArchiveScreen> {
                                         '${c.phone}${c.address.isNotEmpty ? ' • ${c.address}' : ''}${orderCount > 0 ? ' • $orderCount طلب قديم' : ''}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.cairo(
+                                        style: TextStyle(fontFamily: 'Cairo',
                                             fontSize: 12,
                                             color: Colors.grey.shade500),
                                       ),
@@ -271,7 +270,7 @@ class _CountBadge extends StatelessWidget {
           color: AppColors.wood.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20)),
       child: Text('$count عميل',
-          style: GoogleFonts.cairo(
+          style: TextStyle(fontFamily: 'Cairo',
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.wood)),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../data/database.dart';
 import '../providers/data_providers.dart';
@@ -236,13 +235,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('التقارير والتصدير',
-                            style: GoogleFonts.cairo(
+                            style: TextStyle(fontFamily: 'Cairo',
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
                                 color: const Color(0xFF2A2320))),
                         const SizedBox(height: 4),
                         Text('تقارير جاهزة PDF/Excel وإرسال واتساب مباشر',
-                            style: GoogleFonts.cairo(
+                            style: TextStyle(fontFamily: 'Cairo',
                                 fontSize: 13, color: Colors.grey.shade600)),
                       ],
                     ),
@@ -257,7 +256,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     children: [
                       Text(
                           'كل الطلبات المقرر تسليمها خلال الأيام السبعة القادمة ولسه ما اتسلمتش',
-                          style: GoogleFonts.cairo(
+                          style: TextStyle(fontFamily: 'Cairo',
                               fontSize: 12.5, color: Colors.grey.shade600)),
                       const SizedBox(height: 16),
                       Row(
@@ -427,11 +426,11 @@ class _DateRangeRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('الفترة الزمنية',
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 11, color: Colors.grey.shade500)),
                   Text(
                     '${range.start.year}/${range.start.month}/${range.start.day} - ${range.end.year}/${range.end.month}/${range.end.day}',
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         fontSize: 13.5, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -472,7 +471,7 @@ class _SectionCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(title,
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF2A2320))),

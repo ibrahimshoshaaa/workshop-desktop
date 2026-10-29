@@ -13,7 +13,7 @@ class AppColors {
 }
 
 ThemeData buildAppTheme() {
-  final base = ThemeData.light(useMaterial3: true);
+  final base = ThemeData(useMaterial3: true, fontFamily: 'Cairo');
   return base.copyWith(
     scaffoldBackgroundColor: const Color(0xFFFAF6F0),
     colorScheme: base.colorScheme.copyWith(

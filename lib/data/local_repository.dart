@@ -15,39 +15,50 @@ class LocalRepository {
 
   // ---------------- Customers ----------------
 
-  Future<void> addCustomer(
-      {required String name,
-      required String phone,
-      required String address}) async {
-    final now = _now;
-    final serialNumber = await _db.getNextCustomerSerialNumber();
-    return _db.upsertCustomer(CustomersCompanion(
-      id: Value(_uuid.v4()),
-      name: Value(name),
-      phone: Value(phone),
-      address: Value(address),
-      serialNumber: Value(serialNumber),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      isArchived: const Value(false),
-      dirty: const Value(true),
-    ));
+  Future<void> addCustomer({
+    required String name,
+    required String phone,
+    required String address,
+  }) async {
+    return _db.transaction(() async {
+      final now = _now;
+      final serialNumber = await _db.getNextCustomerSerialNumber();
+      return _db.upsertCustomer(
+        CustomersCompanion(
+          id: Value(_uuid.v4()),
+          name: Value(name),
+          phone: Value(phone),
+          address: Value(address),
+          serialNumber: Value(serialNumber),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          isArchived: const Value(false),
+          dirty: const Value(true),
+        ),
+      );
+    });
   }
 
-  Future<void> updateCustomer(Customer customer,
-      {required String name, required String phone, required String address}) {
-    return _db.upsertCustomer(CustomersCompanion(
-      id: Value(customer.id),
-      name: Value(name),
-      phone: Value(phone),
-      address: Value(address),
-      createdAt: Value(customer.createdAt),
-      updatedAt: Value(_now),
-      isDeleted: const Value(false),
-      isArchived: const Value(false),
-      dirty: const Value(true),
-    ));
+  Future<void> updateCustomer(
+    Customer customer, {
+    required String name,
+    required String phone,
+    required String address,
+  }) {
+    return _db.updateCustomerFields(
+      CustomersCompanion(
+        id: Value(customer.id),
+        name: Value(name),
+        phone: Value(phone),
+        address: Value(address),
+        createdAt: Value(customer.createdAt),
+        updatedAt: Value(_now),
+        isDeleted: const Value(false),
+        isArchived: const Value(false),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> deleteCustomer(String id) => _db.softDeleteCustomer(id);
@@ -62,27 +73,42 @@ class LocalRepository {
     required double totalAmount,
     required DateTime deliveryDate,
     List<String> imageUrls = const [],
+    double initialDeposit = 0,
+    String depositMethod = 'cash',
   }) async {
-    final id = _uuid.v4();
-    final now = _now;
-    await _db.upsertOrder(OrdersCompanion(
-      id: Value(id),
-      customerId: Value(customerId),
-      customerName: Value(customerName),
-      itemType: Value(itemType),
-      details: Value(details),
-      imagesJson: Value(jsonEncode(imageUrls)),
-      status: const Value('جاري التجهيز'),
-      totalAmount: Value(totalAmount),
-      totalPaid: const Value(0),
-      deliveryDate: Value(deliveryDate.millisecondsSinceEpoch),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      isArchived: const Value(false),
-      dirty: const Value(true),
-    ));
-    return id;
+    return _db.transaction(() async {
+      final id = _uuid.v4();
+      final now = _now;
+      await _db.upsertOrder(
+        OrdersCompanion(
+          id: Value(id),
+          customerId: Value(customerId),
+          customerName: Value(customerName),
+          itemType: Value(itemType),
+          details: Value(details),
+          imagesJson: Value(jsonEncode(imageUrls)),
+          status: const Value('جاري التجهيز'),
+          totalAmount: Value(totalAmount),
+          totalPaid: const Value(0),
+          deliveryDate: Value(deliveryDate.millisecondsSinceEpoch),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          isArchived: const Value(false),
+          dirty: const Value(true),
+        ),
+      );
+      if (initialDeposit > 0) {
+        await addPayment(
+          orderId: id,
+          customerId: customerId,
+          amount: initialDeposit,
+          paymentType: 'deposit',
+          paymentMethod: depositMethod,
+        );
+      }
+      return id;
+    });
   }
 
   /// بيضيف روابط صور جديدة (بعد رفعها على Cloudinary) لطلب موجود، من غير
@@ -92,12 +118,14 @@ class LocalRepository {
         .map((e) => e.toString())
         .toList();
     final merged = [...existing, ...newImageUrls];
-    return _db.updateOrderFields(OrdersCompanion(
-      id: Value(order.id),
-      imagesJson: Value(jsonEncode(merged)),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    return _db.updateOrderFields(
+      OrdersCompanion(
+        id: Value(order.id),
+        imagesJson: Value(jsonEncode(merged)),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   /// بيمسح صورة واحدة بس من قائمة صور الطلب (بالرابط)
@@ -106,12 +134,14 @@ class LocalRepository {
         .map((e) => e.toString())
         .toList();
     existing.remove(imageUrl);
-    return _db.updateOrderFields(OrdersCompanion(
-      id: Value(order.id),
-      imagesJson: Value(jsonEncode(existing)),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    return _db.updateOrderFields(
+      OrdersCompanion(
+        id: Value(order.id),
+        imagesJson: Value(jsonEncode(existing)),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> updateOrder(
@@ -121,61 +151,76 @@ class LocalRepository {
     required double totalAmount,
     required DateTime deliveryDate,
   }) async {
-    await _db.updateOrderFields(OrdersCompanion(
-      id: Value(order.id),
-      itemType: Value(itemType),
-      details: Value(details),
-      totalAmount: Value(totalAmount),
-      deliveryDate: Value(deliveryDate.millisecondsSinceEpoch),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
-    await _reconcileOrderOverpaymentDebt(
-      orderId: order.id,
-      customerName: order.customerName,
-      itemType: itemType,
-      totalAmount: totalAmount,
-      discountAmount: order.discountAmount,
-      totalPaid: order.totalPaid,
-    );
+    return _db.transaction(() async {
+      await _db.updateOrderFields(
+        OrdersCompanion(
+          id: Value(order.id),
+          itemType: Value(itemType),
+          details: Value(details),
+          totalAmount: Value(totalAmount),
+          deliveryDate: Value(deliveryDate.millisecondsSinceEpoch),
+          updatedAt: Value(_now),
+          dirty: const Value(true),
+        ),
+      );
+      await _reconcileOrderOverpaymentDebt(
+        orderId: order.id,
+        customerName: order.customerName,
+        itemType: itemType,
+        totalAmount: totalAmount,
+        discountAmount: order.discountAmount,
+        totalPaid: order.totalPaid,
+      );
+    });
   }
 
   Future<void> updateOrderStatus(String orderId, String status) {
-    return _db.updateOrderFields(OrdersCompanion(
-      id: Value(orderId),
-      status: Value(status),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    return _db.updateOrderFields(
+      OrdersCompanion(
+        id: Value(orderId),
+        status: Value(status),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   /// حذف الطلب بيمسح (soft delete) كل الدفعات المسجلة عليه كمان، عشان
   /// مبلغها متفضلش محسوبة ضمن "المتاح" في الخزينة وهي مرتبطة بطلب محذوف
   Future<void> deleteOrder(String id) async {
-    await _db.softDeleteTransactionsForOrder(id);
-    await _db.softDeleteOrder(id);
+    return _db.transaction(() async {
+      await _db.softDeleteTransactionsForOrder(id);
+      await _db.softDeleteOrder(id);
+    });
   }
 
   /// بتسجّل (أو تعدّل) خصم بمبلغ ثابت على طلب معيّن - المبلغ ده بيتشال
   /// نهائيًا من حساب المديونية والإيراد المستحق على الطلب، مش بس بيظهر
   /// "متبقي صفر" عن طريق تعديل يدوي في المبلغ الإجمالي
-  Future<void> setOrderDiscount(Order order,
-      {required double discountAmount, String reason = ''}) async {
-    await _db.updateOrderFields(OrdersCompanion(
-      id: Value(order.id),
-      discountAmount: Value(discountAmount),
-      discountReason: Value(reason),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
-    await _reconcileOrderOverpaymentDebt(
-      orderId: order.id,
-      customerName: order.customerName,
-      itemType: order.itemType,
-      totalAmount: order.totalAmount,
-      discountAmount: discountAmount,
-      totalPaid: order.totalPaid,
-    );
+  Future<void> setOrderDiscount(
+    Order order, {
+    required double discountAmount,
+    String reason = '',
+  }) async {
+    return _db.transaction(() async {
+      await _db.updateOrderFields(
+        OrdersCompanion(
+          id: Value(order.id),
+          discountAmount: Value(discountAmount),
+          discountReason: Value(reason),
+          updatedAt: Value(_now),
+          dirty: const Value(true),
+        ),
+      );
+      await _reconcileOrderOverpaymentDebt(
+        orderId: order.id,
+        customerName: order.customerName,
+        itemType: order.itemType,
+        totalAmount: order.totalAmount,
+        discountAmount: discountAmount,
+        totalPaid: order.totalPaid,
+      );
+    });
   }
 
   // ---------------- Payments ----------------
@@ -188,44 +233,57 @@ class LocalRepository {
     String paymentMethod = 'cash',
     String status = 'completed',
   }) async {
-    final now = _now;
-    final id = _uuid.v4();
-    await _db.upsertTransaction(PaymentTransactionsCompanion(
-      id: Value(id),
-      orderId: Value(orderId),
-      customerId: Value(customerId),
-      amountPaid: Value(amount),
-      paymentDate: Value(now),
-      paymentType: Value(paymentType),
-      paymentMethod: Value(paymentMethod),
-      status: Value(status),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
-
-    // بنعيد حساب المدفوع بالكامل من سجل الدفعات (SUM) بدل "اقرأ ثم اجمع"
-    // - الطريقة القديمة كانت بتعمل race مع خدمة المزامنة (اللي كانت بتزوّد
-    // نفس المبلغ تاني وقت الرفع لـ Firebase) فيحصل تراكم أخطاء أو ضياع
-    // تحديثات لو حصل تعارض توقيت
-    await _db.recomputeOrderTotalPaid(orderId);
-
-    // لو الدفعة دي خلت العميل يدفع أكتر من الاتفاق النهائي (نادر، بس
-    // ممكن يحصل غلط)، سجّلها كمديونية على الورشة تلقائيًا زي ظبط السعر
-    final freshOrder = await (_db.select(_db.orders)
-          ..where((t) => t.id.equals(orderId)))
-        .getSingleOrNull();
-    if (freshOrder != null) {
-      await _reconcileOrderOverpaymentDebt(
-        orderId: freshOrder.id,
-        customerName: freshOrder.customerName,
-        itemType: freshOrder.itemType,
-        totalAmount: freshOrder.totalAmount,
-        discountAmount: freshOrder.discountAmount,
-        totalPaid: freshOrder.totalPaid,
+    return _db.transaction(() async {
+      if (!amount.isFinite || amount == 0)
+        throw StateError('مبلغ الدفعة غير صالح');
+      final existingOrder = await (_db.select(
+        _db.orders,
+      )..where((o) => o.id.equals(orderId))).getSingleOrNull();
+      if (existingOrder == null ||
+          existingOrder.isDeleted ||
+          existingOrder.customerId != customerId)
+        throw StateError('الطلب أو العميل غير موجود');
+      final now = _now;
+      final id = _uuid.v4();
+      await _db.upsertTransaction(
+        PaymentTransactionsCompanion(
+          id: Value(id),
+          orderId: Value(orderId),
+          customerId: Value(customerId),
+          amountPaid: Value(amount),
+          paymentDate: Value(now),
+          paymentType: Value(paymentType),
+          paymentMethod: Value(paymentMethod),
+          status: Value(status),
+          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          dirty: const Value(true),
+        ),
       );
-    }
-    return id;
+
+      // بنعيد حساب المدفوع بالكامل من سجل الدفعات (SUM) بدل "اقرأ ثم اجمع"
+      // - الطريقة القديمة كانت بتعمل race مع خدمة المزامنة (اللي كانت بتزوّد
+      // نفس المبلغ تاني وقت الرفع لـ Firebase) فيحصل تراكم أخطاء أو ضياع
+      // تحديثات لو حصل تعارض توقيت
+      await _db.recomputeOrderTotalPaid(orderId);
+
+      // لو الدفعة دي خلت العميل يدفع أكتر من الاتفاق النهائي (نادر، بس
+      // ممكن يحصل غلط)، سجّلها كمديونية على الورشة تلقائيًا زي ظبط السعر
+      final freshOrder = await (_db.select(
+        _db.orders,
+      )..where((t) => t.id.equals(orderId))).getSingleOrNull();
+      if (freshOrder != null) {
+        await _reconcileOrderOverpaymentDebt(
+          orderId: freshOrder.id,
+          customerName: freshOrder.customerName,
+          itemType: freshOrder.itemType,
+          totalAmount: freshOrder.totalAmount,
+          discountAmount: freshOrder.discountAmount,
+          totalPaid: freshOrder.totalPaid,
+        );
+      }
+      return id;
+    });
   }
 
   /// تحديث حالة دفعة سابقة (مثلاً من "معلقة" لـ "مكتملة")
@@ -243,48 +301,55 @@ class LocalRepository {
     required double newAmount,
     String? paymentMethod,
   }) async {
-    await _db.updateTransactionFields(PaymentTransactionsCompanion(
-      id: Value(transactionId),
-      amountPaid: Value(newAmount),
-      paymentMethod:
-          paymentMethod != null ? Value(paymentMethod) : const Value.absent(),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
-    await _db.recomputeOrderTotalPaid(orderId);
-    final freshOrder = await (_db.select(_db.orders)
-          ..where((t) => t.id.equals(orderId)))
-        .getSingleOrNull();
-    if (freshOrder != null) {
-      await _reconcileOrderOverpaymentDebt(
-        orderId: freshOrder.id,
-        customerName: freshOrder.customerName,
-        itemType: freshOrder.itemType,
-        totalAmount: freshOrder.totalAmount,
-        discountAmount: freshOrder.discountAmount,
-        totalPaid: freshOrder.totalPaid,
+    return _db.transaction(() async {
+      await _db.updateTransactionFields(
+        PaymentTransactionsCompanion(
+          id: Value(transactionId),
+          amountPaid: Value(newAmount),
+          paymentMethod: paymentMethod != null
+              ? Value(paymentMethod)
+              : const Value.absent(),
+          updatedAt: Value(_now),
+          dirty: const Value(true),
+        ),
       );
-    }
+      await _db.recomputeOrderTotalPaid(orderId);
+      final freshOrder = await (_db.select(
+        _db.orders,
+      )..where((t) => t.id.equals(orderId))).getSingleOrNull();
+      if (freshOrder != null) {
+        await _reconcileOrderOverpaymentDebt(
+          orderId: freshOrder.id,
+          customerName: freshOrder.customerName,
+          itemType: freshOrder.itemType,
+          totalAmount: freshOrder.totalAmount,
+          discountAmount: freshOrder.discountAmount,
+          totalPaid: freshOrder.totalPaid,
+        );
+      }
+    });
   }
 
   /// حذف دفعة بالكامل (اتسجلت غلط) - بيرجّع المبلغ من المدفوع تلقائيًا عبر
   /// [recomputeOrderTotalPaid]، وبيعيد فحص مديونية الورشة (الفائض) بعد الحذف
   Future<void> deletePayment(String orderId, String transactionId) async {
-    await _db.softDeleteTransaction(transactionId);
-    await _db.recomputeOrderTotalPaid(orderId);
-    final freshOrder = await (_db.select(_db.orders)
-          ..where((t) => t.id.equals(orderId)))
-        .getSingleOrNull();
-    if (freshOrder != null) {
-      await _reconcileOrderOverpaymentDebt(
-        orderId: freshOrder.id,
-        customerName: freshOrder.customerName,
-        itemType: freshOrder.itemType,
-        totalAmount: freshOrder.totalAmount,
-        discountAmount: freshOrder.discountAmount,
-        totalPaid: freshOrder.totalPaid,
-      );
-    }
+    return _db.transaction(() async {
+      await _db.softDeleteTransaction(transactionId);
+      await _db.recomputeOrderTotalPaid(orderId);
+      final freshOrder = await (_db.select(
+        _db.orders,
+      )..where((t) => t.id.equals(orderId))).getSingleOrNull();
+      if (freshOrder != null) {
+        await _reconcileOrderOverpaymentDebt(
+          orderId: freshOrder.id,
+          customerName: freshOrder.customerName,
+          itemType: freshOrder.itemType,
+          totalAmount: freshOrder.totalAmount,
+          discountAmount: freshOrder.discountAmount,
+          totalPaid: freshOrder.totalPaid,
+        );
+      }
+    });
   }
 
   // ---------------- Expenses ----------------
@@ -303,24 +368,27 @@ class LocalRepository {
     // لو طلب واحد بس متاختار، بنفضل نحتفظ بيه في الأعمدة القديمة كمان
     // (orderId/customerId/customerName) عشان أي كود قديم لسه بيقرا منها
     final single = orderAllocations.length == 1 ? orderAllocations.first : null;
-    return _db.upsertExpense(ExpensesCompanion(
-      id: Value(_uuid.v4()),
-      amount: Value(amount),
-      category: Value(category),
-      description: Value(description),
-      workerName: Value(workerName),
-      orderId: Value(single?.orderId),
-      customerId: Value(single?.customerId),
-      customerName: Value(single?.customerName),
-      paymentMethod: Value(paymentMethod),
-      workshopDebtId: Value(workshopDebtId),
-      orderAllocationsJson:
-          Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
-      date: Value(date.millisecondsSinceEpoch),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
+    return _db.upsertExpense(
+      ExpensesCompanion(
+        id: Value(_uuid.v4()),
+        amount: Value(amount),
+        category: Value(category),
+        description: Value(description),
+        workerName: Value(workerName),
+        orderId: Value(single?.orderId),
+        customerId: Value(single?.customerId),
+        customerName: Value(single?.customerName),
+        paymentMethod: Value(paymentMethod),
+        workshopDebtId: Value(workshopDebtId),
+        orderAllocationsJson: Value(
+          ExpenseOrderAllocation.encodeList(orderAllocations),
+        ),
+        date: Value(date.millisecondsSinceEpoch),
+        updatedAt: Value(now),
+        isDeleted: const Value(false),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> updateExpense(
@@ -334,22 +402,25 @@ class LocalRepository {
     List<ExpenseOrderAllocation> orderAllocations = const [],
   }) {
     final single = orderAllocations.length == 1 ? orderAllocations.first : null;
-    return _db.updateExpenseFields(ExpensesCompanion(
-      id: Value(expense.id),
-      amount: Value(amount),
-      category: Value(category),
-      description: Value(description),
-      workerName: Value(workerName),
-      date: Value(date.millisecondsSinceEpoch),
-      orderId: Value(single?.orderId),
-      customerId: Value(single?.customerId),
-      customerName: Value(single?.customerName),
-      paymentMethod: Value(paymentMethod),
-      orderAllocationsJson:
-          Value(ExpenseOrderAllocation.encodeList(orderAllocations)),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    return _db.updateExpenseFields(
+      ExpensesCompanion(
+        id: Value(expense.id),
+        amount: Value(amount),
+        category: Value(category),
+        description: Value(description),
+        workerName: Value(workerName),
+        date: Value(date.millisecondsSinceEpoch),
+        orderId: Value(single?.orderId),
+        customerId: Value(single?.customerId),
+        customerName: Value(single?.customerName),
+        paymentMethod: Value(paymentMethod),
+        orderAllocationsJson: Value(
+          ExpenseOrderAllocation.encodeList(orderAllocations),
+        ),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> deleteExpense(String id) => _db.softDeleteExpense(id);
@@ -366,20 +437,22 @@ class LocalRepository {
     String notes = '',
   }) {
     final now = _now;
-    return _db.upsertWorker(WorkersCompanion(
-      id: Value(_uuid.v4()),
-      name: Value(name),
-      jobTitle: Value(jobTitle),
-      salaryType: Value(salaryType),
-      salaryAmount: Value(salaryAmount),
-      payWeekday: Value(payWeekday),
-      phone: Value(phone),
-      notes: Value(notes),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
+    return _db.upsertWorker(
+      WorkersCompanion(
+        id: Value(_uuid.v4()),
+        name: Value(name),
+        jobTitle: Value(jobTitle),
+        salaryType: Value(salaryType),
+        salaryAmount: Value(salaryAmount),
+        payWeekday: Value(payWeekday),
+        phone: Value(phone),
+        notes: Value(notes),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+        isDeleted: const Value(false),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> updateWorker(
@@ -392,18 +465,20 @@ class LocalRepository {
     String phone = '',
     String notes = '',
   }) {
-    return _db.updateWorkerFields(WorkersCompanion(
-      id: Value(worker.id),
-      name: Value(name),
-      jobTitle: Value(jobTitle),
-      salaryType: Value(salaryType),
-      salaryAmount: Value(salaryAmount),
-      payWeekday: Value(payWeekday),
-      phone: Value(phone),
-      notes: Value(notes),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    return _db.updateWorkerFields(
+      WorkersCompanion(
+        id: Value(worker.id),
+        name: Value(name),
+        jobTitle: Value(jobTitle),
+        salaryType: Value(salaryType),
+        salaryAmount: Value(salaryAmount),
+        payWeekday: Value(payWeekday),
+        phone: Value(phone),
+        notes: Value(notes),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> deleteWorker(String id) => _db.softDeleteWorker(id);
@@ -418,32 +493,40 @@ class LocalRepository {
     String? note,
     String paymentMethod = 'cash',
   }) async {
-    final now = _now;
-    final expenseId = _uuid.v4();
-    await _db.upsertExpense(ExpensesCompanion(
-      id: Value(expenseId),
-      amount: Value(amount),
-      category: const Value('wages'),
-      description: Value(note?.trim().isNotEmpty == true
-          ? note!.trim()
-          : 'قبض ${worker.jobTitle} - ${worker.name}'),
-      workerName: Value(worker.name),
-      paymentMethod: Value(paymentMethod),
-      date: Value(now),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
-    await _db.insertWorkerPayment(WorkerPaymentsCompanion.insert(
-      id: _uuid.v4(),
-      workerId: worker.id,
-      workerName: worker.name,
-      amount: amount,
-      paymentDate: now,
-      periodStart: periodStart.millisecondsSinceEpoch,
-      expenseId: Value(expenseId),
-      updatedAt: now,
-    ));
+    return _db.transaction(() async {
+      final now = _now;
+      final expenseId = _uuid.v4();
+      await _db.upsertExpense(
+        ExpensesCompanion(
+          id: Value(expenseId),
+          amount: Value(amount),
+          category: const Value('wages'),
+          description: Value(
+            note?.trim().isNotEmpty == true
+                ? note!.trim()
+                : 'قبض ${worker.jobTitle} - ${worker.name}',
+          ),
+          workerName: Value(worker.name),
+          paymentMethod: Value(paymentMethod),
+          date: Value(now),
+          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          dirty: const Value(true),
+        ),
+      );
+      await _db.insertWorkerPayment(
+        WorkerPaymentsCompanion.insert(
+          id: _uuid.v4(),
+          workerId: worker.id,
+          workerName: worker.name,
+          amount: amount,
+          paymentDate: now,
+          periodStart: periodStart.millisecondsSinceEpoch,
+          expenseId: Value(expenseId),
+          updatedAt: now,
+        ),
+      );
+    });
   }
 
   // ---------------- Workshop Debts ----------------
@@ -456,18 +539,20 @@ class LocalRepository {
     String orderId = '',
   }) {
     final now = _now;
-    return _db.upsertWorkshopDebt(WorkshopDebtsCompanion(
-      id: Value(_uuid.v4()),
-      creditorName: Value(creditorName),
-      totalAmount: Value(totalAmount),
-      paidAmount: const Value(0),
-      notes: Value(notes),
-      orderId: Value(orderId),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
+    return _db.upsertWorkshopDebt(
+      WorkshopDebtsCompanion(
+        id: Value(_uuid.v4()),
+        creditorName: Value(creditorName),
+        totalAmount: Value(totalAmount),
+        paidAmount: const Value(0),
+        notes: Value(notes),
+        orderId: Value(orderId),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+        isDeleted: const Value(false),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> updateWorkshopDebt(
@@ -476,14 +561,16 @@ class LocalRepository {
     required double totalAmount,
     String notes = '',
   }) {
-    return _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
-      id: Value(debt.id),
-      creditorName: Value(creditorName),
-      totalAmount: Value(totalAmount),
-      notes: Value(notes),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    return _db.updateWorkshopDebtFields(
+      WorkshopDebtsCompanion(
+        id: Value(debt.id),
+        creditorName: Value(creditorName),
+        totalAmount: Value(totalAmount),
+        notes: Value(notes),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> deleteWorkshopDebt(String id) => _db.softDeleteWorkshopDebt(id);
@@ -502,9 +589,11 @@ class LocalRepository {
     required double totalPaid,
   }) async {
     final overpaid = totalPaid - (totalAmount - discountAmount);
-    final existing = await (_db.select(_db.workshopDebts)
-          ..where((t) => t.orderId.equals(orderId) & t.isDeleted.equals(false)))
-        .getSingleOrNull();
+    final existing =
+        await (_db.select(_db.workshopDebts)..where(
+              (t) => t.orderId.equals(orderId) & t.isDeleted.equals(false),
+            ))
+            .getSingleOrNull();
 
     if (overpaid <= 0) {
       if (existing != null) {
@@ -522,12 +611,14 @@ class LocalRepository {
         orderId: orderId,
       );
     } else if (existing.totalAmount != overpaid) {
-      await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
-        id: Value(existing.id),
-        totalAmount: Value(overpaid),
-        updatedAt: Value(_now),
-        dirty: const Value(true),
-      ));
+      await _db.updateWorkshopDebtFields(
+        WorkshopDebtsCompanion(
+          id: Value(existing.id),
+          totalAmount: Value(overpaid),
+          updatedAt: Value(_now),
+          dirty: const Value(true),
+        ),
+      );
     }
   }
 
@@ -538,15 +629,17 @@ class LocalRepository {
   /// المصروفات/الإيرادات"
   Future<void> addCashTransfer({required double amount, String note = ''}) {
     final now = _now;
-    return _db.upsertCashTransfer(CashTransfersCompanion(
-      id: Value(_uuid.v4()),
-      amount: Value(amount),
-      note: Value(note),
-      date: Value(now),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
+    return _db.upsertCashTransfer(
+      CashTransfersCompanion(
+        id: Value(_uuid.v4()),
+        amount: Value(amount),
+        note: Value(note),
+        date: Value(now),
+        updatedAt: Value(now),
+        isDeleted: const Value(false),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> deleteCashTransfer(String id) => _db.softDeleteCashTransfer(id);
@@ -572,49 +665,57 @@ class LocalRepository {
     required String paymentMethod,
     String? note,
   }) async {
-    final now = _now;
+    return _db.transaction(() async {
+      final now = _now;
 
-    if (debt.orderId.isNotEmpty) {
-      final order = await (_db.select(_db.orders)
-            ..where((t) => t.id.equals(debt.orderId)))
-          .getSingleOrNull();
-      if (order != null) {
-        // معلش هنا مش بنسجل مصروف منفصل زي الحالة التانية تحت - الدفعة
-        // السالبة دي نفسها بتقلل "الإيراد حسب طريقة الدفع" وبالتالي
-        // "المبلغ المتاح" بنفس قيمة الفلوس اللي خرجت فعليًا، فلو سجّلنا
-        // مصروف كمان هنخصم نفس المبلغ مرتين من الخزينة غلط
-        await addPayment(
-          orderId: order.id,
-          customerId: order.customerId,
-          amount: -amount,
-          paymentType: 'refund',
-          paymentMethod: paymentMethod,
-        );
-        return;
+      if (debt.orderId.isNotEmpty) {
+        final order = await (_db.select(
+          _db.orders,
+        )..where((t) => t.id.equals(debt.orderId))).getSingleOrNull();
+        if (order != null) {
+          // معلش هنا مش بنسجل مصروف منفصل زي الحالة التانية تحت - الدفعة
+          // السالبة دي نفسها بتقلل "الإيراد حسب طريقة الدفع" وبالتالي
+          // "المبلغ المتاح" بنفس قيمة الفلوس اللي خرجت فعليًا، فلو سجّلنا
+          // مصروف كمان هنخصم نفس المبلغ مرتين من الخزينة غلط
+          await addPayment(
+            orderId: order.id,
+            customerId: order.customerId,
+            amount: -amount,
+            paymentType: 'refund',
+            paymentMethod: paymentMethod,
+          );
+          return;
+        }
       }
-    }
 
-    await _db.upsertExpense(ExpensesCompanion(
-      id: Value(_uuid.v4()),
-      amount: Value(amount),
-      category: const Value('workshop_debt'),
-      description: Value(note?.trim().isNotEmpty == true
-          ? note!.trim()
-          : 'سداد مديونية - ${debt.creditorName}'),
-      workshopDebtId: Value(debt.id),
-      paymentMethod: Value(paymentMethod),
-      date: Value(now),
-      updatedAt: Value(now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
-    final newPaid = debt.paidAmount + amount;
-    await _db.updateWorkshopDebtFields(WorkshopDebtsCompanion(
-      id: Value(debt.id),
-      paidAmount: Value(newPaid),
-      updatedAt: Value(now),
-      dirty: const Value(true),
-    ));
+      await _db.upsertExpense(
+        ExpensesCompanion(
+          id: Value(_uuid.v4()),
+          amount: Value(amount),
+          category: const Value('workshop_debt'),
+          description: Value(
+            note?.trim().isNotEmpty == true
+                ? note!.trim()
+                : 'سداد مديونية - ${debt.creditorName}',
+          ),
+          workshopDebtId: Value(debt.id),
+          paymentMethod: Value(paymentMethod),
+          date: Value(now),
+          updatedAt: Value(now),
+          isDeleted: const Value(false),
+          dirty: const Value(true),
+        ),
+      );
+      final newPaid = debt.paidAmount + amount;
+      await _db.updateWorkshopDebtFields(
+        WorkshopDebtsCompanion(
+          id: Value(debt.id),
+          paidAmount: Value(newPaid),
+          updatedAt: Value(now),
+          dirty: const Value(true),
+        ),
+      );
+    });
   }
 
   // ---------------- Materials ----------------
@@ -625,16 +726,18 @@ class LocalRepository {
     required double quantity,
     required double minThreshold,
   }) {
-    return _db.upsertMaterial(MaterialItemsCompanion(
-      id: Value(_uuid.v4()),
-      name: Value(name),
-      unit: Value(unit),
-      quantity: Value(quantity),
-      minThreshold: Value(minThreshold),
-      updatedAt: Value(_now),
-      isDeleted: const Value(false),
-      dirty: const Value(true),
-    ));
+    return _db.upsertMaterial(
+      MaterialItemsCompanion(
+        id: Value(_uuid.v4()),
+        name: Value(name),
+        unit: Value(unit),
+        quantity: Value(quantity),
+        minThreshold: Value(minThreshold),
+        updatedAt: Value(_now),
+        isDeleted: const Value(false),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> updateMaterial(
@@ -644,26 +747,31 @@ class LocalRepository {
     required double quantity,
     required double minThreshold,
   }) {
-    return _db.updateMaterialFields(MaterialItemsCompanion(
-      id: Value(material.id),
-      name: Value(name),
-      unit: Value(unit),
-      quantity: Value(quantity),
-      minThreshold: Value(minThreshold),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    return _db.updateMaterialFields(
+      MaterialItemsCompanion(
+        id: Value(material.id),
+        name: Value(name),
+        unit: Value(unit),
+        quantity: Value(quantity),
+        minThreshold: Value(minThreshold),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> adjustMaterialQuantity(MaterialItem material, double delta) {
-    final newQuantity =
-        (material.quantity + delta) < 0 ? 0.0 : material.quantity + delta;
-    return _db.updateMaterialFields(MaterialItemsCompanion(
-      id: Value(material.id),
-      quantity: Value(newQuantity),
-      updatedAt: Value(_now),
-      dirty: const Value(true),
-    ));
+    final newQuantity = (material.quantity + delta) < 0
+        ? 0.0
+        : material.quantity + delta;
+    return _db.updateMaterialFields(
+      MaterialItemsCompanion(
+        id: Value(material.id),
+        quantity: Value(newQuantity),
+        updatedAt: Value(_now),
+        dirty: const Value(true),
+      ),
+    );
   }
 
   Future<void> deleteMaterial(String id) => _db.softDeleteMaterial(id);

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../core/theme.dart';
 import '../providers/activity_provider.dart';
@@ -53,7 +52,7 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
         backgroundColor: const Color(0xFFFAF6F0),
         elevation: 0,
         title: Text('سجل الأنشطة',
-            style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: Column(
@@ -104,7 +103,7 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           child: Text(
                             group.key,
-                            style: GoogleFonts.cairo(
+                            style: TextStyle(fontFamily: 'Cairo',
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                               color: Colors.grey.shade600,
@@ -151,7 +150,7 @@ class _ActivityCard extends StatelessWidget {
                 children: [
                   Text(
                     item.title,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFF2A2320),
@@ -162,7 +161,7 @@ class _ActivityCard extends StatelessWidget {
                     item.subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 12,
                       color: Colors.grey.shade500,
                     ),
@@ -172,7 +171,7 @@ class _ActivityCard extends StatelessWidget {
             ),
             Text(
               DateFormat('h:mm a', 'ar').format(item.time),
-              style: GoogleFonts.cairo(
+              style: TextStyle(fontFamily: 'Cairo',
                 fontSize: 11.5,
                 color: Colors.grey.shade400,
               ),
@@ -217,7 +216,7 @@ class _PageHeader extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF2A2320),
@@ -234,7 +233,7 @@ class _PageHeader extends StatelessWidget {
                       ),
                       child: Text(
                         badge!,
-                        style: GoogleFonts.cairo(
+                        style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           color: AppColors.wood,
@@ -247,7 +246,7 @@ class _PageHeader extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: GoogleFonts.cairo(
+                style: TextStyle(fontFamily: 'Cairo',
                     fontSize: 13, color: Colors.grey.shade600),
               ),
             ],
@@ -281,7 +280,7 @@ class _FilterChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: GoogleFonts.cairo(
+          style: TextStyle(fontFamily: 'Cairo',
             fontSize: 12.5,
             fontWeight: FontWeight.w700,
             color: selected ? Colors.white : Colors.grey.shade700,
@@ -306,7 +305,7 @@ class _EmptyState extends StatelessWidget {
           Icon(icon, size: 42, color: Colors.grey.shade300),
           const SizedBox(height: 12),
           Text(text,
-              style: GoogleFonts.cairo(
+              style: TextStyle(fontFamily: 'Cairo',
                   fontSize: 13.5, color: Colors.grey.shade400)),
         ],
       ),

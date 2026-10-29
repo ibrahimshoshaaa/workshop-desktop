@@ -1,7 +1,7 @@
 name: workshop_desktop
-description: تطبيق سطح المكتب (ويندوز) لإدارة طاحون رويال هوم - نسخة متزامنة مع تطبيق الموبايل
+description: تطبيق سطح المكتب (ويندوز) لإدارة طاحون رويال هوم - نسخة محلية مستقلة مع نسخ احتياطي
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -22,11 +22,10 @@ dependencies:
   path_provider: ^2.1.4
   path: ^1.9.0
 
-  # الاتصال بـ Firebase عن طريق REST API (مفيش دعم SDK رسمي لويندوز)
+  # تنزيل الصور القديمة فقط عند طلب المستخدم أثناء النقل
   http: ^1.2.2
 
   # UI / Fonts
-  google_fonts: ^6.2.1
   intl: ^0.20.2
 
   # PDF / Excel export
@@ -37,6 +36,10 @@ dependencies:
   # Utilities
   uuid: ^4.5.1
   url_launcher: ^6.3.1
+  archive: ^3.6.1
+  crypto: ^3.0.6
+  cryptography: ^2.7.0
+  sqlite3: ^2.9.4
 
   # إشعارات محلية على ويندوز (تنبيهات التسليم والمديونيات) - نفس فكرة
   # نسخة الموبايل. ملحوظة: دعم ويندوز في المكتبة دي أحدث وأقل نضجًا من
@@ -56,3 +59,11 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/app_icon.png
+    - assets/fonts/Cairo-Regular.ttf
+    - assets/fonts/Cairo-Bold.ttf
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Regular.ttf
+        - asset: assets/fonts/Cairo-Bold.ttf
+          weight: 700

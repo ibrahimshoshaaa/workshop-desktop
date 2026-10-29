@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../providers/data_providers.dart';
 import '../data/database.dart';
 import '../core/theme.dart';
@@ -42,7 +41,7 @@ class _WorkshopDebtsScreenState extends ConsumerState<WorkshopDebtsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(debt == null ? 'تسجيل مديونية جديدة' : 'تعديل المديونية',
             style:
-                GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+                TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 16)),
         content: SizedBox(
           width: 400,
           child: Form(
@@ -157,7 +156,7 @@ class _WorkshopDebtsScreenState extends ConsumerState<WorkshopDebtsScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text('سداد دفعة - ${debt.creditorName}',
               style:
-                  GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 15)),
+                  TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 15)),
           content: SizedBox(
             width: 380,
             child: Form(
@@ -169,7 +168,7 @@ class _WorkshopDebtsScreenState extends ConsumerState<WorkshopDebtsScreen> {
                     alignment: Alignment.centerRight,
                     child: Text(
                         'المتبقي حاليًا: ${debt.remaining.toStringAsFixed(0)} ج.م',
-                        style: GoogleFonts.cairo(
+                        style: TextStyle(fontFamily: 'Cairo',
                             color: Colors.grey.shade600, fontSize: 12.5)),
                   ),
                   const SizedBox(height: 14),
@@ -327,7 +326,7 @@ class _WorkshopDebtsScreenState extends ConsumerState<WorkshopDebtsScreen> {
                                         Text(d.creditorName,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.cairo(
+                                            style: TextStyle(fontFamily: 'Cairo',
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w800,
                                                 color:
@@ -338,7 +337,7 @@ class _WorkshopDebtsScreenState extends ConsumerState<WorkshopDebtsScreen> {
                                           '${d.notes.isNotEmpty ? ' - ${d.notes}' : ''}',
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.cairo(
+                                          style: TextStyle(fontFamily: 'Cairo',
                                               fontSize: 11.5,
                                               color: Colors.grey.shade500),
                                         ),
@@ -349,7 +348,7 @@ class _WorkshopDebtsScreenState extends ConsumerState<WorkshopDebtsScreen> {
                                     isSettled
                                         ? 'مسدد بالكامل'
                                         : '${remaining.toStringAsFixed(0)} ج.م',
-                                    style: GoogleFonts.cairo(
+                                    style: TextStyle(fontFamily: 'Cairo',
                                         color: color,
                                         fontWeight: FontWeight.w800,
                                         fontSize: 13.5),
@@ -440,7 +439,7 @@ class _PageHeader extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(title,
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF2A2320))),
@@ -453,7 +452,7 @@ class _PageHeader extends StatelessWidget {
                           color: AppColors.wood.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20)),
                       child: Text(badge!,
-                          style: GoogleFonts.cairo(
+                          style: TextStyle(fontFamily: 'Cairo',
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.wood)),
@@ -463,7 +462,7 @@ class _PageHeader extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(subtitle,
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13, color: Colors.grey.shade600)),
             ],
           ),
@@ -485,7 +484,7 @@ class _PageHeader extends StatelessWidget {
               Icon(actionIcon, size: 18, color: Colors.white),
               const SizedBox(width: 8),
               Text(actionLabel,
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
@@ -544,17 +543,17 @@ class _HeroStatCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         fontSize: 13, color: Colors.grey.shade600)),
                 const SizedBox(height: 6),
                 Text(value,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
                         color: color)),
                 const SizedBox(height: 4),
                 Text(caption,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         fontSize: 12, color: Colors.grey.shade500)),
               ],
             ),
@@ -579,7 +578,7 @@ class _EmptyState extends StatelessWidget {
           Icon(icon, size: 48, color: Colors.grey.shade300),
           const SizedBox(height: 14),
           Text(text,
-              style: GoogleFonts.cairo(
+              style: TextStyle(fontFamily: 'Cairo',
                   fontSize: 14.5, color: Colors.grey.shade500)),
         ],
       ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../providers/data_providers.dart';
 import '../data/database.dart';
@@ -55,7 +54,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
           title: Text(
               worker == null ? 'إضافة عامل جديد' : 'تعديل بيانات العامل',
               style:
-                  GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+                  TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 16)),
           content: SizedBox(
             width: 420,
             child: Form(
@@ -265,7 +264,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                           ),
                           const SizedBox(width: 12),
                           Text('فيه عمال مستحقين لسه ما اتأكدش دفعهم',
-                              style: GoogleFonts.cairo(
+                              style: TextStyle(fontFamily: 'Cairo',
                                   fontWeight: FontWeight.w800, fontSize: 14)),
                         ],
                       ),
@@ -277,7 +276,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                                 Expanded(
                                   child: Text(
                                       '${w.name} (${w.jobTitle}) - ${w.salaryAmount.toStringAsFixed(0)} ج.م',
-                                      style: GoogleFonts.cairo(fontSize: 13)),
+                                      style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
                                 ),
                                 ElevatedButton(
                                   onPressed: () =>
@@ -363,7 +362,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                                     Text(w.name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.cairo(
+                                        style: TextStyle(fontFamily: 'Cairo',
                                             fontSize: 14,
                                             fontWeight: FontWeight.w800,
                                             color: const Color(0xFF2A2320))),
@@ -372,7 +371,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                                       '${w.jobTitle} - ${_salaryTypes[w.salaryType]}${w.salaryType == 'weekly' ? ' (${_weekdays[w.payWeekday]})' : ''}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.cairo(
+                                      style: TextStyle(fontFamily: 'Cairo',
                                           fontSize: 11.5,
                                           color: Colors.grey.shade500),
                                     ),
@@ -380,7 +379,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
                                 ),
                               ),
                               Text('${w.salaryAmount.toStringAsFixed(0)} ج.م',
-                                  style: GoogleFonts.cairo(
+                                  style: TextStyle(fontFamily: 'Cairo',
                                       fontWeight: FontWeight.w800,
                                       fontSize: 13.5,
                                       color: const Color(0xFF2A2320))),
@@ -450,7 +449,7 @@ class _WorkerDetailDialog extends ConsumerWidget {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       title: Text(worker.name,
-          style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 16)),
       content: SizedBox(
         width: 420,
         height: 420,
@@ -460,21 +459,21 @@ class _WorkerDetailDialog extends ConsumerWidget {
             children: [
               Text(
                   '${worker.jobTitle} - ${_salaryTypes[worker.salaryType]}${worker.salaryType == 'weekly' ? ' (${_weekdays[worker.payWeekday]})' : ''}',
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13, color: Colors.grey.shade600)),
               const SizedBox(height: 6),
               Text('المرتب: ${worker.salaryAmount.toStringAsFixed(0)} ج.م',
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontWeight: FontWeight.w800, fontSize: 14)),
               if (worker.phone.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text('الهاتف: ${worker.phone}',
-                    style: GoogleFonts.cairo(fontSize: 13))
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13))
               ],
               if (worker.notes.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text(worker.notes,
-                    style: GoogleFonts.cairo(
+                    style: TextStyle(fontFamily: 'Cairo',
                         color: Colors.grey.shade600, fontSize: 12.5)),
               ],
               const SizedBox(height: 18),
@@ -583,7 +582,7 @@ class _FieldLabel extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: Text(text,
-          style: GoogleFonts.cairo(
+          style: TextStyle(fontFamily: 'Cairo',
               fontSize: 13.5,
               fontWeight: FontWeight.w800,
               color: const Color(0xFF2A2320))),
@@ -623,13 +622,13 @@ class _MiniRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF2A2320))),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 11.5, color: Colors.grey.shade500)),
                 ],
               ),
@@ -683,7 +682,7 @@ class _PageHeader extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(title,
-                      style: GoogleFonts.cairo(
+                      style: TextStyle(fontFamily: 'Cairo',
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF2A2320))),
@@ -696,7 +695,7 @@ class _PageHeader extends StatelessWidget {
                           color: AppColors.wood.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20)),
                       child: Text(badge!,
-                          style: GoogleFonts.cairo(
+                          style: TextStyle(fontFamily: 'Cairo',
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.wood)),
@@ -706,7 +705,7 @@ class _PageHeader extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(subtitle,
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13, color: Colors.grey.shade600)),
             ],
           ),
@@ -728,7 +727,7 @@ class _PageHeader extends StatelessWidget {
               Icon(actionIcon, size: 18, color: Colors.white),
               const SizedBox(width: 8),
               Text(actionLabel,
-                  style: GoogleFonts.cairo(
+                  style: TextStyle(fontFamily: 'Cairo',
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
@@ -761,7 +760,7 @@ class _EmptyState extends StatelessWidget {
           Icon(icon, size: 48, color: Colors.grey.shade300),
           const SizedBox(height: 14),
           Text(text,
-              style: GoogleFonts.cairo(
+              style: TextStyle(fontFamily: 'Cairo',
                   fontSize: 14.5, color: Colors.grey.shade500)),
         ],
       ),

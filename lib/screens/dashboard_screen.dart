@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../core/constants.dart';
 import '../core/order_calculations.dart';
@@ -9,7 +8,7 @@ import '../core/theme.dart';
 import '../data/database.dart';
 import '../providers/data_providers.dart';
 import '../providers/navigation_provider.dart';
-import '../providers/sync_provider.dart';
+import '../providers/backup_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/notification_service.dart';
 import 'customers_screen.dart' show CustomerOrdersDialog;
@@ -50,12 +49,19 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _monthsRange = 6;
-  bool _isSyncing = false;
+  bool _isBackingUp = false;
 
-  Future<void> _syncNow() async {
-    setState(() => _isSyncing = true);
-    await ref.read(syncServiceProvider).syncAll();
-    if (mounted) setState(() => _isSyncing = false);
+  Future<void> _backupNow() async {
+    setState(() => _isBackingUp = true);
+    try {
+      await ref.read(backupServiceProvider).createBackup();
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('فشل النسخ الاحتياطي: $e')));
+    }
+    if (mounted) setState(() => _isBackingUp = false);
   }
 
   List<_MonthlyPoint> _buildMonthlySeries(
@@ -65,20 +71,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   ) {
     final liveOrderIds = orders.map((o) => o.id).toSet();
     final now = DateTime.now();
-    final months = List.generate(_monthsRange,
-        (i) => DateTime(now.year, now.month - (_monthsRange - 1 - i), 1));
+    final months = List.generate(
+      _monthsRange,
+      (i) => DateTime(now.year, now.month - (_monthsRange - 1 - i), 1),
+    );
 
     return months.map((m) {
       final monthEnd = DateTime(m.year, m.month + 1, 1);
-      final revenue = transactions.where((t) {
-        if (!liveOrderIds.contains(t.orderId)) return false;
-        final d = DateTime.fromMillisecondsSinceEpoch(t.paymentDate);
-        return !d.isBefore(m) && d.isBefore(monthEnd);
-      }).fold<double>(0, (s, t) => s + t.amountPaid);
-      final expense = expenses.where((e) {
-        final d = DateTime.fromMillisecondsSinceEpoch(e.date);
-        return !d.isBefore(m) && d.isBefore(monthEnd);
-      }).fold<double>(0, (s, e) => s + e.amount);
+      final revenue = transactions
+          .where((t) {
+            if (!liveOrderIds.contains(t.orderId)) return false;
+            final d = DateTime.fromMillisecondsSinceEpoch(t.paymentDate);
+            return !d.isBefore(m) && d.isBefore(monthEnd);
+          })
+          .fold<double>(0, (s, t) => s + t.amountPaid);
+      final expense = expenses
+          .where((e) {
+            final d = DateTime.fromMillisecondsSinceEpoch(e.date);
+            return !d.isBefore(m) && d.isBefore(monthEnd);
+          })
+          .fold<double>(0, (s, e) => s + e.amount);
       return _MonthlyPoint(month: m, revenue: revenue, expense: expense);
     }).toList();
   }
@@ -94,8 +106,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         value: entry.value,
         color: _categoryColors[entry.key] ?? Colors.grey.shade400,
       );
-    }).toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    }).toList()..sort((a, b) => b.value.compareTo(a.value));
     return slices;
   }
 
@@ -108,41 +119,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final items = <_ActivityItem>[];
 
     for (final o in orders) {
-      items.add(_ActivityItem(
-        time: DateTime.fromMillisecondsSinceEpoch(o.createdAt),
-        title: 'تم تسجيل طلب جديد',
-        subtitle: '${o.customerName} - ${o.itemType}',
-        icon: Icons.checkroom_rounded,
-        color: AppColors.navy,
-      ));
+      items.add(
+        _ActivityItem(
+          time: DateTime.fromMillisecondsSinceEpoch(o.createdAt),
+          title: 'تم تسجيل طلب جديد',
+          subtitle: '${o.customerName} - ${o.itemType}',
+          icon: Icons.checkroom_rounded,
+          color: AppColors.navy,
+        ),
+      );
     }
     for (final t in transactions) {
-      items.add(_ActivityItem(
-        time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
-        title: 'تم تسجيل إيراد جديد',
-        subtitle: '+${t.amountPaid.toStringAsFixed(0)} ج.م',
-        icon: Icons.trending_up_rounded,
-        color: AppColors.success,
-      ));
+      items.add(
+        _ActivityItem(
+          time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
+          title: 'تم تسجيل إيراد جديد',
+          subtitle: '+${t.amountPaid.toStringAsFixed(0)} ج.م',
+          icon: Icons.trending_up_rounded,
+          color: AppColors.success,
+        ),
+      );
     }
     for (final e in expenses) {
-      items.add(_ActivityItem(
-        time: DateTime.fromMillisecondsSinceEpoch(e.date),
-        title: 'تم تسجيل مصروف',
-        subtitle:
-            '-${e.amount.toStringAsFixed(0)} ج.م • ${expenseCategories[e.category] ?? e.category}',
-        icon: Icons.receipt_long_rounded,
-        color: AppColors.danger,
-      ));
+      items.add(
+        _ActivityItem(
+          time: DateTime.fromMillisecondsSinceEpoch(e.date),
+          title: 'تم تسجيل مصروف',
+          subtitle:
+              '-${e.amount.toStringAsFixed(0)} ج.م • ${expenseCategories[e.category] ?? e.category}',
+          icon: Icons.receipt_long_rounded,
+          color: AppColors.danger,
+        ),
+      );
     }
     for (final c in customers) {
-      items.add(_ActivityItem(
-        time: DateTime.fromMillisecondsSinceEpoch(c.createdAt),
-        title: 'تم إضافة عميل جديد',
-        subtitle: c.name,
-        icon: Icons.person_add_alt_1_rounded,
-        color: AppColors.amber,
-      ));
+      items.add(
+        _ActivityItem(
+          time: DateTime.fromMillisecondsSinceEpoch(c.createdAt),
+          title: 'تم إضافة عميل جديد',
+          subtitle: c.name,
+          icon: Icons.person_add_alt_1_rounded,
+          color: AppColors.amber,
+        ),
+      );
     }
 
     items.sort((a, b) => b.time.compareTo(a.time));
@@ -184,8 +203,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final dueWorkers = ref.watch(workersDueTodayProvider);
     final upcomingDeliveries = ref.watch(upcomingDeliveriesProvider);
     final debtorOrders = ref.watch(debtorOrdersProvider);
-    final outstandingWorkshopDebts =
-        ref.watch(outstandingWorkshopDebtsProvider);
+    final outstandingWorkshopDebts = ref.watch(
+      outstandingWorkshopDebtsProvider,
+    );
 
     // تجديد تنبيه المديونيات كل ما بيانات المديونيات تتغيّر - نفس فكرة
     // نسخة الموبايل بالظبط
@@ -197,8 +217,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final customers = ref.watch(customersProvider).value ?? [];
     final expenses = ref.watch(expensesProvider).value ?? [];
     final transactions = ref.watch(allTransactionsProvider).value ?? [];
-    final formatter =
-        NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 0);
+    final formatter = NumberFormat.currency(
+      locale: 'ar_EG',
+      symbol: 'ج.م',
+      decimalDigits: 0,
+    );
 
     final monthlySeries = _buildMonthlySeries(orders, transactions, expenses);
     final expenseSlices = _buildExpenseSlices(expenses);
@@ -245,9 +268,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     icon: Icons.trending_up_rounded,
                     color: AppColors.success,
                     onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const RevenuesDetailScreen())),
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RevenuesDetailScreen(),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -293,7 +318,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ? AppColors.navy
                         : AppColors.danger,
                     onTap: () => _showCashTransferDialog(
-                        context, ref, stats.instapayAvailable),
+                      context,
+                      ref,
+                      stats.instapayAvailable,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -320,23 +348,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   icon: Icons.local_shipping_rounded,
                   child: upcomingDeliveries.isEmpty
                       ? const _EmptyState(
-                          text: 'مفيش تسليمات خلال الأسبوع الجاي')
+                          text: 'مفيش تسليمات خلال الأسبوع الجاي',
+                        )
                       : Column(
                           children: upcomingDeliveries.take(6).map((o) {
                             final delivery =
                                 DateTime.fromMillisecondsSinceEpoch(
-                                    o.deliveryDate);
+                                  o.deliveryDate,
+                                );
                             final today = DateTime.now();
-                            final daysLeft = DateTime(
-                                    delivery.year, delivery.month, delivery.day)
-                                .difference(DateTime(
-                                    today.year, today.month, today.day))
-                                .inDays;
+                            final daysLeft =
+                                DateTime(
+                                      delivery.year,
+                                      delivery.month,
+                                      delivery.day,
+                                    )
+                                    .difference(
+                                      DateTime(
+                                        today.year,
+                                        today.month,
+                                        today.day,
+                                      ),
+                                    )
+                                    .inDays;
                             final label = daysLeft == 0
                                 ? 'النهاردة'
                                 : (daysLeft == 1
-                                    ? 'بكرة'
-                                    : 'بعد $daysLeft أيام');
+                                      ? 'بكرة'
+                                      : 'بعد $daysLeft أيام');
                             return _ListRow(
                               leadingIcon: Icons.checkroom_rounded,
                               leadingColor: daysLeft == 0
@@ -347,15 +386,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   '${DateFormat('d/M/yyyy').format(delivery)} • $label',
                               trailingAction: IconButton(
                                 tooltip: 'مشاركة على واتساب',
-                                icon: const Icon(Icons.share_rounded,
-                                    color: AppColors.success, size: 18),
+                                icon: const Icon(
+                                  Icons.share_rounded,
+                                  color: AppColors.success,
+                                  size: 18,
+                                ),
                                 onPressed: () =>
                                     showShareToWorkerDialog(context, ref, o),
                               ),
                               onTap: () => showDialog(
-                                  context: context,
-                                  builder: (context) =>
-                                      OrderDetailDialog(order: o)),
+                                context: context,
+                                builder: (context) =>
+                                    OrderDetailDialog(order: o),
+                              ),
                             );
                           }).toList(),
                         ),
@@ -375,9 +418,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               trailingText:
                                   '${o.totalPaid.toStringAsFixed(0)} ج.م',
                               onTap: () => showDialog(
-                                  context: context,
-                                  builder: (context) =>
-                                      OrderDetailDialog(order: o)),
+                                context: context,
+                                builder: (context) =>
+                                    OrderDetailDialog(order: o),
+                              ),
                             );
                           }).toList(),
                         ),
@@ -403,9 +447,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   title: 'توزيع المصروفات',
                   icon: Icons.donut_large_rounded,
                   child: _ExpenseDonut(
-                      slices: expenseSlices,
-                      total: stats.totalExpenses,
-                      formatter: formatter),
+                    slices: expenseSlices,
+                    total: stats.totalExpenses,
+                    formatter: formatter,
+                  ),
                 ),
               ],
             ),
@@ -430,9 +475,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               title: c.name,
                               subtitle: c.phone,
                               onTap: () => showDialog(
-                                  context: context,
-                                  builder: (context) =>
-                                      CustomerOrdersDialog(customer: c)),
+                                context: context,
+                                builder: (context) =>
+                                    CustomerOrdersDialog(customer: c),
+                              ),
                             );
                           }).toList(),
                         ),
@@ -464,82 +510,116 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required VoidCallback onDebtorsTap,
     required VoidCallback onWorkshopDebtsTap,
   }) {
-    final dateStr =
-        DateFormat('EEEE، d MMMM yyyy', 'ar_EG').format(DateTime.now());
-    return LayoutBuilder(builder: (context, constraints) {
-      final narrow = constraints.maxWidth < 720;
-      final title = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('مرحباً بك 👋',
-              style: GoogleFonts.cairo(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF2A2320))),
-          const SizedBox(height: 6),
-          Text('نظرة سريعة وشاملة على أداء طاحون رويال هوم',
-              style:
-                  GoogleFonts.cairo(fontSize: 14, color: Colors.grey.shade600)),
-        ],
-      );
-      final actions = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(dateStr,
-              style: GoogleFonts.cairo(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.wood)),
-          const SizedBox(width: 14),
-          _NotificationBell(
-            dueWorkersCount: dueWorkersCount,
-            debtorOrdersCount: debtorOrdersCount,
-            workshopDebtsCount: workshopDebtsCount,
-            onWorkersTap: onWorkersTap,
-            onDebtorsTap: onDebtorsTap,
-            onWorkshopDebtsTap: onWorkshopDebtsTap,
-          ),
-          const SizedBox(width: 10),
-          _HoverCard(
-            borderRadius: BorderRadius.circular(14),
-            onTap: _isSyncing ? null : _syncNow,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _isSyncing
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AppColors.wood),
-                        )
-                      : const Icon(Icons.sync_rounded,
-                          size: 18, color: AppColors.wood),
-                  const SizedBox(width: 8),
-                  Text(_isSyncing ? 'جاري المزامنة...' : 'مزامنة الآن',
-                      style: GoogleFonts.cairo(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.wood)),
-                ],
+    final dateStr = DateFormat(
+      'EEEE، d MMMM yyyy',
+      'ar_EG',
+    ).format(DateTime.now());
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 720;
+        final title = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'مرحباً بك 👋',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF2A2320),
               ),
             ),
-          ),
-        ],
-      );
+            const SizedBox(height: 6),
+            Text(
+              'نظرة سريعة وشاملة على أداء طاحون رويال هوم',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        );
+        final actions = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              dateStr,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.wood,
+              ),
+            ),
+            const SizedBox(width: 14),
+            _NotificationBell(
+              dueWorkersCount: dueWorkersCount,
+              debtorOrdersCount: debtorOrdersCount,
+              workshopDebtsCount: workshopDebtsCount,
+              onWorkersTap: onWorkersTap,
+              onDebtorsTap: onDebtorsTap,
+              onWorkshopDebtsTap: onWorkshopDebtsTap,
+            ),
+            const SizedBox(width: 10),
+            _HoverCard(
+              borderRadius: BorderRadius.circular(14),
+              onTap: _isBackingUp ? null : _backupNow,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _isBackingUp
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.wood,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.backup_rounded,
+                            size: 18,
+                            color: AppColors.wood,
+                          ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isBackingUp ? 'جاري النسخ...' : 'نسخ احتياطي الآن',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.wood,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
 
-      if (narrow) {
-        return Column(
+        if (narrow) {
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [title, const SizedBox(height: 16), actions]);
-      }
-      return Row(
+            children: [title, const SizedBox(height: 16), actions],
+          );
+        }
+        return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [Expanded(child: title), actions]);
-    });
+          children: [
+            Expanded(child: title),
+            actions,
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -547,16 +627,22 @@ class _MonthlyPoint {
   final DateTime month;
   final double revenue;
   final double expense;
-  const _MonthlyPoint(
-      {required this.month, required this.revenue, required this.expense});
+  const _MonthlyPoint({
+    required this.month,
+    required this.revenue,
+    required this.expense,
+  });
 }
 
 class _DonutSlice {
   final String label;
   final double value;
   final Color color;
-  const _DonutSlice(
-      {required this.label, required this.value, required this.color});
+  const _DonutSlice({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 }
 
 class _ActivityItem {
@@ -565,12 +651,13 @@ class _ActivityItem {
   final String subtitle;
   final IconData icon;
   final Color color;
-  const _ActivityItem(
-      {required this.time,
-      required this.title,
-      required this.subtitle,
-      required this.icon,
-      required this.color});
+  const _ActivityItem({
+    required this.time,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
 }
 
 // ==================== الويدجت المشتركة ====================
@@ -581,10 +668,11 @@ class _HoverCard extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final BorderRadius borderRadius;
-  const _HoverCard(
-      {required this.child,
-      this.onTap,
-      this.borderRadius = const BorderRadius.all(Radius.circular(20))});
+  const _HoverCard({
+    required this.child,
+    this.onTap,
+    this.borderRadius = const BorderRadius.all(Radius.circular(20)),
+  });
 
   @override
   State<_HoverCard> createState() => _HoverCardState();
@@ -621,9 +709,10 @@ class _HoverCardState extends State<_HoverCard> {
           borderRadius: widget.borderRadius,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-              onTap: widget.onTap,
-              borderRadius: widget.borderRadius,
-              child: widget.child),
+            onTap: widget.onTap,
+            borderRadius: widget.borderRadius,
+            child: widget.child,
+          ),
         ),
       ),
     );
@@ -637,33 +726,41 @@ class _ResponsiveRow extends StatelessWidget {
   final List<int> flexes;
   final double breakpoint;
   final double spacing;
-  const _ResponsiveRow(
-      {required this.children,
-      required this.flexes,
-      required this.breakpoint,
-      this.spacing = 16});
+  const _ResponsiveRow({
+    required this.children,
+    required this.flexes,
+    required this.breakpoint,
+    this.spacing = 16,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < breakpoint) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < breakpoint) {
+          final items = <Widget>[];
+          for (var i = 0; i < children.length; i++) {
+            if (i > 0) items.add(SizedBox(height: spacing));
+            items.add(children[i]);
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: items,
+          );
+        }
         final items = <Widget>[];
         for (var i = 0; i < children.length; i++) {
-          if (i > 0) items.add(SizedBox(height: spacing));
-          items.add(children[i]);
+          if (i > 0) items.add(SizedBox(width: spacing));
+          items.add(Expanded(flex: flexes[i], child: children[i]));
         }
-        return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch, children: items);
-      }
-      final items = <Widget>[];
-      for (var i = 0; i < children.length; i++) {
-        if (i > 0) items.add(SizedBox(width: spacing));
-        items.add(Expanded(flex: flexes[i], child: children[i]));
-      }
-      return IntrinsicHeight(
+        return IntrinsicHeight(
           child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch, children: items));
-    });
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: items,
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -674,11 +771,12 @@ class _SectionCard extends StatelessWidget {
   final IconData icon;
   final Widget child;
   final Widget? trailing;
-  const _SectionCard(
-      {required this.title,
-      required this.icon,
-      required this.child,
-      this.trailing});
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -693,17 +791,22 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: AppColors.wood.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10)),
+                    color: AppColors.wood.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: Icon(icon, color: AppColors.wood, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(title,
-                      style: GoogleFonts.cairo(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF2A2320))),
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF2A2320),
+                    ),
+                  ),
                 ),
                 if (trailing != null) trailing!,
               ],
@@ -726,9 +829,14 @@ class _EmptyState extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Center(
-        child: Text(text,
-            style:
-                GoogleFonts.cairo(fontSize: 13, color: Colors.grey.shade400)),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 13,
+            color: Colors.grey.shade400,
+          ),
+        ),
       ),
     );
   }
@@ -772,44 +880,64 @@ class _ListRow extends StatelessWidget {
                 backgroundColor: leadingColor.withValues(alpha: 0.12),
                 child: leadingIcon != null
                     ? Icon(leadingIcon, color: leadingColor, size: 18)
-                    : Text(leadingText ?? '',
+                    : Text(
+                        leadingText ?? '',
                         style: TextStyle(
-                            color: leadingColor, fontWeight: FontWeight.bold)),
+                          color: leadingColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.cairo(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF2A2320))),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF2A2320),
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.cairo(
-                            fontSize: 11.5, color: Colors.grey.shade500)),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 11.5,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
                   ],
                 ),
               ),
               if (trailingText != null) ...[
                 const SizedBox(width: 8),
-                Text(trailingText!,
-                    style: GoogleFonts.cairo(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.success)),
+                Text(
+                  trailingText!,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.success,
+                  ),
+                ),
               ],
               if (trailingAction != null) trailingAction!,
               if (onTap != null) ...[
                 const SizedBox(width: 4),
-                Icon(Icons.chevron_left_rounded,
-                    color: Colors.grey.shade300, size: 18),
+                Icon(
+                  Icons.chevron_left_rounded,
+                  color: Colors.grey.shade300,
+                  size: 18,
+                ),
               ],
             ],
           ),
@@ -856,7 +984,7 @@ class _KpiCard extends StatelessWidget {
                       end: Alignment.bottomRight,
                       colors: [
                         color.withValues(alpha: 0.20),
-                        color.withValues(alpha: 0.08)
+                        color.withValues(alpha: 0.08),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(10),
@@ -865,24 +993,32 @@ class _KpiCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.cairo(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey.shade600)),
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            Text(value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.cairo(
-                    fontSize: 16.5,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF2A2320))),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 16.5,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF2A2320),
+              ),
+            ),
           ],
         ),
       ),
@@ -912,25 +1048,37 @@ class _DueWorkersBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.notifications_active_rounded,
-                  color: AppColors.warning),
+                color: AppColors.warning.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.notifications_active_rounded,
+                color: AppColors.warning,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('فيه عمال مستحقين لسه ما اتأكدش دفعهم',
-                      style: GoogleFonts.cairo(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: const Color(0xFF2A2320))),
+                  Text(
+                    'فيه عمال مستحقين لسه ما اتأكدش دفعهم',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: const Color(0xFF2A2320),
+                    ),
+                  ),
                   const SizedBox(height: 3),
-                  Text('مستني تأكيد الدفع: $names',
-                      style: GoogleFonts.cairo(
-                          fontSize: 12.5, color: Colors.grey.shade700)),
+                  Text(
+                    'مستني تأكيد الدفع: $names',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12.5,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -952,16 +1100,20 @@ class _MonthsRangeDropdown extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-          color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           value: value,
           isDense: true,
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-          style: GoogleFonts.cairo(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF2A2320)),
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF2A2320),
+          ),
           items: const [
             DropdownMenuItem(value: 3, child: Text('آخر 3 أشهر')),
             DropdownMenuItem(value: 6, child: Text('آخر 6 أشهر')),
@@ -1018,13 +1170,19 @@ class _LegendDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
         const SizedBox(width: 6),
-        Text(label,
-            style:
-                GoogleFonts.cairo(fontSize: 12, color: Colors.grey.shade600)),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
       ],
     );
   }
@@ -1039,7 +1197,9 @@ class _RevenueExpenseChartPainter extends CustomPainter {
     if (points.isEmpty || size.width <= 0 || size.height <= 0) return;
 
     final maxValue = points.fold<double>(
-        0, (m, p) => math.max(m, math.max(p.revenue, p.expense)));
+      0,
+      (m, p) => math.max(m, math.max(p.revenue, p.expense)),
+    );
     final safeMax = maxValue <= 0 ? 1.0 : maxValue * 1.2;
 
     const double leftPadding = 6;
@@ -1054,8 +1214,11 @@ class _RevenueExpenseChartPainter extends CustomPainter {
       ..strokeWidth = 1;
     for (int i = 0; i <= 3; i++) {
       final y = topPadding + chartHeight - (chartHeight / 3) * i;
-      canvas.drawLine(Offset(leftPadding, y),
-          Offset(size.width - leftPadding, y), gridPaint);
+      canvas.drawLine(
+        Offset(leftPadding, y),
+        Offset(size.width - leftPadding, y),
+        gridPaint,
+      );
     }
 
     final double dx = points.length > 1 ? chartWidth / (points.length - 1) : 0;
@@ -1091,7 +1254,7 @@ class _RevenueExpenseChartPainter extends CustomPainter {
             end: Alignment.bottomCenter,
             colors: [
               color.withValues(alpha: 0.22),
-              color.withValues(alpha: 0.0)
+              color.withValues(alpha: 0.0),
             ],
           ).createShader(Rect.fromLTWH(0, topPadding, size.width, chartHeight));
         canvas.drawPath(fillPath, fillPaint);
@@ -1109,30 +1272,37 @@ class _RevenueExpenseChartPainter extends CustomPainter {
         final o = pointOffset(i, values[i]);
         canvas.drawCircle(o, 4.2, Paint()..color = Colors.white);
         canvas.drawCircle(
-            o,
-            4.2,
-            Paint()
-              ..color = color
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 2.4);
+          o,
+          4.2,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4,
+        );
       }
     }
 
     drawSeries(points.map((p) => p.expense).toList(), AppColors.wood);
-    drawSeries(points.map((p) => p.revenue).toList(), AppColors.success,
-        fill: true);
+    drawSeries(
+      points.map((p) => p.revenue).toList(),
+      AppColors.success,
+      fill: true,
+    );
 
     for (int i = 0; i < points.length; i++) {
       final o = pointOffset(i, 0);
       final label = _arabicMonthsShort[points[i].month.month - 1];
       final tp = TextPainter(
         text: TextSpan(
-            text: label,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+          text: label,
+          style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(
-          canvas, Offset(o.dx - tp.width / 2, size.height - bottomPadding + 8));
+        canvas,
+        Offset(o.dx - tp.width / 2, size.height - bottomPadding + 8),
+      );
     }
   }
 
@@ -1146,8 +1316,11 @@ class _ExpenseDonut extends StatelessWidget {
   final List<_DonutSlice> slices;
   final double total;
   final NumberFormat formatter;
-  const _ExpenseDonut(
-      {required this.slices, required this.total, required this.formatter});
+  const _ExpenseDonut({
+    required this.slices,
+    required this.total,
+    required this.formatter,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1160,18 +1333,29 @@ class _ExpenseDonut extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               CustomPaint(
-                  painter: _DonutChartPainter(slices, total),
-                  size: Size.infinite),
+                painter: _DonutChartPainter(slices, total),
+                size: Size.infinite,
+              ),
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(formatter.format(total),
-                      style: GoogleFonts.cairo(
-                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  Text(
+                    formatter.format(total),
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text('إجمالي',
-                      style: GoogleFonts.cairo(
-                          fontSize: 11, color: Colors.grey.shade500)),
+                  Text(
+                    'إجمالي',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -1188,19 +1372,32 @@ class _ExpenseDonut extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                          color: s.color, shape: BoxShape.circle)),
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: s.color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(s.label,
-                        style: GoogleFonts.cairo(
-                            fontSize: 12.5, color: Colors.grey.shade700)),
+                    child: Text(
+                      s.label,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12.5,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
                   ),
-                  Text('${pct.toStringAsFixed(0)}%',
-                      style: GoogleFonts.cairo(
-                          fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  Text(
+                    '${pct.toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -1228,11 +1425,12 @@ class _DonutChartPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth;
       canvas.drawArc(
-          Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
-          0,
-          2 * math.pi,
-          false,
-          bgPaint);
+        Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+        0,
+        2 * math.pi,
+        false,
+        bgPaint,
+      );
       return;
     }
 
@@ -1246,11 +1444,12 @@ class _DonutChartPainter extends CustomPainter {
         ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.butt;
       canvas.drawArc(
-          Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
-          startAngle,
-          sweep,
-          false,
-          paint);
+        Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+        startAngle,
+        sweep,
+        false,
+        paint,
+      );
       startAngle += sweep;
     }
   }
@@ -1282,7 +1481,8 @@ class _NotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeCategories = (dueWorkersCount > 0 ? 1 : 0) +
+    final activeCategories =
+        (dueWorkersCount > 0 ? 1 : 0) +
         (debtorOrdersCount > 0 ? 1 : 0) +
         (workshopDebtsCount > 0 ? 1 : 0);
 
@@ -1291,11 +1491,17 @@ class _NotificationBell extends StatelessWidget {
       onTap: () => showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('التنبيهات',
-              style:
-                  GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'التنبيهات',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
           content: SizedBox(
             width: 380,
             child: _NotificationsList(
@@ -1318,8 +1524,9 @@ class _NotificationBell extends StatelessWidget {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('إغلاق'))
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إغلاق'),
+            ),
           ],
         ),
       ),
@@ -1328,26 +1535,34 @@ class _NotificationBell extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            const Icon(Icons.notifications_rounded,
-                size: 20, color: AppColors.wood),
+            const Icon(
+              Icons.notifications_rounded,
+              size: 20,
+              color: AppColors.wood,
+            ),
             if (activeCategories > 0)
               Positioned(
                 top: -6,
                 right: -6,
                 child: Container(
                   padding: const EdgeInsets.all(3),
-                  constraints:
-                      const BoxConstraints(minWidth: 16, minHeight: 16),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
                   decoration: const BoxDecoration(
-                      color: AppColors.danger, shape: BoxShape.circle),
+                    color: AppColors.danger,
+                    shape: BoxShape.circle,
+                  ),
                   child: Text(
                     '$activeCategories',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        height: 1),
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      height: 1,
+                    ),
                   ),
                 ),
               ),
@@ -1378,31 +1593,37 @@ class _NotificationsList extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = <Widget>[];
     if (dueWorkersCount > 0) {
-      rows.add(_ListRow(
-        leadingIcon: Icons.engineering_rounded,
-        leadingColor: AppColors.warning,
-        title: 'موعد قبض عمال أسبوعي',
-        subtitle: '$dueWorkersCount عامل مستني تأكيد الدفع',
-        onTap: onWorkersTap,
-      ));
+      rows.add(
+        _ListRow(
+          leadingIcon: Icons.engineering_rounded,
+          leadingColor: AppColors.warning,
+          title: 'موعد قبض عمال أسبوعي',
+          subtitle: '$dueWorkersCount عامل مستني تأكيد الدفع',
+          onTap: onWorkersTap,
+        ),
+      );
     }
     if (debtorOrdersCount > 0) {
-      rows.add(_ListRow(
-        leadingIcon: Icons.account_balance_wallet_rounded,
-        leadingColor: AppColors.danger,
-        title: 'مديونيات عملاء مستحقة',
-        subtitle: '$debtorOrdersCount طلب لسه عليه فلوس',
-        onTap: onDebtorsTap,
-      ));
+      rows.add(
+        _ListRow(
+          leadingIcon: Icons.account_balance_wallet_rounded,
+          leadingColor: AppColors.danger,
+          title: 'مديونيات عملاء مستحقة',
+          subtitle: '$debtorOrdersCount طلب لسه عليه فلوس',
+          onTap: onDebtorsTap,
+        ),
+      );
     }
     if (workshopDebtsCount > 0) {
-      rows.add(_ListRow(
-        leadingIcon: Icons.store_rounded,
-        leadingColor: AppColors.danger,
-        title: 'مديونيات ورشة مستحقة',
-        subtitle: '$workshopDebtsCount مديونية للموردين/الصنايعية',
-        onTap: onWorkshopDebtsTap,
-      ));
+      rows.add(
+        _ListRow(
+          leadingIcon: Icons.store_rounded,
+          leadingColor: AppColors.danger,
+          title: 'مديونيات ورشة مستحقة',
+          subtitle: '$workshopDebtsCount مديونية للموردين/الصنايعية',
+          onTap: onWorkshopDebtsTap,
+        ),
+      );
     }
 
     if (rows.isEmpty) {
@@ -1431,14 +1652,15 @@ class _ActivityTimeline extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
-                        color: item.color.withValues(alpha: 0.14),
-                        shape: BoxShape.circle),
+                      color: item.color.withValues(alpha: 0.14),
+                      shape: BoxShape.circle,
+                    ),
                     child: Icon(item.icon, size: 13, color: item.color),
                   ),
                   if (!isLast)
                     Expanded(
-                        child:
-                            Container(width: 1.4, color: Colors.grey.shade200)),
+                      child: Container(width: 1.4, color: Colors.grey.shade200),
+                    ),
                 ],
               ),
               const SizedBox(width: 12),
@@ -1448,21 +1670,33 @@ class _ActivityTimeline extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.title,
-                          style: GoogleFonts.cairo(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF2A2320))),
+                      Text(
+                        item.title,
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF2A2320),
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text(item.subtitle,
-                          style: GoogleFonts.cairo(
-                              fontSize: 11.5, color: Colors.grey.shade500)),
+                      Text(
+                        item.subtitle,
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 11.5,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
                       const SizedBox(height: 3),
                       Text(
-                          DateFormat('d/M - hh:mm a', 'ar_EG')
-                              .format(item.time),
-                          style: GoogleFonts.cairo(
-                              fontSize: 10.5, color: Colors.grey.shade400)),
+                        DateFormat('d/M - hh:mm a', 'ar_EG').format(item.time),
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 10.5,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1499,11 +1733,15 @@ class _QuickActionsRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('اختصارات سريعة',
-                style: GoogleFonts.cairo(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF2A2320))),
+            Text(
+              'اختصارات سريعة',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF2A2320),
+              ),
+            ),
             const SizedBox(height: 14),
             Wrap(
               spacing: 12,
@@ -1528,8 +1766,11 @@ class _QuickActionChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _QuickActionChip(
-      {required this.icon, required this.label, required this.onTap});
+  const _QuickActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1543,11 +1784,15 @@ class _QuickActionChip extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: AppColors.wood),
             const SizedBox(width: 8),
-            Text(label,
-                style: GoogleFonts.cairo(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF2A2320))),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF2A2320),
+              ),
+            ),
           ],
         ),
       ),
@@ -1560,7 +1805,10 @@ class _QuickActionChip extends StatelessWidget {
 /// سجل بآخر العمليات يقدر يحذف منه أي عملية غلط. نفس تصميم تطبيق
 /// الموبايل بالظبط
 void _showCashTransferDialog(
-    BuildContext context, WidgetRef ref, double availableInstapay) {
+  BuildContext context,
+  WidgetRef ref,
+  double availableInstapay,
+) {
   final formKey = GlobalKey<FormState>();
   final amountController = TextEditingController();
   final noteController = TextEditingController();
@@ -1571,8 +1819,10 @@ void _showCashTransferDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('سحب إنستاباي كاش',
-            style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+        title: Text(
+          'سحب إنستاباي كاش',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+        ),
         content: SizedBox(
           width: 420,
           child: SingleChildScrollView(
@@ -1582,8 +1832,11 @@ void _showCashTransferDialog(
               children: [
                 Text(
                   'المتاح حاليًا في إنستاباي: ${availableInstapay.toStringAsFixed(0)} ج.م',
-                  style: GoogleFonts.cairo(
-                      fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Form(
@@ -1594,7 +1847,8 @@ void _showCashTransferDialog(
                         controller: amountController,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                            labelText: 'المبلغ اللي اتسحب (ج.م)'),
+                          labelText: 'المبلغ اللي اتسحب (ج.م)',
+                        ),
                         validator: (v) {
                           final amount = double.tryParse(v ?? '');
                           if (amount == null || amount <= 0)
@@ -1609,14 +1863,20 @@ void _showCashTransferDialog(
                       TextFormField(
                         controller: noteController,
                         decoration: const InputDecoration(
-                            labelText: 'ملاحظة (اختياري)'),
+                          labelText: 'ملاحظة (اختياري)',
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const Divider(height: 28),
-                Text('آخر العمليات',
-                    style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
+                Text(
+                  'آخر العمليات',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Consumer(
                   builder: (context, ref, _) {
@@ -1625,17 +1885,23 @@ void _showCashTransferDialog(
                     if (transfers.isEmpty) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text('لا توجد عمليات سحب مسجّلة بعد',
-                            style: GoogleFonts.cairo(
-                                color: Colors.grey, fontSize: 12)),
+                        child: Text(
+                          'لا توجد عمليات سحب مسجّلة بعد',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
                       );
                     }
                     final sorted = [...transfers]
                       ..sort((a, b) => b.date.compareTo(a.date));
                     return Column(
                       children: sorted.take(5).map((t) {
-                        final date =
-                            DateTime.fromMillisecondsSinceEpoch(t.date);
+                        final date = DateTime.fromMillisecondsSinceEpoch(
+                          t.date,
+                        );
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           dense: true,
@@ -1648,8 +1914,11 @@ void _showCashTransferDialog(
                             style: const TextStyle(fontSize: 11),
                           ),
                           trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded,
-                                color: AppColors.danger, size: 20),
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: AppColors.danger,
+                              size: 20,
+                            ),
                             onPressed: () => ref
                                 .read(repositoryProvider)
                                 .deleteCashTransfer(t.id),
@@ -1665,8 +1934,9 @@ void _showCashTransferDialog(
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إغلاق')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إغلاق'),
+          ),
           ElevatedButton(
             onPressed: isSaving
                 ? null
@@ -1674,7 +1944,9 @@ void _showCashTransferDialog(
                     if (!formKey.currentState!.validate()) return;
                     setDialogState(() => isSaving = true);
                     try {
-                      await ref.read(repositoryProvider).addCashTransfer(
+                      await ref
+                          .read(repositoryProvider)
+                          .addCashTransfer(
                             amount: double.parse(amountController.text.trim()),
                             note: noteController.text.trim(),
                           );
@@ -1683,8 +1955,9 @@ void _showCashTransferDialog(
                       setDialogState(() => isSaving = false);
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('حدث خطأ: $e')));
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
                       }
                       setDialogState(() => isSaving = false);
                     }
@@ -1693,7 +1966,8 @@ void _showCashTransferDialog(
                 ? const SizedBox(
                     height: 18,
                     width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('تسجيل السحب'),
           ),
         ],
