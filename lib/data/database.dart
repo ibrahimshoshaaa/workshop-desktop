@@ -284,12 +284,16 @@ class AppDatabase extends _$AppDatabase {
           // إضافة الرقم التسلسلي للعميل (نسخة 5) - وترقيم العملاء
           // الموجودين بالفعل حسب ترتيب تاريخ إضافتهم عشان محدش يفضل صفر
           await m.addColumn(customers, customers.serialNumber);
-          final existing = await (select(
-            customers,
-          )..orderBy([(t) => OrderingTerm.asc(t.createdAt)])).get();
+          // During upgrade the archive columns do not exist yet. Selecting
+          // the generated Customer row would read the latest schema too early.
+          final existing = await customSelect(
+            'SELECT id FROM customers ORDER BY created_at',
+          ).get();
           for (var i = 0; i < existing.length; i++) {
-            await (update(customers)..where((t) => t.id.equals(existing[i].id)))
-                .write(CustomersCompanion(serialNumber: Value(i + 1)));
+            await customStatement(
+              'UPDATE customers SET serial_number = ? WHERE id = ?',
+              [i + 1, existing[i].read<String>('id')],
+            );
           }
         }
         if (from < 6) {
@@ -315,7 +319,7 @@ class AppDatabase extends _$AppDatabase {
           // جدول سحب إنستاباي كاش (نسخة 9)
           await m.createTable(cashTransfers);
         }
-        if (from < 10) {
+        if (from >= 7 && from < 10) {
           // ربط مديونية الورشة بالطلب اللي ولّدها (نسخة 10) - لحالة العميل
           // اللي دفع أكتر من السعر النهائي بعد تعديله
           await m.addColumn(workshopDebts, workshopDebts.orderId);

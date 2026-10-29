@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:drift/native.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:workshop_desktop/data/database.dart';
 import 'package:workshop_desktop/data/local_repository.dart';
@@ -75,6 +77,53 @@ void main() {
   );
 
   test(
+    'version 4 legacy data upgrades without reading future columns or adding duplicate columns',
+    () async {
+      await db.close();
+      if (await paths.database.exists()) await paths.database.delete();
+      final legacy = AppDatabase.withExecutor(
+        NativeDatabase(paths.legacyDatabase),
+      );
+      await LocalRepository(
+        legacy,
+      ).addCustomer(name: 'قديم من النسخة الرابعة', phone: '1', address: '');
+      await legacy.close();
+      final raw = sqlite.sqlite3.open(paths.legacyDatabase.path);
+      try {
+        for (final statement in [
+          'ALTER TABLE customers DROP COLUMN serial_number',
+          'ALTER TABLE customers DROP COLUMN is_archived',
+          'ALTER TABLE orders DROP COLUMN is_archived',
+          'ALTER TABLE payment_transactions DROP COLUMN payment_method',
+          'ALTER TABLE payment_transactions DROP COLUMN status',
+          'ALTER TABLE expenses DROP COLUMN payment_method',
+          'ALTER TABLE expenses DROP COLUMN workshop_debt_id',
+          'ALTER TABLE expenses DROP COLUMN order_allocations_json',
+          'DROP TABLE workshop_debts',
+          'DROP TABLE cash_transfers',
+          'PRAGMA user_version=4',
+        ]) {
+          raw.execute(statement);
+        }
+      } finally {
+        raw.dispose();
+      }
+      final originalBytes = await paths.legacyDatabase.readAsBytes();
+      await paths.prepareLocalDatabase();
+      db = AppDatabase.withExecutor(NativeDatabase(paths.database));
+      final customer = (await db.select(db.customers).get()).single;
+      expect(customer.name, 'قديم من النسخة الرابعة');
+      expect(customer.serialNumber, 1);
+      expect(customer.isArchived, isFalse);
+      expect(
+        BackupService.inspectDatabase(paths.database.path)['customers'],
+        1,
+      );
+      expect(await paths.legacyDatabase.readAsBytes(), originalBytes);
+    },
+  );
+
+  test(
     'offline owner and workers use salted hashes, reject wrong passwords, and retain permissions after reopen',
     () async {
       final accounts = LocalAccountService(db);
@@ -107,6 +156,32 @@ void main() {
         (await LocalAccountService(db).currentUser())!['username'],
         'cashier',
       );
+    },
+  );
+
+  test(
+    'an already open customers stream updates immediately after a committed save',
+    () async {
+      final initial = Completer<void>();
+      final updated = Completer<void>();
+      final subscription = db.watchCustomers().listen(
+        (rows) {
+          if (rows.isEmpty && !initial.isCompleted) initial.complete();
+          if (rows.any((r) => r.name == 'يظهر فورًا') && !updated.isCompleted)
+            updated.complete();
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!initial.isCompleted) initial.completeError(error, stack);
+          if (!updated.isCompleted) updated.completeError(error, stack);
+        },
+      );
+      try {
+        await initial.future.timeout(const Duration(seconds: 10));
+        await repo.addCustomer(name: 'يظهر فورًا', phone: '1', address: '');
+        await updated.future.timeout(const Duration(seconds: 10));
+      } finally {
+        await subscription.cancel();
+      }
     },
   );
 
