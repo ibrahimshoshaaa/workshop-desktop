@@ -100,7 +100,7 @@ class _WorkshopDebtsScreenState extends ConsumerState<WorkshopDebtsScreen> {
         ),
         actions: [
           if (debt != null)
-            TextButton(
+            SafeSaveButton.text(
               onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,

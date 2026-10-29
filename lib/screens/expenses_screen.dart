@@ -379,7 +379,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           ),
           actions: [
             if (expense != null)
-              TextButton(
+              SafeSaveButton.text(
                 onPressed: () async {
                   final confirm = await showDialog<bool>(
                     context: context,

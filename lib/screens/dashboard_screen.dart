@@ -1955,9 +1955,12 @@ void _showCashTransferDialog(
                               color: AppColors.danger,
                               size: 20,
                             ),
-                            onPressed: () => ref
-                                .read(repositoryProvider)
-                                .deleteCashTransfer(t.id),
+                            onPressed: () => runGuardedSave(
+                              context,
+                              () => ref
+                                  .read(repositoryProvider)
+                                  .deleteCashTransfer(t.id),
+                            ),
                           ),
                         );
                       }).toList(),

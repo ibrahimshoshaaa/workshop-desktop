@@ -172,7 +172,7 @@ class _WorkersScreenState extends ConsumerState<WorkersScreen> {
           ),
           actions: [
             if (worker != null)
-              TextButton(
+              SafeSaveButton.text(
                 onPressed: () async {
                   final confirm = await showDialog<bool>(
                     context: context,
