@@ -65,7 +65,14 @@ class LocalRepository {
   }
 
   Future<void> repairDerivedOrder(String id) => _write(() async {
-    await _currentOrder(id, allowArchived: true);
+    final order = await _currentOrder(id, allowArchived: true);
+    if (order.isArchived) {
+      // Archive is a closed operating period. Rebuild only the cached paid
+      // amount; never recreate a historical liability from its receipts.
+      if (Money.cents(order.totalPaid) < 0) throw StateError('المدفوع أقل من صفر');
+      await _db.recomputeOrderTotalPaid(id);
+      return;
+    }
     await _reconcile(id);
   });
   String _text(String value, String label) {
@@ -899,6 +906,12 @@ class LocalRepository {
         'سجل مديونية العميل القديم يحتاج مراجعة من فحص البيانات',
       );
     final debt = existing.isEmpty ? null : existing.single;
+    if (debt != null && Money.cents(debt.remaining) == 0) {
+      if (overpaid > 0) {
+        throw StateError('مديونية العميل مقفلة بتسوية قديمة؛ لا يمكن إعادة فتحها تلقائيًا من الدفعات.');
+      }
+      return;
+    }
     if (overpaid <= 0) {
       if (debt != null) await _db.softDeleteWorkshopDebt(debt.id);
       return;

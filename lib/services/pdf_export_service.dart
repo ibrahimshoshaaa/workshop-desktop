@@ -237,6 +237,7 @@ class PdfExportService {
     required DateTime from,
     required DateTime to,
     List<CashTransfer> transfers = const [],
+    bool includeArchived = false,
   }) async {
     await _ensureFontsLoaded();
     final doc = pw.Document();
@@ -267,7 +268,7 @@ class PdfExportService {
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
                     pw.Text(
-                      'تقرير مالي شامل',
+                      includeArchived ? 'تقرير مالي يشمل الأرشيف' : 'تقرير مالي للطلبات الحالية',
                       style: pw.TextStyle(
                         fontSize: 22,
                         fontWeight: pw.FontWeight.bold,

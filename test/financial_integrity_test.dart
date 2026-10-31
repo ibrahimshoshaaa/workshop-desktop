@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:workshop_desktop/providers/database_provider.dart';
 import 'package:workshop_desktop/core/accounting.dart';
 import 'package:workshop_desktop/core/calendar_dates.dart';
 import 'package:workshop_desktop/core/money.dart';
@@ -659,4 +661,78 @@ void main() {
       expect(active, 0);
     },
   );
+  test('current dashboard and default reports exclude archive without altering archived rows', () async {
+    final archived = await order(total: 375, deposit: 375);
+    await repo.updateOrderStatus(archived.id, 'تم التسليم');
+    await CustomerArchiveService(db).archiveCustomer(archived.customerId);
+    final archivedBefore = await fresh(archived.id);
+    final current = await order(total: 1000, deposit: 400);
+    await pay(current, 25, method: 'instapay');
+    await repo.addCashTransfer(amount: 25);
+    await repo.addExpense(amount: 338, category: 'general', description: 'مصروف اختبار',
+      date: DateTime.now(), paymentMethod: 'cash');
+    final container = ProviderContainer(overrides: [databaseProvider.overrideWithValue(db)]);
+    addTearDown(container.dispose);
+    await container.read(ordersProvider.future);
+    await container.read(accountingOrdersProvider.future);
+    await container.read(allTransactionsProvider.future);
+    await container.read(expensesProvider.future);
+    await container.read(workshopDebtsProvider.future);
+    await container.read(cashTransfersProvider.future);
+    final stats = container.read(dashboardStatsProvider);
+    expect(stats.totalRevenue, 425);
+    expect(stats.cashAvailable, 87);
+    expect(stats.instapayAvailable, 0);
+    expect(stats.totalExpenses, 338);
+    expect(stats.totalDebts, 575);
+    final from = DateTime(2000), through = DateTime(2100);
+    final report = await FinancialReportData.load(db, from, through);
+    expect(report.orders.map((o) => o.id), [current.id]);
+    expect(report.transactions.length, 2);
+    final history = await FinancialReportData.load(db, from, through, includeArchived: true);
+    expect(history.orders.length, 2);
+    expect(history.transactions.length, 3);
+    expect((await totals()).revenue, 800);
+    expect(await fresh(archived.id), archivedBefore);
+    expect((await db.select(db.paymentTransactions).get()).length, 3);
+  });
+  test('archived closed legacy liability stays closed during scan and cache repair', () async {
+    final o = await order(total: 100);
+    await pay(o, 130);
+    await repo.updateOrderStatus(o.id, 'تم التسليم');
+    final debt = (await db.select(db.workshopDebts).get()).single;
+    await db.updateWorkshopDebtFields(WorkshopDebtsCompanion(id: Value(debt.id),
+      totalAmount: const Value(0), paidAmount: const Value(0)));
+    await db.updateOrderFields(OrdersCompanion(id: Value(o.id), isArchived: const Value(true)));
+    await db.updateCustomerFields(CustomersCompanion(id: Value(o.customerId), isArchived: const Value(true)));
+    final before = await fresh(o.id);
+    final closed = (await db.select(db.workshopDebts).get()).single;
+    final service = DataIntegrityService(db);
+    expect(await service.scan(), isEmpty);
+    await service.repairDerivedOrders([o.id]);
+    expect(await fresh(o.id), before);
+    expect((await db.select(db.workshopDebts).get()).single, closed);
+    await db.updateOrderFields(OrdersCompanion(id: Value(o.id), totalPaid: const Value(120)));
+    expect((await service.scan()).any((i) => i.repairOrderId == o.id), isTrue);
+    await service.repairDerivedOrders([o.id]);
+    expect((await fresh(o.id)).totalPaid, 130);
+    expect((await fresh(o.id)).isArchived, isTrue);
+    expect((await db.select(db.workshopDebts).get()).single, closed);
+    expect((await db.select(db.paymentTransactions).get()).length, 1);
+    expect((await db.select(db.customers).get()).single.isArchived, isTrue);
+  });
+  test('an active legacy closed liability cannot be silently reopened by repair or a new payment', () async {
+    final o = await order(total: 100);
+    await pay(o, 130);
+    final debt = (await db.select(db.workshopDebts).get()).single;
+    await db.updateWorkshopDebtFields(WorkshopDebtsCompanion(id: Value(debt.id), totalAmount: const Value(0)));
+    final issues = await DataIntegrityService(db).scan();
+    expect(issues.any((i) => i.repairOrderId == o.id), isFalse);
+    await expectLater(repo.repairDerivedOrder(o.id), throwsStateError);
+    await expectLater(pay(o, 10), throwsStateError);
+    expect((await fresh(o.id)).totalPaid, 130);
+    expect((await db.select(db.paymentTransactions).get()).length, 1);
+    expect((await db.select(db.workshopDebts).get()).single.totalAmount, 0);
+  });
+
 }

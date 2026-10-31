@@ -25,6 +25,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String? _selectedCustomerId;
   String? _selectedOrderId;
   bool _isExporting = false;
+  bool _includeArchived = false;
 
   Future<void> _pickRange() async {
     final picked = await showDateRangePicker(
@@ -115,12 +116,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ref.read(databaseProvider),
         _range.start,
         _range.end,
+        includeArchived: _includeArchived,
       );
       final bytes = await PdfExportService.instance.buildFinancialReport(
         orders: data.orders,
         expenses: data.expenses,
         transactions: data.transactions,
         transfers: data.transfers,
+        includeArchived: _includeArchived,
         from: _range.start,
         to: _range.end,
       );
@@ -147,12 +150,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ref.read(databaseProvider),
         _range.start,
         _range.end,
+        includeArchived: _includeArchived,
       );
       final bytes = ExcelExportService.instance.buildFinancialWorkbook(
         orders: data.orders,
         expenses: data.expenses,
         transactions: data.transactions,
         transfers: data.transfers,
+        includeArchived: _includeArchived,
       );
       final saved = await ExcelExportService.instance.saveWorkbook(
         bytes,
@@ -321,6 +326,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _DateRangeRow(range: _range, onTap: _pickRange),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('تضمين الطلبات المؤرشفة في التقرير'),
+                        subtitle: const Text('افتراضيًا: الطلبات الحالية فقط، مثل إجماليات الرئيسية.'),
+                        value: _includeArchived,
+                        onChanged: (value) => setState(() => _includeArchived = value ?? false),
+                      ),
                       const SizedBox(height: 16),
                       Row(
                         children: [

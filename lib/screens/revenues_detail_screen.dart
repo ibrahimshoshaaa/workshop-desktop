@@ -49,7 +49,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ordersAsync = ref.watch(accountingOrdersProvider);
+    final ordersAsync = ref.watch(ordersProvider);
     final txAsync = ref.watch(allTransactionsProvider);
     if (ordersAsync.hasError || txAsync.hasError)
       return const Scaffold(
@@ -119,7 +119,7 @@ class _RevenuesDetailScreenState extends ConsumerState<RevenuesDetailScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4EF),
       appBar: AppBar(
-        title: const Text('تفاصيل الإيرادات'),
+        title: const Text('تفاصيل إيرادات الطلبات الحالية'),
         backgroundColor: AppColors.wood,
         foregroundColor: Colors.white,
         elevation: 0,

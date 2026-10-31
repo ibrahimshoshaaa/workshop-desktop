@@ -212,7 +212,7 @@ class DashboardStats {
 }
 
 final dashboardStatsProvider = Provider<DashboardStats>((ref) {
-  final orders = ref.watch(accountingOrdersProvider).value ?? [];
+  final orders = ref.watch(ordersProvider).value ?? [];
   final expenses = ref.watch(expensesProvider).value ?? [];
   final transactions = ref.watch(allTransactionsProvider).value ?? [];
   final debts = ref.watch(workshopDebtsProvider).value ?? [];

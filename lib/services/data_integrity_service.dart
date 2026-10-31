@@ -86,22 +86,30 @@ class DataIntegrityService {
         );
       final overpaid = Money.subtract(paid, order.effectiveTotal);
       final linked = debts.where((d) => d.orderId == order.id).toList();
-      if (linked.length > 1 || linked.any((d) => d.paidAmount != 0))
+      final closedSettlement = linked.length == 1 &&
+          linked.single.totalAmount >= 0 && linked.single.paidAmount >= 0 &&
+          Money.cents(linked.single.remaining) == 0;
+      if (closedSettlement) {
+        // A legacy closed liability is authoritative. Receipts alone do not
+        // describe its historical settlement, so never offer to reopen it.
+        if (!order.isArchived && overpaid > 0) {
+          issue('طلب ${order.id}: توجد تسوية مديونية قديمة مقفلة؛ تبقى محفوظة ولا يعاد فتحها تلقائيًا.');
+        }
+      } else if (linked.length > 1 || linked.any((d) => d.paidAmount != 0)) {
         issue('طلب ${order.id}: مديونية عميل قديمة أو مكررة تحتاج مراجعة.');
-      else if ((overpaid > 0 &&
-              (linked.isEmpty ||
-                  Money.cents(linked.single.totalAmount) !=
-                      Money.cents(overpaid))) ||
+      } else if ((overpaid > 0 &&
+              (linked.isEmpty || Money.cents(linked.single.totalAmount) != Money.cents(overpaid))) ||
           (overpaid <= 0 && linked.isNotEmpty)) {
         issue(
-          'طلب ${order.id}: مديونية الزيادة المدفوعة تحتاج تحديثًا من السجل.',
-          repair: payments.isNotEmpty && paid >= 0 ? order.id : null,
+          'طلب ${order.id}: مديونية الزيادة المدفوعة تختلف عن السجل.',
+          repair: !order.isArchived && payments.isNotEmpty && paid >= 0 ? order.id : null,
         );
       }
       if (order.isArchived &&
-          (Money.cents(Money.subtract(order.effectiveTotal, paid)) != 0 ||
-              payments.any((t) => t.status == 'pending')))
-        issue('طلب مؤرشف ${order.id}: عليه رصيد أو دفعة معلقة.');
+          ((Money.cents(Money.subtract(order.effectiveTotal, paid)) != 0 && !closedSettlement) ||
+              payments.any((t) => t.status == 'pending'))) {
+        issue('طلب مؤرشف ${order.id}: عليه رصيد غير مسوّى أو دفعة معلقة؛ لا يتم تعديله تلقائيًا.');
+      }
       if (order.deliveryDate <= 0)
         issue('طلب ${order.id}: موعد تسليم غير محدد.');
     }

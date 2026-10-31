@@ -17,8 +17,9 @@ class FinancialReportData {
   static Future<FinancialReportData> load(
     AppDatabase db,
     DateTime from,
-    DateTime through,
-  ) => db.transaction(() async {
+    DateTime through, {
+    bool includeArchived = false,
+  }) => db.transaction(() async {
     final txs = await (db.select(
       db.paymentTransactions,
     )..where((t) => t.isDeleted.equals(false))).get();
@@ -30,8 +31,10 @@ class FinancialReportData {
       db.orders,
     )..where((o) => o.isDeleted.equals(false))).get();
     final orders = rawOrders
+        .where((o) => includeArchived || !o.isArchived)
         .map((o) => o.copyWith(totalPaid: Money.sum(paid[o.id] ?? [])))
         .toList();
+    final orderIds = orders.map((o) => o.id).toSet();
     final expenses = await (db.select(
       db.expenses,
     )..where((e) => e.isDeleted.equals(false))).get();
@@ -44,7 +47,8 @@ class FinancialReportData {
           .where((e) => CalendarDates.contains(e.date, from, through))
           .toList(),
       txs
-          .where((t) => CalendarDates.contains(t.paymentDate, from, through))
+          .where((t) => orderIds.contains(t.orderId) &&
+              CalendarDates.contains(t.paymentDate, from, through))
           .toList(),
       transfers
           .where((t) => CalendarDates.contains(t.date, from, through))

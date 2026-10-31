@@ -19,6 +19,7 @@ class ExcelExportService {
     required List<Expense> expenses,
     List<PaymentTransaction> transactions = const [],
     List<CashTransfer> transfers = const [],
+    bool includeArchived = false,
   }) {
     final excel = Excel.createExcel();
     final defaultSheetName = excel.getDefaultSheet()!;
@@ -106,6 +107,10 @@ class ExcelExportService {
     }
     final summarySheet = excel['ملخص الخزينة'];
     summarySheet.appendRow([TextCellValue('البند'), TextCellValue('القيمة')]);
+    summarySheet.appendRow([
+      TextCellValue('نطاق الطلبات'),
+      TextCellValue(includeArchived ? 'الحالية والمؤرشفة' : 'الحالية فقط'),
+    ]);
     summarySheet.appendRow([
       TextCellValue('إجمالي الإيرادات'),
       DoubleCellValue(totalRevenue),

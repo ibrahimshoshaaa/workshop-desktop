@@ -205,7 +205,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     ref.watch(calendarClockProvider);
     final financeSources = [
-      ref.watch(accountingOrdersProvider),
+      ref.watch(ordersProvider),
       ref.watch(allTransactionsProvider),
       ref.watch(expensesProvider),
       ref.watch(workshopDebtsProvider),
@@ -242,7 +242,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
 
     final monthlySeries = _buildMonthlySeries(
-      ref.watch(accountingOrdersProvider).value ?? [],
+      ref.watch(ordersProvider).value ?? [],
       transactions,
       expenses,
     );
@@ -274,7 +274,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ref.read(selectedTabProvider.notifier).state =
                       AppTab.workshopDebts,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 12),
+            const Text(
+              'إجماليات الطلبات الحالية — الطلبات المؤرشفة محفوظة في الأرشيف ولا تدخل في هذه الأرقام.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 20),
             if (dueWorkers.isNotEmpty) ...[
               _DueWorkersBanner(
                 names: dueWorkers.map((w) => w.name).join('، '),
