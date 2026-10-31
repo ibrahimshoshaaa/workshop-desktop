@@ -1,10 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// يتحكم في التاب المختار حاليًا في NavigationRail بتاع AppShell.
-/// بنستخدمه عشان أي صفحة تقدر "تنقل" لصفحة تانية عن طريق تغيير التاب
-/// (بدل استخدام Navigator.push اللي بيفتح صفحة فوق الحالية).
-///
-/// ترتيب الفهارس مطابق لترتيب _destinations / _screens في app_shell.dart:
-/// 0: الرئيسية, 1: العملاء, 2: الطلبات, 3: المديونيات, 4: العمال,
-/// 5: المصروفات, 6: المخزون, 7: التقارير
-final selectedTabProvider = StateProvider<int>((ref) => 0);
+/// Logical screen IDs stay stable even when permissions hide destinations.
+class AppTab {
+  static const dashboard = 0,
+      customers = 1,
+      archive = 2,
+      orders = 3,
+      debts = 4,
+      workshopDebts = 5,
+      workers = 6,
+      expenses = 7,
+      inventory = 8,
+      reports = 9,
+      activity = 10,
+      settings = 11;
+}
+
+final selectedTabProvider = StateProvider<int>((ref) => AppTab.dashboard);

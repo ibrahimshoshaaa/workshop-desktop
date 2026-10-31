@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../providers/auth_provider.dart';
 
@@ -26,15 +25,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    final error = await ref.read(authRepositoryProvider).login(
-          _usernameController.text,
-          _passwordController.text,
-        );
+    final auth = ref.read(authRepositoryProvider);
+    final exists = await ref.read(ownerExistsProvider.future);
+    final error = exists
+        ? await auth.login(_usernameController.text, _passwordController.text)
+        : await auth.setupOwner(
+            _usernameController.text,
+            _passwordController.text,
+          );
     if (!mounted) return;
     setState(() {
       _isLoading = false;
@@ -45,26 +49,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   InputDecoration _decoration(String label, IconData icon, {Widget? suffix}) {
     return InputDecoration(
       labelText: label,
-      labelStyle: GoogleFonts.cairo(fontSize: 13.5),
+      labelStyle: TextStyle(fontFamily: 'Cairo', fontSize: 13.5),
       prefixIcon: Icon(icon, size: 20, color: AppColors.wood),
       suffixIcon: suffix,
       filled: true,
       fillColor: const Color(0xFFFAF6F0),
       border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
       enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
       focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.wood, width: 1.6)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.wood, width: 1.6),
+      ),
       errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.danger, width: 1.2)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.danger, width: 1.2),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final existsAsync = ref.watch(ownerExistsProvider);
+    if (existsAsync.isLoading)
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (existsAsync.hasError)
+      return const Scaffold(
+        body: Center(child: Text('تعذر قراءة الحسابات المحلية')),
+      );
+    final setup = existsAsync.value != true;
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -88,9 +106,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 borderRadius: BorderRadius.circular(26),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.22),
-                      blurRadius: 40,
-                      offset: const Offset(0, 20)),
+                    color: Colors.black.withValues(alpha: 0.22),
+                    blurRadius: 40,
+                    offset: const Offset(0, 20),
+                  ),
                 ],
               ),
               child: Form(
@@ -103,12 +122,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: const LinearGradient(
-                            colors: [AppColors.amber, AppColors.wood]),
+                          colors: [AppColors.amber, AppColors.wood],
+                        ),
                         boxShadow: [
                           BoxShadow(
-                              color: AppColors.wood.withValues(alpha: 0.35),
-                              blurRadius: 18,
-                              offset: const Offset(0, 8))
+                            color: AppColors.wood.withValues(alpha: 0.35),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
                         ],
                       ),
                       child: ClipOval(
@@ -121,15 +142,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text('Tahoun Royal Home',
-                        style: GoogleFonts.cairo(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.woodDark)),
+                    Text(
+                      'Tahoun Royal Home',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.woodDark,
+                      ),
+                    ),
                     const SizedBox(height: 6),
-                    Text('سجّل الدخول لإدارة المتجر',
-                        style: GoogleFonts.cairo(
-                            color: Colors.grey.shade600, fontSize: 13)),
+                    Text(
+                      setup
+                          ? 'إنشاء مدير محلي — البيانات الحالية محفوظة'
+                          : 'تسجيل الدخول المحلي — بدون إنترنت',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     if (_error != null) ...[
                       Container(
@@ -140,17 +172,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           color: AppColors.danger.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: AppColors.danger.withValues(alpha: 0.2)),
+                            color: AppColors.danger.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline_rounded,
-                                color: AppColors.danger, size: 18),
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              color: AppColors.danger,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(_error!,
-                                  style: GoogleFonts.cairo(
-                                      color: AppColors.danger, fontSize: 12.5)),
+                              child: Text(
+                                _error!,
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  color: AppColors.danger,
+                                  fontSize: 12.5,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -161,9 +202,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       autofocus: true,
                       textDirection: TextDirection.ltr,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.cairo(fontSize: 14),
-                      decoration:
-                          _decoration('اليوزر', Icons.person_outline_rounded),
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 14),
+                      decoration: _decoration(
+                        'اليوزر',
+                        Icons.person_outline_rounded,
+                      ),
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'اكتب اليوزر'
                           : null,
@@ -174,18 +217,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       obscureText: _obscure,
                       textDirection: TextDirection.ltr,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.cairo(fontSize: 14),
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 14),
                       onFieldSubmitted: (_) => _submit(),
                       decoration: _decoration(
                         'كلمة المرور',
                         Icons.lock_outline_rounded,
                         suffix: IconButton(
                           icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_off_rounded
-                                  : Icons.visibility_rounded,
-                              size: 20,
-                              color: Colors.grey.shade500),
+                            _obscure
+                                ? Icons.visibility_off_rounded
+                                : Icons.visibility_rounded,
+                            size: 20,
+                            color: Colors.grey.shade500,
+                          ),
                           onPressed: () => setState(() => _obscure = !_obscure),
                         ),
                       ),
@@ -201,7 +245,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.wood,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           elevation: 0,
                         ),
                         child: _isLoading
@@ -209,12 +254,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : Text('دخول',
-                                style: GoogleFonts.cairo(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                setup ? 'إنشاء الحساب المحلي' : 'دخول',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
                       ),
                     ),
                   ],

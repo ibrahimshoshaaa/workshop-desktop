@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/calendar_dates.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -54,7 +55,12 @@ class NotificationService {
 
       final dayBefore = tz.TZDateTime.from(
         DateTime(
-            deliveryDate.year, deliveryDate.month, deliveryDate.day - 1, 9, 0),
+          deliveryDate.year,
+          deliveryDate.month,
+          deliveryDate.day - 1,
+          9,
+          0,
+        ),
         tz.local,
       );
       final onDay = tz.TZDateTime.from(
@@ -105,7 +111,7 @@ class NotificationService {
       await _plugin.cancel(_debtNotificationId);
       if (totalDebts <= 0) return;
 
-      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final tomorrow = CalendarDates.addDays(DateTime.now(), 1);
       final scheduledTime = tz.TZDateTime.from(
         DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 10, 0),
         tz.local,
@@ -116,7 +122,7 @@ class NotificationService {
       await _plugin.zonedSchedule(
         _debtNotificationId,
         'عندك مديونيات مستحقة',
-        'إجمالي ${totalDebts.toStringAsFixed(0)} ج.م من $debtorsCount عميل - راجع صفحة المديونيات',
+        'إجمالي ${totalDebts.toStringAsFixed(2)} ج.م من $debtorsCount عميل - راجع صفحة المديونيات',
         scheduledTime,
         details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,

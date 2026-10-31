@@ -33,10 +33,10 @@ class ActivityItem {
 }
 
 final activityLogProvider = Provider<List<ActivityItem>>((ref) {
-  final orders = ref.watch(ordersProvider).value ?? [];
+  final orders = ref.watch(accountingOrdersProvider).value ?? [];
   final transactions = ref.watch(allTransactionsProvider).value ?? [];
   final expenses = ref.watch(expensesProvider).value ?? [];
-  final customers = ref.watch(customersProvider).value ?? [];
+  final customers = ref.watch(allCustomersProvider).value ?? [];
   final workerPayments = ref.watch(workerPaymentsProvider).value ?? [];
   final cashTransfers = ref.watch(cashTransfersProvider).value ?? [];
   final workshopDebts = ref.watch(workshopDebtsProvider).value ?? [];
@@ -61,9 +61,9 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       items.add(ActivityItem(
         time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
         kind: ActivityKind.customerRefund,
-        title: 'تم استرجاع فلوس لعميل',
+        title: t.status == 'completed' ? 'تم رد أموال لعميل' : 'رد أموال معلق',
         subtitle:
-            '${order?.customerName ?? 'عميل'} - ${t.amountPaid.abs().toStringAsFixed(0)} ج.م',
+            '${order?.customerName ?? 'عميل'} - ${t.amountPaid.abs().toStringAsFixed(2)} ج.م',
         icon: Icons.undo_rounded,
         color: AppColors.wood,
       ));
@@ -71,8 +71,8 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       items.add(ActivityItem(
         time: DateTime.fromMillisecondsSinceEpoch(t.paymentDate),
         kind: ActivityKind.orderPayment,
-        title: 'تم تسجيل دفعة من عميل',
-        subtitle: '+${t.amountPaid.toStringAsFixed(0)} ج.م',
+        title: t.status == 'completed' ? 'تم تسجيل دفعة مكتملة من عميل' : 'دفعة معلقة — خارج الإيراد',
+        subtitle: '+${t.amountPaid.toStringAsFixed(2)} ج.م',
         icon: Icons.trending_up_rounded,
         color: AppColors.success,
       ));
@@ -84,7 +84,7 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       time: DateTime.fromMillisecondsSinceEpoch(e.date),
       kind: ActivityKind.expense,
       title: 'تم تسجيل مصروف',
-      subtitle: '-${e.amount.toStringAsFixed(0)} ج.م'
+      subtitle: '-${e.amount.toStringAsFixed(2)} ج.م'
           '${e.description.isNotEmpty ? ' - ${e.description}' : ''}',
       icon: Icons.receipt_long_rounded,
       color: AppColors.danger,
@@ -107,7 +107,7 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       time: DateTime.fromMillisecondsSinceEpoch(p.paymentDate),
       kind: ActivityKind.workerPayment,
       title: 'تم صرف مرتب/سلفة',
-      subtitle: '${p.workerName} - ${p.amount.toStringAsFixed(0)} ج.م',
+      subtitle: '${p.workerName} - ${p.amount.toStringAsFixed(2)} ج.م',
       icon: Icons.engineering_rounded,
       color: AppColors.warning,
     ));
@@ -118,7 +118,7 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       time: DateTime.fromMillisecondsSinceEpoch(ct.date),
       kind: ActivityKind.cashTransfer,
       title: 'تحويل بين الكاش والإنستاباي',
-      subtitle: '${ct.amount.toStringAsFixed(0)} ج.م'
+      subtitle: '${ct.amount.toStringAsFixed(2)} ج.م'
           '${ct.note.isNotEmpty ? ' - ${ct.note}' : ''}',
       icon: Icons.swap_horiz_rounded,
       color: AppColors.wood,
@@ -130,7 +130,7 @@ final activityLogProvider = Provider<List<ActivityItem>>((ref) {
       time: DateTime.fromMillisecondsSinceEpoch(d.createdAt),
       kind: ActivityKind.workshopDebt,
       title: 'تم تسجيل دين على الورشة',
-      subtitle: '${d.creditorName} - ${d.totalAmount.toStringAsFixed(0)} ج.م',
+      subtitle: '${d.creditorName} - ${d.totalAmount.toStringAsFixed(2)} ج.م',
       icon: Icons.store_rounded,
       color: AppColors.danger,
     ));

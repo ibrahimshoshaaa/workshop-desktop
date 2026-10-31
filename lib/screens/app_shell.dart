@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme.dart';
-import '../providers/sync_provider.dart';
+import '../providers/backup_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/auth_provider.dart';
 import 'dashboard_screen.dart';
@@ -21,7 +21,7 @@ class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
   static final _allDestinations = [
-    (Icons.dashboard_rounded, 'الرئيسية', null),
+    (Icons.dashboard_rounded, 'الرئيسية', 'dashboard'),
     (Icons.people_alt_rounded, 'العملاء', 'customers'),
     (Icons.archive_rounded, 'أرشيف العملاء', 'admin_only'),
     (Icons.checkroom_rounded, 'الطلبات', 'orders'),
@@ -31,7 +31,7 @@ class AppShell extends ConsumerWidget {
     (Icons.receipt_long_rounded, 'المصروفات', 'expenses'),
     (Icons.inventory_2_rounded, 'المخزون', 'inventory'),
     (Icons.summarize_rounded, 'التقارير', 'reports'),
-    (Icons.history_rounded, 'سجل النشاط', null),
+    (Icons.history_rounded, 'سجل النشاط', 'activity'),
     (Icons.settings_rounded, 'الإعدادات', 'admin_only'),
   ];
 
@@ -60,15 +60,17 @@ class AppShell extends ConsumerWidget {
         visibleIndexes.add(i);
       } else if (permKey == 'admin_only') {
         if (session?.isAdmin ?? false) visibleIndexes.add(i);
-      } else if (session?.can(permKey) ?? true) {
+      } else if (session?.can(permKey) ?? false) {
         visibleIndexes.add(i);
       }
     }
-    final destinations =
-        visibleIndexes.map((i) => _allDestinations[i]).toList();
+    final destinations = visibleIndexes
+        .map((i) => _allDestinations[i])
+        .toList();
     final screens = visibleIndexes.map((i) => _allScreens[i]).toList();
     final rawIndex = ref.watch(selectedTabProvider);
-    final index = screens.isEmpty ? 0 : rawIndex.clamp(0, screens.length - 1);
+    final visibleIndex = visibleIndexes.indexOf(rawIndex);
+    final index = visibleIndex < 0 ? 0 : visibleIndex;
 
     return Scaffold(
       appBar: AppBar(
@@ -76,83 +78,103 @@ class AppShell extends ConsumerWidget {
         elevation: 2,
         automaticallyImplyLeading: false,
         titleSpacing: 20,
-        title: const Row(children: [
-          Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
-          SizedBox(width: 12),
-          Text('Tahoun Royal Home',
+        title: const Row(
+          children: [
+            Icon(Icons.chair_alt_rounded, color: AppColors.amber, size: 28),
+            SizedBox(width: 12),
+            Text(
+              'Tahoun Royal Home',
               style: TextStyle(
-                  color: AppColors.amber,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20))
-        ]),
+                color: AppColors.amber,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
         actions: [
-          const _SyncButton(),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: Center(
+              child: Text('حفظ محلي', style: TextStyle(color: AppColors.amber)),
+            ),
+          ),
+          const _BackupIndicator(),
           IconButton(
-              tooltip: 'تسجيل الخروج',
-              onPressed: () => ref.read(authRepositoryProvider).logout(),
-              icon: const Icon(Icons.logout_rounded, color: AppColors.amber)),
+            tooltip: 'تسجيل الخروج',
+            onPressed: () => ref.read(authRepositoryProvider).logout(),
+            icon: const Icon(Icons.logout_rounded, color: AppColors.amber),
+          ),
           const SizedBox(width: 12),
         ],
       ),
-      body: Row(children: [
-        SizedBox(
-          width: 120,
-          child: Scrollbar(
-            thumbVisibility: true,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+      body: Row(
+        children: [
+          if (destinations.length > 1)
+            SizedBox(
+              width: 120,
               child: NavigationRail(
+                scrollable: true,
                 selectedIndex: index,
                 onDestinationSelected: (i) =>
-                    ref.read(selectedTabProvider.notifier).state = i,
+                    ref.read(selectedTabProvider.notifier).state =
+                        visibleIndexes[i],
                 labelType: NavigationRailLabelType.all,
                 backgroundColor: AppColors.woodDark,
                 selectedIconTheme: const IconThemeData(color: AppColors.amber),
-                unselectedIconTheme:
-                    IconThemeData(color: Colors.white.withValues(alpha: 0.6)),
+                unselectedIconTheme: IconThemeData(
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
                 selectedLabelTextStyle: const TextStyle(
-                    color: AppColors.amber, fontWeight: FontWeight.bold),
-                unselectedLabelTextStyle:
-                    TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                  color: AppColors.amber,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelTextStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
                 destinations: destinations
-                    .map((d) => NavigationRailDestination(
-                        icon: Icon(d.$1), label: Text(d.$2)))
+                    .map(
+                      (d) => NavigationRailDestination(
+                        icon: Icon(d.$1),
+                        label: Text(d.$2),
+                      ),
+                    )
                     .toList(),
               ),
             ),
+          if (destinations.length > 1) const VerticalDivider(width: 1),
+          Expanded(
+            child: screens.isEmpty
+                ? const Center(
+                    child: Text(
+                      'لا توجد شاشات مسموحة لهذا الحساب. راجع المدير.',
+                    ),
+                  )
+                : screens[index],
           ),
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-            child: screens.isEmpty ? const SizedBox.shrink() : screens[index]),
-      ]),
+        ],
+      ),
     );
   }
 }
 
-class _SyncButton extends ConsumerStatefulWidget {
-  const _SyncButton();
+class _BackupIndicator extends ConsumerWidget {
+  const _BackupIndicator();
   @override
-  ConsumerState<_SyncButton> createState() => _SyncButtonState();
-}
-
-class _SyncButtonState extends ConsumerState<_SyncButton> {
-  bool _isSyncing = false;
-  Future<void> _sync() async {
-    setState(() => _isSyncing = true);
-    await ref.read(syncServiceProvider).syncAll();
-    if (mounted) setState(() => _isSyncing = false);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final backup = ref.watch(backupServiceProvider);
+    return Tooltip(
+      message:
+          backup.error ??
+          (backup.lastBackup == null
+              ? 'لم يتم النسخ الاحتياطي بعد'
+              : 'آخر نسخة محلية: ${backup.lastBackup}'),
+      child: Icon(
+        backup.error != null
+            ? Icons.warning_amber_rounded
+            : Icons.backup_rounded,
+        color: AppColors.amber,
+      ),
+    );
   }
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-      tooltip: 'مزامنة الآن',
-      onPressed: _isSyncing ? null : _sync,
-      icon: _isSyncing
-          ? const SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: AppColors.amber))
-          : const Icon(Icons.sync_rounded, color: AppColors.amber));
 }

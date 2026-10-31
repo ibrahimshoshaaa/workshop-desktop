@@ -24,6 +24,7 @@ class AppUserModel {
     MapEntry('expenses', 'المصروفات'),
     MapEntry('inventory', 'المخزون'),
     MapEntry('reports', 'التقارير'),
+    MapEntry('activity', 'سجل النشاط'),
   ];
 
   AppUserModel({

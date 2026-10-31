@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'money.dart';
 import '../data/database.dart';
 
 /// حصة طلب واحد من مصروف مقسّم على أكتر من طلب - لو مصروف اتسجل على
@@ -17,11 +18,11 @@ class ExpenseOrderAllocation {
   });
 
   Map<String, dynamic> toJson() => {
-        'orderId': orderId,
-        'customerId': customerId,
-        'customerName': customerName,
-        'amount': amount,
-      };
+    'orderId': orderId,
+    'customerId': customerId,
+    'customerName': customerName,
+    'amount': amount,
+  };
 
   factory ExpenseOrderAllocation.fromJson(Map<String, dynamic> json) =>
       ExpenseOrderAllocation(
@@ -39,8 +40,11 @@ class ExpenseOrderAllocation {
     try {
       final decoded = jsonDecode(json) as List;
       return decoded
-          .map((e) => ExpenseOrderAllocation.fromJson(
-              Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => ExpenseOrderAllocation.fromJson(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
           .toList();
     } catch (_) {
       return [];
@@ -59,10 +63,11 @@ extension ExpenseAllocationsExtension on Expense {
     if (orderId != null && orderId!.isNotEmpty) {
       return [
         ExpenseOrderAllocation(
-            orderId: orderId!,
-            customerId: customerId ?? '',
-            customerName: customerName ?? '',
-            amount: amount)
+          orderId: orderId!,
+          customerId: customerId ?? '',
+          customerName: customerName ?? '',
+          amount: amount,
+        ),
       ];
     }
     return [];
@@ -76,15 +81,15 @@ extension OrderCalculations on Order {
   /// الإجمالي الفعلي المستحق على العميل بعد خصم مبلغ الخصم (لو موجود)
   /// من الاتفاق الأصلي - ده اللي بيدخل في حسابات الإيرادات والمديونيات،
   /// مش totalAmount الخام
-  double get effectiveTotal => totalAmount - discountAmount;
+  double get effectiveTotal => Money.subtract(totalAmount, discountAmount);
 
   /// المتبقي الفعلي على العميل بعد الخصم والدفعات
-  double get remaining => effectiveTotal - totalPaid;
+  double get remaining => Money.subtract(effectiveTotal, totalPaid);
 }
 
 /// نفس فكرة [OrderCalculations] بس لمديونيات الورشة (الديون اللي علينا
 /// لصالح الموردين/الصنايعية - عكس مديونيات العملاء) - المتبقي = الإجمالي
 /// ناقص المسدد لحد دلوقتي
 extension WorkshopDebtCalculations on WorkshopDebt {
-  double get remaining => totalAmount - paidAmount;
+  double get remaining => Money.subtract(totalAmount, paidAmount);
 }

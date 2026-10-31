@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart' hide TextDirection;
 import '../core/theme.dart';
 import '../models/app_user_model.dart';
 import '../providers/auth_provider.dart';
-import '../providers/database_provider.dart';
-import '../providers/sync_provider.dart';
+import 'local_data_panel.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -15,16 +12,10 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  bool _isSyncing = false;
-
-  Future<void> _syncNow() async {
-    setState(() => _isSyncing = true);
-    await ref.read(syncServiceProvider).syncAll();
-    if (mounted) setState(() => _isSyncing = false);
-  }
-
   Future<void> _showAddUserDialog(
-      BuildContext context, List<String> existingUsernames) async {
+    BuildContext context,
+    List<String> existingUsernames,
+  ) async {
     final formKey = GlobalKey<FormState>();
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
@@ -37,11 +28,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('إضافة حساب جديد',
-              style:
-                  GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'إضافة حساب جديد',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
           content: SizedBox(
             width: 420,
             child: Form(
@@ -55,7 +52,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       controller: usernameController,
                       textDirection: TextDirection.ltr,
                       decoration: _fieldDecoration(
-                          'اليوزر', Icons.person_outline_rounded),
+                        'اليوزر',
+                        Icons.person_outline_rounded,
+                      ),
                       validator: (v) {
                         final value = v?.trim() ?? '';
                         if (value.isEmpty) return 'اكتب اليوزر';
@@ -71,26 +70,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       controller: passwordController,
                       textDirection: TextDirection.ltr,
                       decoration: _fieldDecoration(
-                          'الباسورد', Icons.lock_outline_rounded),
-                      validator: (v) => (v == null || v.length < 4)
-                          ? 'الباسورد لازم يكون 4 حروف/أرقام على الأقل'
+                        'الباسورد',
+                        Icons.lock_outline_rounded,
+                      ),
+                      validator: (v) => (v == null || v.length < 8)
+                          ? 'الباسورد لازم يكون 8 حروف/أرقام على الأقل'
                           : null,
                     ),
                     const SizedBox(height: 20),
                     _FieldLabel('الشاشات المسموح بيها'),
                     const SizedBox(height: 6),
-                    ...AppUserModel.permissionScreens
-                        .map((s) => CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              title: Text(s.value,
-                                  style: GoogleFonts.cairo(fontSize: 13.5)),
-                              value: permissions[s.key],
-                              activeColor: AppColors.wood,
-                              onChanged: (v) => setDialogState(
-                                  () => permissions[s.key] = v ?? true),
-                            )),
+                    ...AppUserModel.permissionScreens.map(
+                      (s) => CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          s.value,
+                          style: TextStyle(fontFamily: 'Cairo', fontSize: 13.5),
+                        ),
+                        value: permissions[s.key],
+                        activeColor: AppColors.wood,
+                        onChanged: (v) => setDialogState(
+                          () => permissions[s.key] = v ?? true,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -98,8 +103,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('إلغاء')),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
             ElevatedButton(
               onPressed: isSaving
                   ? null
@@ -107,7 +113,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (!formKey.currentState!.validate()) return;
                       setDialogState(() => isSaving = true);
                       try {
-                        await ref.read(userAccountServiceProvider).addUser(
+                        await ref
+                            .read(userAccountServiceProvider)
+                            .addUser(
                               usernameController.text.trim(),
                               passwordController.text,
                               permissions: permissions,
@@ -117,7 +125,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('حدث خطأ: $e')));
+                            SnackBar(content: Text('حدث خطأ: $e')),
+                          );
                         }
                         setDialogState(() => isSaving = false);
                       }
@@ -127,7 +136,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Text('حفظ'),
             ),
           ],
@@ -137,8 +149,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _showEditUserDialog(
-      BuildContext context, AppUserModel user) async {
+    BuildContext context,
+    AppUserModel user,
+  ) async {
     bool isSaving = false;
+    final passwordController = TextEditingController();
     final permissions = <String, bool>{
       for (final s in AppUserModel.permissionScreens)
         s.key: user.canAccess(s.key),
@@ -148,11 +163,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('تعديل حساب "${user.username}"',
-              style:
-                  GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'تعديل حساب "${user.username}"',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
           content: SizedBox(
             width: 420,
             child: SingleChildScrollView(
@@ -162,40 +183,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   _FieldLabel('الشاشات المسموح بيها'),
                   const SizedBox(height: 6),
-                  ...AppUserModel.permissionScreens.map((s) => CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(s.value,
-                            style: GoogleFonts.cairo(fontSize: 13.5)),
-                        value: permissions[s.key],
-                        activeColor: AppColors.wood,
-                        onChanged: (v) => setDialogState(
-                            () => permissions[s.key] = v ?? true),
-                      )),
+                  ...AppUserModel.permissionScreens.map(
+                    (s) => CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        s.value,
+                        style: TextStyle(fontFamily: 'Cairo', fontSize: 13.5),
+                      ),
+                      value: permissions[s.key],
+                      activeColor: AppColors.wood,
+                      onChanged: (v) =>
+                          setDialogState(() => permissions[s.key] = v ?? true),
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                        color: AppColors.wood.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(14)),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.info_outline_rounded,
-                            color: AppColors.wood, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'مش ممكن نغيّر باسورد حساب عامل مباشرة (قيد أماني حقيقي في '
-                            'Firebase نفسه). لو عايز تغيّره، احذف الحساب وضيفه تاني '
-                            'بباسورد جديد.',
-                            style: GoogleFonts.cairo(
-                                fontSize: 12, color: Colors.grey.shade700),
-                          ),
-                        ),
-                      ],
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: _fieldDecoration(
+                      'كلمة مرور جديدة (اختياري — 8 أحرف على الأقل)',
+                      Icons.lock_outline,
                     ),
                   ),
                 ],
@@ -204,8 +213,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('إلغاء')),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
             ElevatedButton(
               onPressed: isSaving
                   ? null
@@ -213,14 +223,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       setDialogState(() => isSaving = true);
                       final service = ref.read(userAccountServiceProvider);
                       try {
+                        if (passwordController.text.isNotEmpty) {
+                          await service.resetPassword(
+                            user.id,
+                            passwordController.text,
+                          );
+                        }
                         await service.updateUserPermissions(
-                            user.id, permissions);
+                          user.id,
+                          permissions,
+                        );
                         ref.invalidate(appUsersProvider);
                         if (context.mounted) Navigator.pop(context);
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('حدث خطأ: $e')));
+                            SnackBar(content: Text('حدث خطأ: $e')),
+                          );
                         }
                         setDialogState(() => isSaving = false);
                       }
@@ -230,7 +249,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Text('حفظ'),
             ),
           ],
@@ -256,24 +278,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                      color: AppColors.wood.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14)),
-                  child: const Icon(Icons.settings_rounded,
-                      color: AppColors.wood, size: 22),
+                    color: AppColors.wood.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.settings_rounded,
+                    color: AppColors.wood,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('الإعدادات',
-                        style: GoogleFonts.cairo(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF2A2320))),
+                    Text(
+                      'الإعدادات',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF2A2320),
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('الحساب، حسابات العمال، المزامنة',
-                        style: GoogleFonts.cairo(
-                            fontSize: 13, color: Colors.grey.shade600)),
+                    Text(
+                      'الحسابات المحلية والنسخ الاحتياطي',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -287,46 +322,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: AppColors.wood.withValues(alpha: 0.14),
-                    child:
-                        const Icon(Icons.person_rounded, color: AppColors.wood),
+                    child: const Icon(
+                      Icons.person_rounded,
+                      color: AppColors.wood,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('مسجّل دخول كـ: ${session?.username ?? '-'}',
-                            style: GoogleFonts.cairo(
-                                fontWeight: FontWeight.w800, fontSize: 14)),
+                        Text(
+                          'مسجّل دخول كـ: ${session?.username ?? '-'}',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           session?.isAdmin == true
                               ? 'حساب أدمن - كل الصلاحيات متاحة'
                               : 'حساب عامل - صلاحيات محدّدة',
-                          style: GoogleFonts.cairo(
-                              fontSize: 12, color: Colors.grey.shade600),
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color: (session?.isAdmin == true
-                              ? AppColors.wood
-                              : AppColors.navy)
-                          .withValues(alpha: 0.12),
+                      color:
+                          (session?.isAdmin == true
+                                  ? AppColors.wood
+                                  : AppColors.navy)
+                              .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
                       session?.isAdmin == true ? 'أدمن' : 'عامل',
-                      style: GoogleFonts.cairo(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          color: session?.isAdmin == true
-                              ? AppColors.wood
-                              : AppColors.navy),
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: session?.isAdmin == true
+                            ? AppColors.wood
+                            : AppColors.navy,
+                      ),
                     ),
                   ),
                 ],
@@ -342,7 +392,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     label: 'إضافة حساب',
                     icon: Icons.person_add_alt_1_rounded,
                     onTap: () => _showAddUserDialog(
-                        context, users.map((u) => u.username).toList()),
+                      context,
+                      users.map((u) => u.username).toList(),
+                    ),
                   ),
                   loading: () => const SizedBox.shrink(),
                   error: (_, __) => const SizedBox.shrink(),
@@ -351,8 +403,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   data: (users) {
                     if (users.isEmpty) {
                       return const _EmptyState(
-                          icon: Icons.groups_outlined,
-                          text: 'لا توجد حسابات إضافية بعد');
+                        icon: Icons.groups_outlined,
+                        text: 'لا توجد حسابات إضافية بعد',
+                      );
                     }
                     return Column(
                       children: users.map((u) {
@@ -360,31 +413,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             .where((s) => u.canAccess(s.key))
                             .map((s) => s.value)
                             .toList();
-                        final subtitle = allowedScreens.length ==
+                        final subtitle =
+                            allowedScreens.length ==
                                 AppUserModel.permissionScreens.length
                             ? 'كل الصلاحيات متاحة'
                             : allowedScreens.isEmpty
-                                ? 'من غير أي صلاحية شاشات'
-                                : 'مسموح: ${allowedScreens.join('، ')}';
+                            ? 'من غير أي صلاحية شاشات'
+                            : 'مسموح: ${allowedScreens.join('، ')}';
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _HoverCard(
                             borderRadius: BorderRadius.circular(14),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                               child: Row(
                                 children: [
                                   CircleAvatar(
-                                    backgroundColor:
-                                        AppColors.wood.withValues(alpha: 0.15),
+                                    backgroundColor: AppColors.wood.withValues(
+                                      alpha: 0.15,
+                                    ),
                                     child: Text(
-                                        u.username.isNotEmpty
-                                            ? u.username[0].toUpperCase()
-                                            : '?',
-                                        style: const TextStyle(
-                                            color: AppColors.wood,
-                                            fontWeight: FontWeight.bold)),
+                                      u.username.isNotEmpty
+                                          ? u.username[0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                        color: AppColors.wood,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -392,53 +451,70 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(u.username,
-                                            textDirection: TextDirection.ltr,
-                                            style: GoogleFonts.cairo(
-                                                fontSize: 13.5,
-                                                fontWeight: FontWeight.w700)),
+                                        Text(
+                                          u.username,
+                                          textDirection: TextDirection.ltr,
+                                          style: TextStyle(
+                                            fontFamily: 'Cairo',
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
                                         const SizedBox(height: 2),
-                                        Text(subtitle,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.cairo(
-                                                fontSize: 11.5,
-                                                color: Colors.grey.shade500)),
+                                        Text(
+                                          subtitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: 'Cairo',
+                                            fontSize: 11.5,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.edit_rounded,
-                                        color: AppColors.navy, size: 20),
+                                    icon: const Icon(
+                                      Icons.edit_rounded,
+                                      color: AppColors.navy,
+                                      size: 20,
+                                    ),
                                     tooltip: 'تعديل الصلاحيات/الباسورد',
                                     onPressed: () =>
                                         _showEditUserDialog(context, u),
                                   ),
                                   IconButton(
                                     icon: const Icon(
-                                        Icons.delete_outline_rounded,
-                                        color: AppColors.danger,
-                                        size: 20),
+                                      Icons.delete_outline_rounded,
+                                      color: AppColors.danger,
+                                      size: 20,
+                                    ),
                                     tooltip: 'حذف الحساب',
                                     onPressed: () async {
                                       final confirm = await showDialog<bool>(
                                         context: context,
                                         builder: (context) => AlertDialog(
                                           shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(20)),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                          ),
                                           title: const Text('حذف الحساب'),
                                           content: Text(
-                                              'هل أنت متأكد من حذف حساب "${u.username}"؟'),
+                                            'هل أنت متأكد من حذف حساب "${u.username}"؟',
+                                          ),
                                           actions: [
                                             TextButton(
-                                                onPressed: () => Navigator.pop(
-                                                    context, false),
-                                                child: const Text('إلغاء')),
+                                              onPressed: () =>
+                                                  Navigator.pop(context, false),
+                                              child: const Text('إلغاء'),
+                                            ),
                                             ElevatedButton(
                                               style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      AppColors.danger),
+                                                backgroundColor:
+                                                    AppColors.danger,
+                                              ),
                                               onPressed: () =>
                                                   Navigator.pop(context, true),
                                               child: const Text('حذف'),
@@ -463,45 +539,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     );
                   },
                   loading: () => const Center(
-                      child: CircularProgressIndicator(color: AppColors.wood)),
+                    child: CircularProgressIndicator(color: AppColors.wood),
+                  ),
                   error: (e, _) => Text('خطأ: $e'),
                 ),
               ),
             ],
             const SizedBox(height: 20),
-            _SectionCard(
-              title: 'المزامنة مع السيرفر',
-              icon: Icons.sync_rounded,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: FutureBuilder<String?>(
-                      future: ref.read(databaseProvider).getMeta('lastSyncAt'),
-                      builder: (context, snapshot) {
-                        final raw = snapshot.data;
-                        final text = raw == null
-                            ? 'لسه ما حصلتش مزامنة'
-                            : 'آخر مزامنة: ${DateFormat('d/M/yyyy - hh:mm a', 'ar_EG').format(DateTime.fromMillisecondsSinceEpoch(int.parse(raw)))}';
-                        return Text(text,
-                            style: GoogleFonts.cairo(
-                                color: Colors.grey.shade600, fontSize: 12.5));
-                      },
-                    ),
-                  ),
-                  _SmallActionButton(
-                    label: _isSyncing ? 'جاري المزامنة...' : 'مزامنة الآن',
-                    icon: Icons.sync_rounded,
-                    loading: _isSyncing,
-                    onTap: _isSyncing
-                        ? null
-                        : () async {
-                            await _syncNow();
-                            setState(() {});
-                          },
-                  ),
-                ],
-              ),
-            ),
+            const LocalDataPanel(),
             const SizedBox(height: 20),
             _SectionCard(
               title: 'عن التطبيق',
@@ -509,13 +554,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Tahoun Royal Home - نسخة سطح المكتب',
-                      style: GoogleFonts.cairo(
-                          fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  Text(
+                    'Tahoun Royal Home - نسخة سطح المكتب',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('الإصدار 1.0.0',
-                      style: GoogleFonts.cairo(
-                          color: Colors.grey.shade500, fontSize: 12)),
+                  Text(
+                    'الإصدار 1.0.0',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -529,19 +584,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 InputDecoration _fieldDecoration(String label, [IconData? icon]) {
   return InputDecoration(
     labelText: label,
-    prefixIcon:
-        icon != null ? Icon(icon, size: 20, color: AppColors.wood) : null,
+    prefixIcon: icon != null
+        ? Icon(icon, size: 20, color: AppColors.wood)
+        : null,
     filled: true,
     fillColor: Colors.grey.shade50,
     border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300)),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
     enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300)),
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
     focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: AppColors.wood, width: 1.5)),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+      borderSide: BorderSide(color: AppColors.wood, width: 1.5),
+    ),
   );
 }
 
@@ -553,11 +612,15 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: Text(text,
-          style: GoogleFonts.cairo(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF2A2320))),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'Cairo',
+          fontSize: 13.5,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF2A2320),
+        ),
+      ),
     );
   }
 }
@@ -567,11 +630,12 @@ class _SmallActionButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
   final bool loading;
-  const _SmallActionButton(
-      {required this.label,
-      required this.icon,
-      required this.onTap,
-      this.loading = false});
+  const _SmallActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.loading = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -588,14 +652,21 @@ class _SmallActionButton extends StatelessWidget {
                     width: 15,
                     height: 15,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.wood))
+                      strokeWidth: 2,
+                      color: AppColors.wood,
+                    ),
+                  )
                 : Icon(icon, size: 17, color: AppColors.wood),
             const SizedBox(width: 8),
-            Text(label,
-                style: GoogleFonts.cairo(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.wood)),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.wood,
+              ),
+            ),
           ],
         ),
       ),
@@ -618,9 +689,14 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 36, color: Colors.grey.shade300),
             const SizedBox(height: 10),
-            Text(text,
-                style: GoogleFonts.cairo(
-                    fontSize: 13, color: Colors.grey.shade400)),
+            Text(
+              text,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                color: Colors.grey.shade400,
+              ),
+            ),
           ],
         ),
       ),
@@ -633,11 +709,12 @@ class _SectionCard extends StatelessWidget {
   final IconData icon;
   final Widget child;
   final Widget? trailing;
-  const _SectionCard(
-      {required this.title,
-      required this.icon,
-      required this.child,
-      this.trailing});
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -652,17 +729,22 @@ class _SectionCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: AppColors.wood.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10)),
+                    color: AppColors.wood.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: Icon(icon, color: AppColors.wood, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(title,
-                      style: GoogleFonts.cairo(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF2A2320))),
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF2A2320),
+                    ),
+                  ),
                 ),
                 if (trailing != null) trailing!,
               ],
@@ -683,10 +765,11 @@ class _HoverCard extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final BorderRadius borderRadius;
-  const _HoverCard(
-      {required this.child,
-      this.onTap,
-      this.borderRadius = const BorderRadius.all(Radius.circular(20))});
+  const _HoverCard({
+    required this.child,
+    this.onTap,
+    this.borderRadius = const BorderRadius.all(Radius.circular(20)),
+  });
 
   @override
   State<_HoverCard> createState() => _HoverCardState();
@@ -723,9 +806,10 @@ class _HoverCardState extends State<_HoverCard> {
           borderRadius: widget.borderRadius,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-              onTap: widget.onTap,
-              borderRadius: widget.borderRadius,
-              child: widget.child),
+            onTap: widget.onTap,
+            borderRadius: widget.borderRadius,
+            child: widget.child,
+          ),
         ),
       ),
     );
