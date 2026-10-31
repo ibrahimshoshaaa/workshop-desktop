@@ -106,7 +106,8 @@ class DataIntegrityService {
         );
       }
       if (order.isArchived &&
-          ((Money.cents(Money.subtract(order.effectiveTotal, paid)) != 0 && !closedSettlement) ||
+          ((Money.cents(Money.subtract(order.effectiveTotal, paid)) > 0) ||
+              (Money.cents(Money.subtract(order.effectiveTotal, paid)) < 0 && !closedSettlement) ||
               payments.any((t) => t.status == 'pending'))) {
         issue('طلب مؤرشف ${order.id}: عليه رصيد غير مسوّى أو دفعة معلقة؛ لا يتم تعديله تلقائيًا.');
       }

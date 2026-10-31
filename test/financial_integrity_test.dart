@@ -720,6 +720,10 @@ void main() {
     expect((await db.select(db.workshopDebts).get()).single, closed);
     expect((await db.select(db.paymentTransactions).get()).length, 1);
     expect((await db.select(db.customers).get()).single.isArchived, isTrue);
+    // A closed liability must not hide an unrelated customer receivable.
+    await db.updateOrderFields(OrdersCompanion(id: Value(o.id), totalAmount: const Value(200)));
+    expect((await service.scan()).any((i) => i.message.contains('رصيد غير مسوّى')), isTrue);
+    expect((await db.select(db.workshopDebts).get()).single, closed);
   });
   test('an active legacy closed liability cannot be silently reopened by repair or a new payment', () async {
     final o = await order(total: 100);
