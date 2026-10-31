@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -8,6 +9,7 @@ import 'providers/mutation_provider.dart';
 import 'screens/app_shell.dart';
 import 'screens/login_screen.dart';
 import 'services/backup_service.dart';
+import 'services/desktop_close_guard.dart';
 import 'services/local_paths.dart';
 import 'services/notification_service.dart';
 
@@ -51,12 +53,27 @@ class WorkshopDesktopApp extends ConsumerStatefulWidget {
 }
 
 class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final DesktopCloseGuard _closeGuard;
   @override
   void initState() {
     super.initState();
+    _closeGuard = DesktopCloseGuard(
+      navigatorKey: _navigatorKey,
+      backup: ref.read(backupServiceProvider),
+      mutations: ref.read(mutationStateProvider),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(backupServiceProvider).start();
+      if (!mounted) return;
+      unawaited(_closeGuard.start());
+      unawaited(ref.read(backupServiceProvider).start());
     });
+  }
+
+  @override
+  void dispose() {
+    _closeGuard.dispose();
+    super.dispose();
   }
 
   @override
@@ -64,6 +81,7 @@ class _WorkshopDesktopAppState extends ConsumerState<WorkshopDesktopApp> {
     final backup = ref.watch(backupServiceProvider);
     final saving = ref.watch(mutationStateProvider).busy;
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Tahoun Royal Home — محلي',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),

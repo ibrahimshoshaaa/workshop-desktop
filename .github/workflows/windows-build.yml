@@ -52,6 +52,9 @@ jobs:
             flutter create --platforms=windows .
           fi
 
+      - name: Install native close and shutdown reminder
+        run: python scripts/prepare_windows_close_guard.py
+
       # فلاتر بيحط اسم افتراضي (اسم المشروع) في شريط عنوان نافذة ويندوز.
       # الخطوة دي بتستبدله باسم "Tahoun Royal Home" بعد كل توليد لمجلد windows/
       - name: Set native window title
@@ -125,6 +128,10 @@ jobs:
 
       - name: Build Windows (release)
         run: flutter build windows --release
+
+      - name: Verify release close and shutdown interception
+        shell: pwsh
+        run: ./scripts/test_windows_close_guard.ps1
 
       - name: Zip build output
         shell: pwsh
